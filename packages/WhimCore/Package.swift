@@ -2,8 +2,28 @@
 
 import PackageDescription
 
-let productionSources = ["AppComposition/WhimCoreVersion.swift"]
-let unitTestSources = ["AppComposition/WhimCoreVersion.test.swift"]
+let productionSources = [
+    "AppComposition/WhimCoreVersion.swift",
+    "Delivery/Delivery.swift",
+    "Delivery/DeliveryReducer.swift",
+    "Delivery/RetryPolicy.swift",
+    "Delivery/Workflow.swift",
+    "Notes/Note.swift",
+    "Notes/WhimStore.swift",
+    "Recording/RecordingSessionID.swift",
+    "Retention/RetentionPolicy.swift",
+    "WebhookConfiguration/WebhookConfiguration.swift",
+]
+let unitTestSources = [
+    "AppComposition/WhimCoreVersion.test.swift",
+    "Delivery/Delivery.test.swift",
+    "Delivery/DeliveryReducer.test.swift",
+    "Delivery/RetryPolicy.test.swift",
+    "Delivery/Workflow.test.swift",
+    "Notes/Note.test.swift",
+    "Retention/RetentionPolicy.test.swift",
+    "WebhookConfiguration/WebhookConfiguration.test.swift",
+]
 let integrationTestSources = ["AppComposition/WhimCoreVersion.integration.test.swift"]
 
 let package = Package(
