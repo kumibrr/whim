@@ -1,0 +1,60 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test:unit:ts
+      - run: npm run test:integration:ts
+
+  apple:
+    runs-on: macos-latest
+    env:
+      MAESTRO_CLI_NO_ANALYTICS: 1
+      MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED: true
+      MAESTRO_VERSION: 2.10.0
+      MAESTRO_ZIP_SHA256: 29b675e10cc12080e445e9bfb2e2b4e4dfb9c0f2e30d5884120d258b5e1cd991
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Install native dependencies
+        run: pod install --project-directory=ios
+      - name: Install Maestro
+        run: |
+          maestro_zip="$RUNNER_TEMP/maestro-$MAESTRO_VERSION.zip"
+          maestro_extract="$RUNNER_TEMP/maestro-$MAESTRO_VERSION"
+          curl --fail --location --silent --show-error \
+            "https://github.com/mobile-dev-inc/Maestro/releases/download/cli-$MAESTRO_VERSION/maestro.zip" \
+            --output "$maestro_zip"
+          echo "$MAESTRO_ZIP_SHA256  $maestro_zip" | shasum -a 256 --check
+          mkdir -p "$maestro_extract" "$HOME/.maestro"
+          unzip -q "$maestro_zip" -d "$maestro_extract"
+          cp -R "$maestro_extract/maestro/." "$HOME/.maestro/"
+          "$HOME/.maestro/bin/maestro" --version
+      - name: Boot paired simulators
+        run: |
+          eval "$(./scripts/boot-apple-simulators.sh)"
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
+          echo "WHIM_IPHONE_SIMULATOR_UDID=$WHIM_IPHONE_SIMULATOR_UDID" >> "$GITHUB_ENV"
+          echo "WHIM_WATCH_SIMULATOR_UDID=$WHIM_WATCH_SIMULATOR_UDID" >> "$GITHUB_ENV"
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+      - name: Build iPhone and Watch products
+        run: |
+          xcodebuild build -quiet -workspace ios/Whim.xcworkspace -scheme Whim -derivedDataPath ios/build/DerivedData -destination "id=$WHIM_IPHONE_SIMULATOR_UDID" CODE_SIGNING_ALLOWED=NO
+          xcodebuild build -quiet -workspace ios/Whim.xcworkspace -scheme WhimWatch -derivedDataPath ios/build/DerivedData -destination "id=$WHIM_WATCH_SIMULATOR_UDID" CODE_SIGNING_ALLOWED=NO
+      - run: npm run test:all

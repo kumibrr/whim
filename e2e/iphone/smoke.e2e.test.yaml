@@ -1,0 +1,17 @@
+appId: app.whim.ios
+---
+- launchApp:
+    clearState: true
+- openLink:
+    link: ${EXPO_DEV_CLIENT_URL}
+- runFlow:
+    when:
+      visible: Open
+    commands:
+      - tapOn: Open
+- extendedWaitUntil:
+    visible:
+      id: whim-home
+    timeout: 60000
+- assertVisible:
+    id: whim-home
