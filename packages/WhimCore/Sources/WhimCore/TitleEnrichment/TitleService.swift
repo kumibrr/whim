@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 
 public struct TitleSnapshot: Sendable, Equatable {
     public let noteID: NoteID
@@ -69,19 +70,15 @@ public struct TitleService: Sendable {
             .filter { !$0.isEmpty }.joined(separator: " ")
         guard !normalized.isEmpty else { return nil }
 
-        var candidate = ""
         var sentence: String?
-        for character in normalized {
-            candidate.append(character)
-            if ".!?。！？".contains(character) {
-                if isMeaningful(candidate) {
-                    sentence = candidate
-                    break
-                }
-                candidate = ""
-            }
+        let tokenizer = NLTokenizer(unit: .sentence)
+        tokenizer.string = normalized
+        tokenizer.enumerateTokens(in: normalized.startIndex..<normalized.endIndex) { range, _ in
+            let candidate = String(normalized[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard isMeaningful(candidate) else { return true }
+            sentence = candidate
+            return false
         }
-        if sentence == nil, isMeaningful(candidate) { sentence = candidate }
         guard let sentence else { return nil }
         return String(sentence.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60))
     }

@@ -31,6 +31,25 @@ final class TitleServiceTests: XCTestCase {
         XCTAssertEqual(snapshot.title.count, 60)
     }
 
+    // Break: punctuation inside an abbreviation or decimal is mistaken for the end of the title sentence.
+    func testSentenceSegmentationKeepsAbbreviationsAndDecimalsIntact() async throws {
+        for (transcript, expected) in [
+            ("Meet Dr. Smith tomorrow. Later sentence.", "Meet Dr. Smith tomorrow."),
+            ("Version 1.2 ships Friday. Later sentence.", "Version 1.2 ships Friday."),
+        ] {
+            let note = fixtureNote()
+            let service = TitleService(
+                transcriber: TitleTranscriberFake(result: .success(transcript)),
+                store: TitleStoreFake(note: note),
+                sleep: neverReachDeadline
+            )
+
+            let snapshot = await service.enrich(note)
+
+            XCTAssertEqual(snapshot.title, expected)
+        }
+    }
+
     // Break: unavailable, denied, failed, or empty recognition replaces the timestamp fallback.
     func testRecognitionFailuresAndEmptyResultsUseTimestampFallback() async throws {
         for result in [

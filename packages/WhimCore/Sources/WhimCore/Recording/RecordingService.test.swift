@@ -161,6 +161,98 @@ final class RecordingServiceTests: XCTestCase {
         XCTAssertTrue(sessions.isEmpty)
     }
 
+    // Break: Discard clears the active session before hardware cleanup, allowing a new capture to overlap it.
+    func testNewStartWaitsForInFlightHardwareDiscard() async throws {
+        let harness = RecordingHarness()
+        let first = try await harness.service.start(source: .iphone)
+        await harness.recorder.suspendDiscard()
+        let discarding = Task { try await harness.service.discard() }
+        await harness.recorder.waitUntilDiscardStarts()
+
+        let overlap = expectation(description: "a second recorder start overlaps discard")
+        overlap.isInverted = true
+        await harness.recorder.observeSecondStart { overlap.fulfill() }
+        let driver = RecordingStartDriver()
+        let starting = Task { try await driver.start(harness.service) }
+        await driver.waitUntilCallStarts()
+        await fulfillment(of: [overlap], timeout: 0.1)
+        await harness.recorder.observeSecondStart(nil)
+
+        let startsDuringDiscard = await harness.recorder.startCount
+        XCTAssertEqual(startsDuringDiscard, 1)
+        await harness.recorder.releaseDiscard()
+        try await discarding.value
+        let second = try await starting.value
+        XCTAssertNotEqual(second.sessionID, first.sessionID)
+        let totalStarts = await harness.recorder.startCount
+        XCTAssertEqual(totalStarts, 2)
+    }
+
+    // Break: Encoder completion emitted synchronously by hardware activation is dropped, so Stop uses stale/later data.
+    func testEncoderCompletionDuringActivationIsPreserved() async throws {
+        let harness = RecordingHarness()
+        let events = await harness.service.events()
+        await harness.recorder.suspendStart(afterEmitting: [
+            .encoderCompleted(duration: 0.5, peakPowerDBFS: -60),
+            .peakPower(-60),
+        ])
+        await harness.recorder.completeOnStop(duration: 4, peakPowerDBFS: -20)
+        let starting = Task { try await harness.service.start(source: .iphone) }
+        await harness.recorder.waitUntilStartEventsAreEmitted()
+        await assertNextEvent(.peakPower(-60), from: events)
+        await harness.recorder.releaseStart()
+        _ = try await starting.value
+
+        let note = try await harness.service.stop()
+        let stopCount = await harness.recorder.stopCount
+
+        XCTAssertNil(note)
+        XCTAssertEqual(stopCount, 0)
+    }
+
+    // Break: Encoder failure emitted synchronously by hardware activation is dropped, leaving false success or a hung Stop.
+    func testEncoderFailureDuringActivationIsPreserved() async throws {
+        let harness = RecordingHarness()
+        let events = await harness.service.events()
+        await harness.recorder.suspendStart(afterEmitting: [.failure, .peakPower(-60)])
+        await harness.recorder.completeOnStop(duration: 4, peakPowerDBFS: -20)
+        let starting = Task { try await harness.service.start(source: .iphone) }
+        await harness.recorder.waitUntilStartEventsAreEmitted()
+        await assertNextEvent(.peakPower(-60), from: events)
+        await harness.recorder.releaseStart()
+        let snapshot = try await starting.value
+
+        do { _ = try await harness.service.stop(); XCTFail("Activation-time encoder failure was ignored") }
+        catch RecordingServiceError.encoderFailed { }
+        let sessionError = await harness.store.sessionError(id: snapshot.sessionID)
+        let stopCount = await harness.recorder.stopCount
+        let discardCount = await harness.recorder.discardCount
+        XCTAssertEqual(sessionError, .unreadable)
+        XCTAssertEqual(stopCount, 0)
+        XCTAssertEqual(discardCount, 1)
+    }
+
+    // Break: An interruption delivered while the microphone is activating is ignored instead of finalizing safely.
+    func testInterruptionDuringActivationFinalizesOnce() async throws {
+        let harness = RecordingHarness()
+        let events = await harness.service.events()
+        await harness.recorder.suspendStart(afterEmitting: [.interruption, .peakPower(-30)])
+        await harness.recorder.completeOnStop(duration: 3, peakPowerDBFS: -20)
+        harness.files.setFinalizedDuration(3)
+        let starting = Task { try await harness.service.start(source: .iphone) }
+        await harness.recorder.waitUntilStartEventsAreEmitted()
+        await assertNextEvent(.peakPower(-30), from: events)
+        await harness.recorder.releaseStart()
+        _ = try await starting.value
+
+        await harness.store.waitUntilNoteIsSaved()
+
+        let note = await harness.store.firstNote()
+        let stopCount = await harness.recorder.stopCount
+        XCTAssertEqual(note?.captureOutcome, .interrupted)
+        XCTAssertEqual(stopCount, 1)
+    }
+
     // Break: overlapping Stop and interruption calls close the encoder twice or create two Notes.
     func testOverlappingStopAndInterruptionShareOneFinalization() async throws {
         let harness = RecordingHarness()
@@ -265,6 +357,19 @@ final class RecordingServiceTests: XCTestCase {
         let note = try await harness.service.stop()
         XCTAssertNil(note)
     }
+
+    private func assertNextEvent(_ expected: RecordingServiceEvent,
+        from events: AsyncStream<RecordingServiceEvent>, file: StaticString = #filePath, line: UInt = #line) async {
+        let received = expectation(description: "receive activation-time recorder event")
+        let reading = Task {
+            var iterator = events.makeAsyncIterator()
+            let event = await iterator.next()
+            XCTAssertEqual(event, expected, file: file, line: line)
+            received.fulfill()
+        }
+        await fulfillment(of: [received], timeout: 0.5)
+        reading.cancel()
+    }
 }
 
 private struct RecordingHarness {
@@ -283,9 +388,20 @@ private actor RecordingRecorderFake: AudioRecorder {
     private let continuation: AsyncStream<RecordingEvent>.Continuation
     private(set) var startCount = 0
     private(set) var stopCount = 0
+    private(set) var discardCount = 0
     private var stopResult: (TimeInterval, Float)?
     private var activationFails = false
     private var stopStartedWaiters: [CheckedContinuation<Void, Never>] = []
+    private var startEvents: [RecordingEvent] = []
+    private var shouldSuspendStart = false
+    private var startEventsWereEmitted = false
+    private var startEventsWaiters: [CheckedContinuation<Void, Never>] = []
+    private var startReleaseWaiter: CheckedContinuation<Void, Never>?
+    private var shouldSuspendDiscard = false
+    private var discardHasStarted = false
+    private var discardStartedWaiters: [CheckedContinuation<Void, Never>] = []
+    private var discardReleaseWaiter: CheckedContinuation<Void, Never>?
+    private var secondStartObserver: (@Sendable () -> Void)?
 
     init() {
         (stream, continuation) = AsyncStream.makeStream(of: RecordingEvent.self)
@@ -294,7 +410,15 @@ private actor RecordingRecorderFake: AudioRecorder {
     func events() -> AsyncStream<RecordingEvent> { stream }
     func start(at url: URL) async throws {
         startCount += 1
+        if startCount == 2 { secondStartObserver?() }
         if activationFails { throw RecordingTestError.activationFailed }
+        for event in startEvents { continuation.yield(event) }
+        if shouldSuspendStart {
+            startEventsWereEmitted = true
+            for waiter in startEventsWaiters { waiter.resume() }
+            startEventsWaiters.removeAll()
+            await withCheckedContinuation { startReleaseWaiter = $0 }
+        }
     }
     func stop() async throws {
         stopCount += 1
@@ -304,7 +428,14 @@ private actor RecordingRecorderFake: AudioRecorder {
             continuation.yield(.encoderCompleted(duration: stopResult.0, peakPowerDBFS: stopResult.1))
         }
     }
-    func discard() async {}
+    func discard() async {
+        discardCount += 1
+        guard shouldSuspendDiscard else { return }
+        discardHasStarted = true
+        for waiter in discardStartedWaiters { waiter.resume() }
+        discardStartedWaiters.removeAll()
+        await withCheckedContinuation { discardReleaseWaiter = $0 }
+    }
     func completeOnStop(duration: TimeInterval, peakPowerDBFS: Float) {
         stopResult = (duration, peakPowerDBFS)
     }
@@ -316,6 +447,30 @@ private actor RecordingRecorderFake: AudioRecorder {
         if stopCount > 0 { return }
         await withCheckedContinuation { stopStartedWaiters.append($0) }
     }
+    func suspendStart(afterEmitting events: [RecordingEvent]) {
+        startEvents = events
+        shouldSuspendStart = true
+    }
+    func waitUntilStartEventsAreEmitted() async {
+        if startEventsWereEmitted { return }
+        await withCheckedContinuation { startEventsWaiters.append($0) }
+    }
+    func releaseStart() {
+        startReleaseWaiter?.resume()
+        startReleaseWaiter = nil
+        shouldSuspendStart = false
+    }
+    func suspendDiscard() { shouldSuspendDiscard = true }
+    func waitUntilDiscardStarts() async {
+        if discardHasStarted { return }
+        await withCheckedContinuation { discardStartedWaiters.append($0) }
+    }
+    func releaseDiscard() {
+        discardReleaseWaiter?.resume()
+        discardReleaseWaiter = nil
+        shouldSuspendDiscard = false
+    }
+    func observeSecondStart(_ observer: (@Sendable () -> Void)?) { secondStartObserver = observer }
 }
 
 private enum RecordingTestError: Error { case activationFailed }
@@ -393,6 +548,24 @@ private actor RecordingStoreFake: WhimStore {
     func waitUntilNoteIsSaved() async {
         if !notes.isEmpty { return }
         await withCheckedContinuation { noteSavedWaiters.append($0) }
+    }
+    func firstNote() -> Note? { notes.values.first }
+}
+
+private actor RecordingStartDriver {
+    private var callStarted = false
+    private var callStartedWaiter: CheckedContinuation<Void, Never>?
+
+    func start(_ service: RecordingService) async throws -> RecordingSnapshot {
+        callStarted = true
+        callStartedWaiter?.resume()
+        callStartedWaiter = nil
+        return try await service.start(source: .iphone)
+    }
+
+    func waitUntilCallStarts() async {
+        if callStarted { return }
+        await withCheckedContinuation { callStartedWaiter = $0 }
     }
 }
 

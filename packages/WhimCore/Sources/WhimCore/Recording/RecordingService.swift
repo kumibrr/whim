@@ -38,15 +38,18 @@ public actor RecordingService {
     private let serviceEvents: AsyncStream<RecordingServiceEvent>
     private let serviceEventContinuation: AsyncStream<RecordingServiceEvent>.Continuation
     private var active: RecordingSnapshot?
+    private var activating: RecordingSnapshot?
     private var startTask: Task<RecordingSnapshot, Error>?
     private var recorderEventTask: Task<Void, Never>?
     private var finalizationTask: Task<Note?, Error>?
+    private var discardTask: Task<Void, Error>?
     private var encoderCompletion: EncoderMetrics?
     private var encoderFailure: RecordingServiceError?
     private var encoderWaiter: CheckedContinuation<EncoderMetrics, Error>?
     private var recorderStreamEnded = false
     private var warningEmitted = false
     private var maximumStopRequested = false
+    private var interruptionDuringActivation = false
 
     public init(
         recorder: any AudioRecorder,
@@ -70,6 +73,7 @@ public actor RecordingService {
     public func events() -> AsyncStream<RecordingServiceEvent> { serviceEvents }
 
     public func start(source: CaptureSource) async throws -> RecordingSnapshot {
+        if let discardTask { try await discardTask.value }
         if let active { return active }
         if let startTask { return try await startTask.value }
 
@@ -92,15 +96,28 @@ public actor RecordingService {
             createdAt: snapshot.createdAt, source: snapshot.source)
         do {
             try await store.saveRecordingSession(session)
-            beginConsumingRecorderEvents()
-            try await recorder.start(at: files.temporaryURL(for: snapshot.sessionID))
             encoderCompletion = nil
             encoderFailure = nil
+            encoderWaiter = nil
             warningEmitted = false
             maximumStopRequested = false
+            interruptionDuringActivation = false
+            activating = snapshot
+            beginConsumingRecorderEvents()
+            try await recorder.start(at: files.temporaryURL(for: snapshot.sessionID))
             active = snapshot
+            activating = nil
+            if interruptionDuringActivation {
+                interruptionDuringActivation = false
+                Task { try? await self.handleInterruption() }
+            }
             return snapshot
         } catch {
+            activating = nil
+            interruptionDuringActivation = false
+            encoderCompletion = nil
+            encoderFailure = nil
+            encoderWaiter = nil
             await recorder.discard()
             try? files.deleteTemporary(sessionID: snapshot.sessionID)
             try? await store.discardRecordingSession(sessionID: snapshot.sessionID)
@@ -117,6 +134,10 @@ public actor RecordingService {
     }
 
     private func beginFinalization(outcome: CaptureOutcome) async throws -> Note? {
+        if let discardTask {
+            try await discardTask.value
+            return nil
+        }
         if let startTask { _ = try await startTask.value }
         if let finalizationTask { return try await finalizationTask.value }
         guard let snapshot = active else { return nil }
@@ -134,6 +155,7 @@ public actor RecordingService {
     }
 
     public func discard() async throws {
+        if let discardTask { return try await discardTask.value }
         if let startTask { _ = try await startTask.value }
         if let finalizationTask {
             _ = try await finalizationTask.value
@@ -141,6 +163,18 @@ public actor RecordingService {
         }
         guard let snapshot = active else { return }
         active = nil
+        let task = Task { try await self.performDiscard(snapshot) }
+        discardTask = task
+        do {
+            try await task.value
+            discardTask = nil
+        } catch {
+            discardTask = nil
+            throw error
+        }
+    }
+
+    private func performDiscard(_ snapshot: RecordingSnapshot) async throws {
         await recorder.discard()
         try files.deleteTemporary(sessionID: snapshot.sessionID)
         try await store.discardRecordingSession(sessionID: snapshot.sessionID)
@@ -157,9 +191,10 @@ public actor RecordingService {
     }
 
     private func consume(_ event: RecordingEvent) {
+        let captureExists = active != nil || activating != nil
         switch event {
         case .elapsed(let elapsed):
-            guard active != nil else { return }
+            guard captureExists else { return }
             serviceEventContinuation.yield(.elapsed(elapsed))
             let warningTime = RecordingLimits.maximumDuration.timeInterval
                 - RecordingLimits.warningLeadTime.timeInterval
@@ -172,23 +207,27 @@ public actor RecordingService {
                 Task { try? await self.stop() }
             }
         case .peakPower(let power):
-            guard active != nil else { return }
+            guard captureExists else { return }
             serviceEventContinuation.yield(.peakPower(power))
         case .routeChanged:
-            guard active != nil else { return }
+            guard captureExists else { return }
             serviceEventContinuation.yield(.routeChanged)
         case .interruption:
-            guard active != nil else { return }
-            Task { try? await self.handleInterruption() }
+            guard captureExists else { return }
+            if activating != nil {
+                interruptionDuringActivation = true
+            } else {
+                Task { try? await self.handleInterruption() }
+            }
         case .encoderCompleted(let duration, let peakPowerDBFS):
-            guard active != nil else { return }
+            guard captureExists else { return }
             guard encoderCompletion == nil, encoderFailure == nil else { return }
             let metrics = EncoderMetrics(duration: duration, peakPowerDBFS: peakPowerDBFS)
             encoderCompletion = metrics
             encoderWaiter?.resume(returning: metrics)
             encoderWaiter = nil
         case .failure:
-            guard active != nil else { return }
+            guard captureExists else { return }
             failEncoderWaiter(with: .encoderFailed)
         }
     }
@@ -214,7 +253,9 @@ public actor RecordingService {
     private func finalize(_ snapshot: RecordingSnapshot, outcome: CaptureOutcome) async throws -> Note? {
         if recorderStreamEnded { encoderFailure = .eventStreamEnded }
         do {
-            try await recorder.stop()
+            if encoderCompletion == nil, encoderFailure == nil {
+                try await recorder.stop()
+            }
             let metrics = try await waitForEncoderCompletion()
             if metrics.duration < RecordingLimits.silenceDiscardDuration.timeInterval
                 && metrics.peakPowerDBFS <= RecordingLimits.meaningfulPeakPowerDBFS {
@@ -241,6 +282,7 @@ public actor RecordingService {
             } else {
                 localError = .durabilityFailure
             }
+            if error is RecordingServiceError { await recorder.discard() }
             try? await store.recordSessionError(localError, sessionID: snapshot.sessionID)
             throw error
         }
