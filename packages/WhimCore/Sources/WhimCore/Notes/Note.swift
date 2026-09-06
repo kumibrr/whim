@@ -49,6 +49,9 @@ public struct Note: Codable, Equatable, Sendable {
     public let audioURL: URL
     public let workflowID: String
     public let delivery: Delivery
+    public let localError: LocalAudioError?
+
+    public var isDeliveryEligible: Bool { !requiresReview && localError == nil && delivery.receipt == nil }
 
     public init(
         id: NoteID,
@@ -62,7 +65,8 @@ public struct Note: Codable, Equatable, Sendable {
         requiresReview: Bool,
         audioURL: URL,
         workflowID: String = WorkflowDefinition.default.id,
-        delivery: Delivery = .pending
+        delivery: Delivery = .pending,
+        localError: LocalAudioError? = nil
     ) {
         self.id = id
         self.recordingSessionID = recordingSessionID
@@ -76,6 +80,7 @@ public struct Note: Codable, Equatable, Sendable {
         self.audioURL = audioURL
         self.workflowID = workflowID
         self.delivery = delivery
+        self.localError = localError
     }
 }
 
@@ -125,6 +130,7 @@ public struct NoteProjection: Codable, Equatable, Sendable {
     public let status: DeliveryStatus
     public let requiresReview: Bool
     public let hasLocalAudio: Bool
+    public let localError: LocalAudioError?
 
     public init(note: Note, hasLocalAudio: Bool = true) {
         id = note.id
@@ -132,8 +138,9 @@ public struct NoteProjection: Codable, Equatable, Sendable {
         createdAt = note.createdAt
         duration = note.duration
         source = note.source
-        status = note.delivery.status
+        status = note.localError != nil && note.delivery.receipt == nil ? .failed : note.delivery.status
         requiresReview = note.requiresReview
-        self.hasLocalAudio = hasLocalAudio
+        self.hasLocalAudio = hasLocalAudio && note.localError == nil
+        localError = note.localError
     }
 }

@@ -10,7 +10,12 @@ let productionSources = [
     "Delivery/Workflow.swift",
     "Notes/Note.swift",
     "Notes/WhimStore.swift",
+    "Notes/DatabaseMigrator.swift",
+    "Notes/AudioFileStore.swift",
+    "Notes/FileProtection.swift",
+    "Notes/SQLiteWhimStore.swift",
     "Recording/RecordingSessionID.swift",
+    "Recovery/RecoveryScanner.swift",
     "Retention/RetentionPolicy.swift",
     "WebhookConfiguration/WebhookConfiguration.swift",
 ]
@@ -24,15 +29,21 @@ let unitTestSources = [
     "Retention/RetentionPolicy.test.swift",
     "WebhookConfiguration/WebhookConfiguration.test.swift",
 ]
-let integrationTestSources = ["AppComposition/WhimCoreVersion.integration.test.swift"]
+let integrationTestSources = [
+    "AppComposition/WhimCoreVersion.integration.test.swift",
+    "Notes/SQLiteWhimStore.integration.test.swift",
+    "Recovery/RecoveryScanner.integration.test.swift",
+]
 
 let package = Package(
     name: "WhimCore",
     platforms: [.iOS(.v18), .watchOS(.v11), .macOS(.v15)],
     products: [.library(name: "WhimCore", targets: ["WhimCore"])],
+    dependencies: [.package(url: "https://github.com/groue/GRDB.swift.git", from: "7.10.0")],
     targets: [
         .target(
             name: "WhimCore",
+            dependencies: [.product(name: "GRDB", package: "GRDB.swift")],
             path: "Sources/WhimCore",
             exclude: unitTestSources + integrationTestSources,
             sources: productionSources

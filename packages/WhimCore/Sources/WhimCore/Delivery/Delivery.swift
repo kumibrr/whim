@@ -71,6 +71,7 @@ public struct AttemptFailure: Codable, Equatable, Sendable {
     public let failedAt: Date
     public let reason: AttemptFailureReason
     public let retryAfter: Date?
+    /// A bounded, non-secret excerpt prepared by the HTTP transport before persistence.
     public let responseExcerpt: String?
 
     public init(

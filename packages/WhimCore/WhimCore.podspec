@@ -10,6 +10,7 @@ Pod::Spec.new do |spec|
   spec.platform = :ios, '18.0'
   spec.swift_version = '6.0'
   spec.static_framework = true
+  spec.dependency 'GRDB.swift', '7.11.1'
   spec.source_files = 'Sources/WhimCore/**/*.swift'
   spec.exclude_files = [
     'Sources/WhimCore/**/*.test.swift',

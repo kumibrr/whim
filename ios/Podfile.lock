@@ -254,6 +254,9 @@ PODS:
   - EXUpdatesInterface (57.0.1):
     - ExpoModulesCore
   - FBLazyVector (0.86.3)
+  - GRDB.swift (7.11.1):
+    - GRDB.swift/standard (= 7.11.1)
+  - GRDB.swift/standard (7.11.1)
   - hermes-engine (250829098.0.17):
     - hermes-engine/Pre-built (= 250829098.0.17)
   - hermes-engine/Pre-built (250829098.0.17)
@@ -2407,7 +2410,8 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - WhimCore (1.0.0)
+  - WhimCore (1.0.0):
+    - GRDB.swift (= 7.11.1)
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -2442,6 +2446,7 @@ DEPENDENCIES:
   - ExpoWhim (from `../packages/expo-whim`)
   - EXUpdatesInterface (from `../node_modules/expo-updates-interface/ios`)
   - FBLazyVector (from `../node_modules/react-native/Libraries/FBLazyVector`)
+  - GRDB.swift (from `https://github.com/groue/GRDB.swift.git`, tag `v7.11.1`)
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
   - RCTRequired (from `../node_modules/react-native/Libraries/Required`)
@@ -2588,6 +2593,9 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-updates-interface/ios"
   FBLazyVector:
     :path: "../node_modules/react-native/Libraries/FBLazyVector"
+  GRDB.swift:
+    :git: https://github.com/groue/GRDB.swift.git
+    :tag: v7.11.1
   hermes-engine:
     :podspec: "../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec"
     :tag: hermes-v250829098.0.17
@@ -2752,6 +2760,11 @@ EXTERNAL SOURCES:
   Yoga:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
+CHECKOUT OPTIONS:
+  GRDB.swift:
+    :git: https://github.com/groue/GRDB.swift.git
+    :tag: v7.11.1
+
 SPEC CHECKSUMS:
   EXConstants: 799577d2516460afb4b57874d6823a62327ce5c7
   EXJSONUtils: 7a1683cfa2cbe6d11fca97097d51a496755b0287
@@ -2784,6 +2797,7 @@ SPEC CHECKSUMS:
   ExpoWhim: f620eaad87bad18939b504011b6a69a40d5b264a
   EXUpdatesInterface: 92d2aa5194b6fb93ca8ab749db75665cb28b2e60
   FBLazyVector: 2138c6c2ab66c31bf5754dc18097fbc498a49c7f
+  GRDB.swift: 182a9022de5d725adfa2a46ad4d7cde0efa25ca3
   hermes-engine: 63c5db7d529c36335fada6582fd293ae2a105d77
   RCTDeprecation: 96f68ebf33f8762466b01d57d6e873c4f30efb07
   RCTRequired: 166eed8ad6d8440e73e56d09a9090366609823d2
@@ -2863,9 +2877,9 @@ SPEC CHECKSUMS:
   RNReanimated: fcf6a8cdd698fb09a811a8d6c5bcfe36575d965d
   RNScreens: c1a06fd73d0581a2a28a160577be393f579662b9
   RNWorklets: 43af89f696342f91118a2f1f3a879056e2f47331
-  WhimCore: 6cd08c8175310d5b19c680529765239ec49bcc75
+  WhimCore: fd0bba49ab83dbf63d02515c2c86994289ffe22b
   Yoga: 18b74b3ade30bebc1904004dfaceae1dd02a330a
 
-PODFILE CHECKSUM: 640d0069eb9b97900d82a496fcadac68a15e07ec
+PODFILE CHECKSUM: 21fe1fc4fbf1de76bf8f336daf7bd417cb6de716
 
 COCOAPODS: 1.16.2
