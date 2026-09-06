@@ -34,6 +34,7 @@ target 'whim' do
 
   target 'WhimBridgeIntegrationTests' do
     inherit! :search_paths
+    pod 'WhimCore', :path => '../packages/WhimCore'
   end
 
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'

@@ -2,6 +2,7 @@ import type { CaptureSource } from '../recording/RecordingProjection';
 
 export type DeliveryStatus = 'setup_required' | 'queued' | 'sending' | 'sent' | 'failed';
 export type LocalAudioError = 'storageFull' | 'unreadable' | 'missing' | 'durabilityFailure';
+export type DeliveryWorkflowError = 'delivery_preparation_failed' | 'delivery_persistence_failed';
 
 export type NoteProjection = {
   schemaVersion: 1;
@@ -14,6 +15,7 @@ export type NoteProjection = {
   requiresReview: boolean;
   hasLocalAudio: boolean;
   localError: LocalAudioError | null;
+  workflowError: DeliveryWorkflowError | null;
 };
 
 export type AttemptProjection = {

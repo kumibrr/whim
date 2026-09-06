@@ -132,6 +132,7 @@ public struct NoteProjection: Codable, Equatable, Sendable {
     public let requiresReview: Bool
     public let hasLocalAudio: Bool
     public let localError: LocalAudioError?
+    public let workflowError: DeliveryWorkflowError?
 
     public init(note: Note, hasLocalAudio: Bool = true) {
         schemaVersion = WhimCoreVersion.schema
@@ -144,11 +145,12 @@ public struct NoteProjection: Codable, Equatable, Sendable {
         requiresReview = note.requiresReview
         self.hasLocalAudio = hasLocalAudio && note.localError == nil
         localError = note.localError
+        workflowError = note.delivery.workflowError
     }
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, id, title, createdAt, durationSeconds, source, status
-        case requiresReview, hasLocalAudio, localError
+        case requiresReview, hasLocalAudio, localError, workflowError
     }
 
     public init(from decoder: Decoder) throws {
@@ -167,6 +169,7 @@ public struct NoteProjection: Codable, Equatable, Sendable {
         requiresReview = try values.decode(Bool.self, forKey: .requiresReview)
         hasLocalAudio = try values.decode(Bool.self, forKey: .hasLocalAudio)
         localError = try values.decodeIfPresent(LocalAudioError.self, forKey: .localError)
+        workflowError = try values.decodeIfPresent(DeliveryWorkflowError.self, forKey: .workflowError)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -178,5 +181,6 @@ public struct NoteProjection: Codable, Equatable, Sendable {
         try values.encode(status, forKey: .status); try values.encode(requiresReview, forKey: .requiresReview)
         try values.encode(hasLocalAudio, forKey: .hasLocalAudio)
         try values.encode(localError, forKey: .localError)
+        try values.encode(workflowError, forKey: .workflowError)
     }
 }

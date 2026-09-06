@@ -22,6 +22,7 @@ public protocol WhimStore: Sendable {
     func saveConfigurationRevision(_ revision: ConfigurationRevision) async throws
     func configurationRevision(for noteID: NoteID) async throws -> ConfigurationRevision?
     func note(id: NoteID) async throws -> Note?
+    func deliveryAttempts(noteID: NoteID) async throws -> [Attempt]
     func listNotes(filter: NoteFilter) async throws -> [NoteProjection]
     func saveFinalized(_ finalized: FinalizedRecording) async throws -> Note
     func updateTitle(noteID: NoteID, title: String, source: TitleSource) async throws
@@ -40,6 +41,12 @@ public protocol WhimStore: Sendable {
 public extension WhimStore {
     func latestConfigurationRevision() async throws -> ConfigurationRevision? { nil }
     func reset() async throws { throw WhimStoreError.unsupportedOperation }
+    func deliveryAttempts(noteID: NoteID) async throws -> [Attempt] {
+        guard let note = try await note(id: noteID) else { return [] }
+        let values = note.delivery.activeAttempts + note.delivery.failedAttempts.map(\.attempt)
+        var seen = Set<AttemptID>()
+        return values.filter { seen.insert($0.id).inserted }
+    }
     func beginRetryCycle(noteID: NoteID) async throws -> Bool { false }
     func markExhaustionNotified(noteID: NoteID, retryCycle: Int) async throws -> Bool { true }
 }

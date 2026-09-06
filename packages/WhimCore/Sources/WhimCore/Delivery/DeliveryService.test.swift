@@ -333,6 +333,8 @@ final class DeliveryServiceTests: XCTestCase {
         let note = try await h.store.note(id: h.note.id)!
         let requestCount = await h.fakeTransport.count()
         XCTAssertNil(note.localError)
+        XCTAssertEqual(note.delivery.workflowError, .deliveryPreparationFailed)
+        XCTAssertEqual(note.delivery.status, .failed)
         XCTAssertTrue(note.delivery.activeAttempts.isEmpty)
         XCTAssertTrue(note.delivery.failedAttempts.isEmpty)
         XCTAssertEqual(requestCount, 0)
@@ -350,6 +352,20 @@ final class DeliveryServiceTests: XCTestCase {
         XCTAssertEqual(recovered, .sent)
         let recoveredRequestCount = await h.fakeTransport.count()
         XCTAssertEqual(recoveredRequestCount, 1)
+    }
+
+    // Break: reset cancellation is persisted as a user-visible workflow failure or consumes an Attempt failure.
+    func testCancellationDoesNotBecomeWorkflowOrAttemptFailure() async throws {
+        let h = try DeliveryHarness(responses: [.failure(CancellationError())])
+
+        do {
+            _ = try await h.service.deliver(noteID: h.note.id)
+            XCTFail("Expected cancellation")
+        } catch is CancellationError { }
+
+        let note = try await h.store.note(id: h.note.id)!
+        XCTAssertNil(note.delivery.workflowError)
+        XCTAssertTrue(note.delivery.failedAttempts.isEmpty)
     }
 
     // Break: Watch delivery records an iPhone Attempt.
@@ -637,7 +653,11 @@ private actor DeliveryStoreFake: WhimStore {
     func releaseLease(_ kind: LeaseKind, noteID: NoteID, owner: UUID) { leaseHeld = false }
     func beginRetryCycle(noteID: NoteID) -> Bool {
         guard stored.delivery.receipt == nil else { return false }
-        var delivery = stored.delivery; delivery.currentRetryCycle += 1; stored = replacing(delivery: delivery); return true
+        var delivery = stored.delivery
+        delivery.currentRetryCycle += 1
+        delivery.workflowError = nil
+        stored = replacing(delivery: delivery)
+        return true
     }
     func markExhaustionNotified(noteID: NoteID, retryCycle: Int) -> Bool { notifiedCycles.insert(retryCycle).inserted }
     func setReceiptOnAcquire(_ value: Bool) { receiptOnAcquire = value }

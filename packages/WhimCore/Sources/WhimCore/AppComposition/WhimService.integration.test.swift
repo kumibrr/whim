@@ -3,6 +3,26 @@ import XCTest
 @testable import WhimCore
 
 final class WhimServiceIntegrationTests: XCTestCase {
+    func testEventSubscriptionCancellationDoesNotTerminateFutureSubscriptions() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let client: any WhimClient = harness.makeService()
+        let firstStream = client.events()
+        let first = Task { for await _ in firstStream { } }
+        first.cancel()
+        await first.value
+        let secondStream = client.events()
+        let received = Task { () -> WhimEvent? in
+            for await event in secondStream { return event }
+            return nil
+        }
+
+        _ = try await client.startRecording(source: .iphone)
+        let event = await received.value
+
+        XCTAssertEqual(event?.type, .recordingStarted)
+    }
+
     func testUserDefaultsPreferencesPersistAcrossInstancesAndResetTruthfully() async throws {
         let suite = "app.whim.tests.\(UUID().uuidString)"
         defer { UserDefaults().removePersistentDomain(forName: suite) }
@@ -40,6 +60,38 @@ final class WhimServiceIntegrationTests: XCTestCase {
         XCTAssertEqual(sent?.status, .sent)
     }
 
+    func testSentAttemptDetailSurvivesReceiptReductionAndStoreReopen() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let session = RecordingSession(id: RecordingSessionID(), noteID: NoteID(),
+            createdAt: Date(timeIntervalSince1970: 1_000), source: .iphone)
+        try await harness.store.saveRecordingSession(session)
+        try writeAudioFixture(to: harness.files.temporaryURL(for: session.id))
+        _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"),
+            now: Date(timeIntervalSince1970: 1_000))
+        let persistedRevision = try await harness.store.latestConfigurationRevision()
+        let revision = try XCTUnwrap(persistedRevision)
+        let client: any WhimClient = harness.makeService()
+        _ = try await client.listNotes(filter: .all)
+
+        try await client.sendRecovered(noteID: session.noteID)
+        let persistedAttempts = try await harness.store.deliveryAttempts(noteID: session.noteID)
+        let live = try await client.note(id: session.noteID)
+        let reopenedStore = try SQLiteWhimStore.open(at: harness.databaseURL, now: { harness.clock.now })
+        let reopenedClient: any WhimClient = harness.makeService(store: reopenedStore)
+        let reopened = try await reopenedClient.note(id: session.noteID)
+
+        XCTAssertEqual(persistedAttempts.count, 1)
+        for detail in [live, reopened] {
+            XCTAssertEqual(detail?.attempts.count, 1)
+            XCTAssertEqual(detail?.attempts.first?.outcome, .sent)
+            XCTAssertEqual(detail?.attempts.first?.configurationRevisionID,
+                revision.id.rawValue.uuidString.lowercased())
+            XCTAssertEqual(detail?.attempts.first?.destination.host, "example.com")
+            XCTAssertEqual(detail?.attempts.first?.responseStatusCode, 204)
+        }
+    }
+
     func testStopReturnsPromptlyWhileDeliveryAndOneSharedTitleJobContinue() async throws {
         let harness = try WhimFacadeHarness()
         defer { harness.remove() }
@@ -47,6 +99,7 @@ final class WhimServiceIntegrationTests: XCTestCase {
         let transcriber = BlockingFacadeTranscriber()
         await harness.transport.suspendResponses()
         let client: any WhimClient = harness.makeService(transcriber: transcriber)
+        let events = FacadeEventProbe(stream: client.events())
         _ = try await client.startRecording(source: .iphone)
 
         let stopping = Task { try await client.stopRecording() }
@@ -57,6 +110,7 @@ final class WhimServiceIntegrationTests: XCTestCase {
         await fulfillment(of: [completed], timeout: 0.2)
         let transcriptionCount = transcriber.callCount
         let transportCount = await harness.transport.requestCount
+        await events.waitForStatus(.sending, count: 1)
         await harness.transport.resumeResponses()
         let stopped = try await stopping.value
         transcriber.finish(with: "A later local title")
@@ -64,6 +118,51 @@ final class WhimServiceIntegrationTests: XCTestCase {
         XCTAssertEqual(transcriptionCount, 1)
         XCTAssertEqual(transportCount, 1)
         XCTAssertEqual(stopped?.status, .queued)
+    }
+
+    func testScheduledAttemptPublishesSendingBeforeTransportCompletes() async throws {
+        let harness = try WhimFacadeHarness(responses: [
+            HTTPResponse(statusCode: 500), HTTPResponse(statusCode: 204),
+        ])
+        defer { harness.remove() }
+        _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"))
+        let client: any WhimClient = harness.makeService()
+        let events = FacadeEventProbe(stream: client.events())
+        _ = try await client.startRecording(source: .iphone)
+        _ = try await client.stopRecording()
+        await harness.scheduler.waitForCount(1)
+        await events.waitForStatus(.sending, count: 1)
+
+        harness.clock.advance(by: 61)
+        await harness.transport.suspendResponses()
+        let scheduled = Task { try await harness.scheduler.runNext() }
+        await harness.transport.waitForRequestCount(2)
+        await events.waitForStatus(.sending, count: 2)
+        let whileBlocked = try await client.listNotes(filter: .all).first
+        await harness.transport.resumeResponses()
+        try await scheduled.value
+
+        XCTAssertEqual(whileBlocked?.status, .sending)
+    }
+
+    func testAutomaticDeliveryPreparationFailureBecomesSanitizedFailedProjection() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"))
+        let builder = WebhookRequestBuilder(makeBodyFileURL: { _ in throw POSIXError(.ENOSPC) })
+        let client: any WhimClient = harness.makeService(requestBuilder: builder)
+        let events = FacadeEventProbe(stream: client.events())
+        _ = try await client.startRecording(source: .iphone)
+        let stopped = try await client.stopRecording()
+
+        await events.waitForWorkflowError(.deliveryPreparationFailed)
+        let failed = try await client.note(id: try XCTUnwrap(stopped?.id))
+
+        XCTAssertEqual(failed?.status, .failed)
+        XCTAssertEqual(failed?.workflowError, .deliveryPreparationFailed)
+        XCTAssertTrue(failed?.attempts.isEmpty == true)
+        let requestCount = await harness.transport.requestCount
+        XCTAssertEqual(requestCount, 0)
     }
 
     func testInterruptionFinalizationStartsWorkflowAndPublishesResult() async throws {
@@ -203,32 +302,42 @@ private final class WhimFacadeHarness: @unchecked Sendable {
     let files: AudioFileStore
     let recorder = FacadeRecorder()
     let credentials = FacadeCredentials()
-    let transport = FacadeTransport()
+    let transport: FacadeTransport
     let scheduler = FacadeScheduler()
+    let clock: FacadeClock
     let preferences = FacadePreferences()
     let configuration: WebhookConfigurationService
 
-    init() throws {
+    var databaseURL: URL { root.appendingPathComponent("whim.sqlite") }
+
+    init(responses: [HTTPResponse] = [HTTPResponse(statusCode: 204)]) throws {
+        let clock = FacadeClock(Date(timeIntervalSince1970: 1_000))
+        self.clock = clock
         root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        store = try SQLiteWhimStore.open(at: root.appendingPathComponent("whim.sqlite"))
+        store = try SQLiteWhimStore.open(at: root.appendingPathComponent("whim.sqlite"), now: { clock.now })
         files = try AudioFileStore(root: root.appendingPathComponent("Audio"), closeWriter: { _ in })
+        transport = FacadeTransport(responses: responses)
         configuration = WebhookConfigurationService(store: store, credentials: credentials)
     }
 
     func makeService(transcriber: any Transcriber = EmptyFacadeTranscriber(),
-                     preferences: (any PreferenceStoring)? = nil) -> WhimService {
-        let title = TitleService(transcriber: transcriber, store: store)
-        let delivery = DeliveryService(store: store, credentials: credentials, transport: transport,
-            notifications: FacadeNotifications(), scheduler: scheduler, isConnected: { true },
+                     preferences: (any PreferenceStoring)? = nil,
+                     store selectedStore: (any WhimStore)? = nil,
+                     requestBuilder: WebhookRequestBuilder = WebhookRequestBuilder()) -> WhimService {
+        let selectedStore = selectedStore ?? store
+        let title = TitleService(transcriber: transcriber, store: selectedStore)
+        let delivery = DeliveryService(store: selectedStore, credentials: credentials, transport: transport,
+            notifications: FacadeNotifications(), clock: clock, scheduler: scheduler, isConnected: { true },
+            requestBuilder: requestBuilder,
             titleSnapshot: { await title.enrich($0) }, scheduledFailure: { _, _ in },
             appVersion: "1.0.0", appBuild: "1")
-        let recording = RecordingService(recorder: recorder, store: store, files: files)
+        let recording = RecordingService(recorder: recorder, store: selectedStore, files: files)
         let configurationTest = ConfigurationTestService(credentials: credentials, transport: transport,
             fixtureAudioURL: root.appendingPathComponent("test.m4a"), appVersion: "1.0.0", appBuild: "1")
-        return WhimService(recording: recording, store: store, files: files, title: title,
+        return WhimService(recording: recording, store: selectedStore, files: files, title: title,
             delivery: delivery, configuration: configuration, configurationTest: configurationTest,
-            recovery: RecoveryScanner(store: store, files: files), preferences: preferences ?? self.preferences,
+            recovery: RecoveryScanner(store: selectedStore, files: files), preferences: preferences ?? self.preferences,
             credentials: credentials, scheduler: scheduler)
     }
 
@@ -300,8 +409,10 @@ private actor FacadeCredentials: CredentialStore {
 private actor FacadeTransport: HTTPTransport {
     private(set) var requestCount = 0
     private(set) var cancellationCount = 0
+    private var responses: [HTTPResponse]
     private var suspended = false
     private var waiters: [(Int, CheckedContinuation<Void, Never>)] = []
+    init(responses: [HTTPResponse]) { self.responses = responses }
     func send(_ request: WebhookRequest) async throws -> HTTPResponse {
         requestCount += 1
         let ready = waiters.filter { requestCount >= $0.0 }
@@ -311,7 +422,7 @@ private actor FacadeTransport: HTTPTransport {
             do { try await Task.sleep(for: .milliseconds(5)) }
             catch { cancellationCount += 1; throw error }
         }
-        return HTTPResponse(statusCode: 204)
+        return responses.isEmpty ? HTTPResponse(statusCode: 204) : responses.removeFirst()
     }
     func waitForRequestCount(_ count: Int) async {
         if requestCount >= count { return }
@@ -322,10 +433,82 @@ private actor FacadeTransport: HTTPTransport {
 }
 
 private actor FacadeScheduler: DeliveryScheduler {
+    private typealias Operation = @Sendable () async throws -> Void
+    private var operations: [Operation] = []
+    private var waiters: [(Int, CheckedContinuation<Void, Never>)] = []
     func schedule(noteID: NoteID, earliest: Date,
         operation: @escaping @Sendable () async throws -> Void,
-        onFailure: @escaping @Sendable (any Error) async -> Void) {}
-    func cancel(noteID: NoteID) {}
+        onFailure: @escaping @Sendable (any Error) async -> Void) {
+        operations.append(operation)
+        let ready = waiters.filter { operations.count >= $0.0 }
+        waiters.removeAll { operations.count >= $0.0 }
+        ready.forEach { $0.1.resume() }
+    }
+    func cancel(noteID: NoteID) { operations.removeAll() }
+    func waitForCount(_ count: Int) async {
+        if operations.count >= count { return }
+        await withCheckedContinuation { waiters.append((count, $0)) }
+    }
+    func runNext() async throws { try await operations.removeFirst()() }
+}
+
+private final class FacadeClock: Clock, @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Date
+    init(_ value: Date) { self.value = value }
+    var now: Date { lock.withLock { value } }
+    func advance(by interval: TimeInterval) { lock.withLock { value.addTimeInterval(interval) } }
+}
+
+private final class FacadeEventProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var statuses: [DeliveryStatus] = []
+    private var workflowErrors: [DeliveryWorkflowError] = []
+    private var statusWaiters: [(DeliveryStatus, Int, CheckedContinuation<Void, Never>)] = []
+    private var errorWaiters: [(DeliveryWorkflowError, CheckedContinuation<Void, Never>)] = []
+    private var task: Task<Void, Never>?
+
+    init(stream: AsyncStream<WhimEvent>) {
+        task = Task { [weak self] in
+            for await event in stream {
+                guard let note = event.note else { continue }
+                self?.record(status: note.status, workflowError: note.workflowError)
+            }
+        }
+    }
+
+    deinit { task?.cancel() }
+
+    func waitForStatus(_ status: DeliveryStatus, count: Int) async {
+        if lock.withLock({ statuses.count(where: { $0 == status }) >= count }) { return }
+        await withCheckedContinuation { continuation in
+            lock.withLock { statusWaiters.append((status, count, continuation)) }
+        }
+    }
+
+    func waitForWorkflowError(_ error: DeliveryWorkflowError) async {
+        if lock.withLock({ workflowErrors.contains(error) }) { return }
+        await withCheckedContinuation { continuation in
+            lock.withLock { errorWaiters.append((error, continuation)) }
+        }
+    }
+
+    private func record(status: DeliveryStatus, workflowError: DeliveryWorkflowError?) {
+        let ready = lock.withLock { () -> ([CheckedContinuation<Void, Never>], [CheckedContinuation<Void, Never>]) in
+            statuses.append(status)
+            if let workflowError { workflowErrors.append(workflowError) }
+            let readyStatuses = statusWaiters.filter { waiter in
+                statuses.count(where: { value in value == waiter.0 }) >= waiter.1
+            }
+            statusWaiters.removeAll { waiter in
+                statuses.count(where: { $0 == waiter.0 }) >= waiter.1
+            }
+            let readyErrors = errorWaiters.filter { workflowErrors.contains($0.0) }
+            errorWaiters.removeAll { workflowErrors.contains($0.0) }
+            return (readyStatuses.map(\.2), readyErrors.map(\.1))
+        }
+        (ready.0 + ready.1).forEach { $0.resume() }
+    }
 }
 
 private struct FacadeNotifications: DeliveryNotificationAdapter {

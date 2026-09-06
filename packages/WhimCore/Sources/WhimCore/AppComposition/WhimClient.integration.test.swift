@@ -25,6 +25,8 @@ final class WhimEventContractIntegrationTests: XCTestCase {
             [.failed, .setupRequired, .queued, .sending, .sent])
         XCTAssertEqual(events[6...10].map(\.note?.localError),
             [.unreadable, .storageFull, .missing, .durabilityFailure, nil])
+        XCTAssertEqual(events[6...10].map(\.note?.workflowError),
+            [.deliveryPreparationFailed, .deliveryPersistenceFailed, nil, nil, nil])
         XCTAssertNil(events[12].note)
     }
 

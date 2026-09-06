@@ -19,6 +19,7 @@ const note: NoteProjection = {
   requiresReview: false,
   hasLocalAudio: true,
   localError: null,
+  workflowError: null,
 };
 const recording: RecordingProjection = {
   schemaVersion: 1,

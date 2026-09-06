@@ -31,8 +31,11 @@ public actor SQLiteWhimStore: WhimStore {
         let recording = try JSONDecoder().decode(FinalizedRecording.self, from: data)
         let retryCycle = try Int.fetchOne(db, sql: "SELECT retry_cycle FROM deliveries WHERE note_id = ?",
             arguments: [id.rawValue.uuidString]) ?? 0
+        let workflowError = try String.fetchOne(db,
+            sql: "SELECT workflow_error FROM deliveries WHERE note_id = ?",
+            arguments: [id.rawValue.uuidString]).flatMap(DeliveryWorkflowError.init(rawValue:))
         var delivery = Delivery(hasUsableConfiguration: try Self.latestRevision(db: db) != nil,
-            currentRetryCycle: retryCycle)
+            currentRetryCycle: retryCycle, workflowError: workflowError)
         delivery.isConnected = connected
         delivery.hasExecutionLease = try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM leases WHERE note_id = ? AND kind = 'delivery' AND expires_at > ?)", arguments: [id.rawValue.uuidString, time.timeIntervalSince1970]) == true
         for row in try Row.fetchAll(db, sql: "SELECT metadata, failure FROM attempts WHERE note_id = ? ORDER BY rowid", arguments: [id.rawValue.uuidString]) {
@@ -149,6 +152,17 @@ public actor SQLiteWhimStore: WhimStore {
         try await database.read { db in try Self.latestRevision(db: db) }
     }
 
+    public func deliveryAttempts(noteID: NoteID) async throws -> [Attempt] {
+        try await database.read { db in
+            try Row.fetchAll(db,
+                sql: "SELECT metadata FROM attempts WHERE note_id = ? AND metadata IS NOT NULL ORDER BY rowid",
+                arguments: [noteID.rawValue.uuidString]).compactMap { row in
+                    guard let metadata: Data = row["metadata"] else { return nil }
+                    return try JSONDecoder().decode(Attempt.self, from: metadata)
+                }
+        }
+    }
+
     public func reset() async throws {
         try await database.write { db in
             for table in ["tombstone_acknowledgements", "tombstones", "leases", "workflow_steps",
@@ -245,6 +259,12 @@ public actor SQLiteWhimStore: WhimStore {
                 try Self.persist(attempt, noteID: noteID, db: db)
             case .attemptFailed(let failure):
                 try Self.persist(failure.attempt, noteID: noteID, db: db)
+            case .workflowFailed(let error):
+                try db.execute(sql: "UPDATE deliveries SET workflow_error = ? WHERE note_id = ?",
+                    arguments: [error.rawValue, noteID.rawValue.uuidString])
+            case .receipt:
+                try db.execute(sql: "UPDATE deliveries SET workflow_error = NULL WHERE note_id = ?",
+                    arguments: [noteID.rawValue.uuidString])
             default:
                 break
             }
@@ -308,7 +328,7 @@ public actor SQLiteWhimStore: WhimStore {
         try await database.write { db in
             guard let note = try Self.readNote(id: noteID, db: db), note.delivery.receipt == nil,
                   note.delivery.status == .failed else { return false }
-            try db.execute(sql: "UPDATE deliveries SET retry_cycle = retry_cycle + 1, notified_cycle = NULL WHERE note_id = ?",
+            try db.execute(sql: "UPDATE deliveries SET retry_cycle = retry_cycle + 1, notified_cycle = NULL, workflow_error = NULL WHERE note_id = ?",
                 arguments: [noteID.rawValue.uuidString])
             return db.changesCount == 1
         }

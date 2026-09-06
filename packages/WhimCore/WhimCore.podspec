@@ -10,6 +10,10 @@ Pod::Spec.new do |spec|
   spec.platform = :ios, '18.0'
   spec.swift_version = '6.0'
   spec.static_framework = true
+  # The watch app consumes the same sources through Swift Package Manager in the
+  # shared workspace. A distinct CocoaPods module name prevents Xcode from
+  # selecting the watch package module when compiling the iPhone bridge.
+  spec.module_name = 'WhimCorePod'
   spec.dependency 'GRDB.swift', '7.11.1'
   spec.source_files = 'Sources/WhimCore/**/*.swift'
   spec.exclude_files = [

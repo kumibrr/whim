@@ -95,7 +95,7 @@ let package = Package(
         ),
         .testTarget(
             name: "WhimCoreIntegrationTests",
-            dependencies: ["WhimCore"],
+            dependencies: ["WhimCore", .product(name: "GRDB", package: "GRDB.swift")],
             path: "Sources/WhimCore",
             exclude: productionSources + unitTestSources,
             sources: integrationTestSources,

@@ -129,6 +129,11 @@ public enum DeliveryStatus: String, Codable, Sendable {
     case failed
 }
 
+public enum DeliveryWorkflowError: String, Codable, Sendable {
+    case deliveryPreparationFailed = "delivery_preparation_failed"
+    case deliveryPersistenceFailed = "delivery_persistence_failed"
+}
+
 public struct Delivery: Codable, Equatable, Sendable {
     public internal(set) var hasUsableConfiguration: Bool
     public internal(set) var isConnected: Bool
@@ -137,6 +142,7 @@ public struct Delivery: Codable, Equatable, Sendable {
     public internal(set) var failedAttempts: [AttemptFailure]
     public internal(set) var receipt: Receipt?
     public internal(set) var currentRetryCycle: Int
+    public internal(set) var workflowError: DeliveryWorkflowError?
 
     public init(
         hasUsableConfiguration: Bool = false,
@@ -145,7 +151,8 @@ public struct Delivery: Codable, Equatable, Sendable {
         activeAttempts: [Attempt] = [],
         failedAttempts: [AttemptFailure] = [],
         receipt: Receipt? = nil,
-        currentRetryCycle: Int = 0
+        currentRetryCycle: Int = 0,
+        workflowError: DeliveryWorkflowError? = nil
     ) {
         self.hasUsableConfiguration = hasUsableConfiguration
         self.isConnected = isConnected
@@ -154,6 +161,7 @@ public struct Delivery: Codable, Equatable, Sendable {
         self.failedAttempts = failedAttempts
         self.receipt = receipt
         self.currentRetryCycle = currentRetryCycle
+        self.workflowError = workflowError
     }
 
     public static let pending = Delivery()
@@ -161,6 +169,7 @@ public struct Delivery: Codable, Equatable, Sendable {
     public var status: DeliveryStatus {
         if receipt != nil { return .sent }
         if activeAttempts.contains(where: { $0.retryCycle == currentRetryCycle }) { return .sending }
+        if workflowError != nil { return .failed }
         if !hasUsableConfiguration { return .setupRequired }
 
         let currentFailures = failedAttempts.filter { $0.attempt.retryCycle == currentRetryCycle }
@@ -184,4 +193,5 @@ public enum DeliveryEvent: Codable, Equatable, Sendable {
     case attemptStarted(Attempt)
     case attemptFailed(AttemptFailure)
     case receipt(Receipt)
+    case workflowFailed(DeliveryWorkflowError)
 }

@@ -52,7 +52,7 @@ class RawModuleFake implements RawExpoWhimModule {
   getActiveRecording = async () => 'null';
   stopRecording = async () => 'null';
   discardRecording = async () => undefined;
-  listNotes = async () => JSON.stringify([{ schemaVersion: 1, id: '22222222-2222-2222-2222-222222222222', title: 'Idea', createdAt: '2026-09-04T20:20:00.000Z', durationSeconds: 1, source: 'iphone', status: 'queued', requiresReview: false, hasLocalAudio: true, localError: null }]);
+  listNotes = async () => JSON.stringify([{ schemaVersion: 1, id: '22222222-2222-2222-2222-222222222222', title: 'Idea', createdAt: '2026-09-04T20:20:00.000Z', durationSeconds: 1, source: 'iphone', status: 'queued', requiresReview: false, hasLocalAudio: true, localError: null, workflowError: null }]);
   getNote = async () => 'null';
   retry = async () => undefined;
   retryAllFailed = async () => 0;

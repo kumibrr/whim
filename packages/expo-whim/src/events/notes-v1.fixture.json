@@ -36,7 +36,8 @@
       "status": "failed",
       "requiresReview": false,
       "hasLocalAudio": false,
-      "localError": "unreadable"
+      "localError": "unreadable",
+      "workflowError": "delivery_preparation_failed"
     }
   },
   {
@@ -53,7 +54,8 @@
       "status": "setup_required",
       "requiresReview": false,
       "hasLocalAudio": false,
-      "localError": "storageFull"
+      "localError": "storageFull",
+      "workflowError": "delivery_persistence_failed"
     }
   },
   {
@@ -70,7 +72,8 @@
       "status": "queued",
       "requiresReview": true,
       "hasLocalAudio": false,
-      "localError": "missing"
+      "localError": "missing",
+      "workflowError": null
     }
   },
   {
@@ -87,7 +90,8 @@
       "status": "sending",
       "requiresReview": false,
       "hasLocalAudio": false,
-      "localError": "durabilityFailure"
+      "localError": "durabilityFailure",
+      "workflowError": null
     }
   },
   {
@@ -104,7 +108,8 @@
       "status": "sent",
       "requiresReview": false,
       "hasLocalAudio": true,
-      "localError": null
+      "localError": null,
+      "workflowError": null
     }
   },
   {

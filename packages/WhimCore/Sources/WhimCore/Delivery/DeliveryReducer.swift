@@ -29,6 +29,10 @@ public enum DeliveryReducer {
             guard reduced.receipt == nil else { return reduced }
             reduced.activeAttempts.removeAll { $0.id == receipt.attemptID }
             reduced.receipt = receipt
+            reduced.workflowError = nil
+        case .workflowFailed(let error):
+            guard reduced.receipt == nil else { return reduced }
+            reduced.workflowError = error
         }
 
         return reduced

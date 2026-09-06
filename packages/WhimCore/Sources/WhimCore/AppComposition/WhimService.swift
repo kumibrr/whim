@@ -29,8 +29,7 @@ public actor WhimService: WhimClient {
     private let preferences: any PreferenceStoring
     private let credentials: any CredentialStore
     private let scheduler: any DeliveryScheduler
-    private nonisolated let eventStream: AsyncStream<WhimEvent>
-    private nonisolated let eventContinuation: AsyncStream<WhimEvent>.Continuation
+    private nonisolated let eventBroadcaster = WhimEventBroadcaster()
     private var launchTask: Task<Void, Error>?
     private var recordingEventTask: Task<Void, Never>?
     private var deliveryEventTask: Task<Void, Never>?
@@ -53,11 +52,9 @@ public actor WhimService: WhimClient {
         self.delivery = delivery; self.configuration = configuration
         self.configurationTest = configurationTest; self.recovery = recovery
         self.preferences = preferences; self.credentials = credentials; self.scheduler = scheduler
-        let pair = AsyncStream.makeStream(of: WhimEvent.self)
-        eventStream = pair.stream; eventContinuation = pair.continuation
     }
 
-    public nonisolated func events() -> AsyncStream<WhimEvent> { eventStream }
+    public nonisolated func events() -> AsyncStream<WhimEvent> { eventBroadcaster.stream() }
 
     /// Production composition awaits this at process launch. Public commands also join it,
     /// so a caller can never race startup recovery.
@@ -102,7 +99,9 @@ public actor WhimService: WhimClient {
 
     public func note(id: NoteID) async throws -> NoteDetailProjection? {
         await beginCommand(); defer { endCommand() }; try await launch()
-        return try await store.note(id: id).map { NoteDetailProjection(note: $0) }
+        guard let note = try await store.note(id: id) else { return nil }
+        let attempts = try await store.deliveryAttempts(noteID: id)
+        return NoteDetailProjection(note: note, deliveryAttempts: attempts)
     }
 
     public func retry(noteID: NoteID) async throws {
@@ -230,7 +229,12 @@ public actor WhimService: WhimClient {
                 await self?.workerUpdated(noteID: note.id, token: token)
             }
             let deliveryStep = Task { [weak self] in
-                _ = try? await delivery.deliver(noteID: note.id)
+                do { _ = try await delivery.deliver(noteID: note.id) }
+                catch is CancellationError { return }
+                catch {
+                    await self?.workerFailed(noteID: note.id, token: token)
+                    return
+                }
                 await self?.workerUpdated(noteID: note.id, token: token)
             }
             await withTaskCancellationHandler {
@@ -255,6 +259,11 @@ public actor WhimService: WhimClient {
         if workflows[noteID]?.token == token { workflows[noteID] = nil }
     }
 
+    private func workerFailed(noteID: NoteID, token: UUID) async {
+        guard workflows[noteID]?.token == token else { return }
+        try? await publishCurrent(noteID)
+    }
+
     private func quiesce(noteID: NoteID) async {
         suppressedNoteIDs.insert(noteID)
         let workflow = workflows[noteID]
@@ -270,7 +279,7 @@ public actor WhimService: WhimClient {
                          note: NoteProjection? = nil, noteID: String? = nil,
                          elapsedSeconds: TimeInterval? = nil, peakPowerDBFS: Float? = nil) {
         sequence += 1
-        eventContinuation.yield(.init(sequence: sequence, type: type, recording: recording,
+        eventBroadcaster.yield(.init(sequence: sequence, type: type, recording: recording,
             note: note, noteID: noteID, elapsedSeconds: elapsedSeconds, peakPowerDBFS: peakPowerDBFS))
     }
 
@@ -289,6 +298,25 @@ public actor WhimService: WhimClient {
         case .endpoint: "endpoint"; case .customHeaders: "customHeaders"
         case .customHeader(let index): "customHeaders[\(index)]"; case nil: "configuration"
         }
+    }
+}
+
+private final class WhimEventBroadcaster: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuations: [UUID: AsyncStream<WhimEvent>.Continuation] = [:]
+
+    func stream() -> AsyncStream<WhimEvent> {
+        let id = UUID()
+        return AsyncStream { continuation in
+            lock.withLock { continuations[id] = continuation }
+            continuation.onTermination = { [weak self] _ in
+                self?.lock.withLock { self?.continuations[id] = nil }
+            }
+        }
+    }
+
+    func yield(_ event: WhimEvent) {
+        lock.withLock { Array(continuations.values) }.forEach { $0.yield(event) }
     }
 }
 
@@ -342,11 +370,16 @@ public enum WhimProductionComposition {
         let transport = URLSessionHTTPTransport()
         let scheduler = InProcessDeliveryScheduler()
         let connectivity = SystemConnectivity()
+        let notifications = LocalNotificationAdapter()
         let info = bundle.infoDictionary
         let delivery = DeliveryService(store: store, credentials: credentials, transport: transport,
-            notifications: LocalNotificationAdapter(), scheduler: scheduler,
+            notifications: notifications, scheduler: scheduler,
             isConnected: { connectivity.isConnected }, titleSnapshot: { await title.enrich($0) },
-            scheduledFailure: { _, _ in }, appVersion: info?["CFBundleShortVersionString"] as? String ?? "1.0.0",
+            scheduledFailure: { noteID, error in
+                guard !(error is CancellationError) else { return }
+                await notifications.notifyFailure(title: "Whim delivery",
+                    reason: "Delivery could not continue until it is retried.", noteID: noteID)
+            }, appVersion: info?["CFBundleShortVersionString"] as? String ?? "1.0.0",
             appBuild: info?["CFBundleVersion"] as? String ?? "1")
         let configuration = WebhookConfigurationService(store: store, credentials: credentials)
         let configurationTest = ConfigurationTestService(credentials: credentials, transport: transport,

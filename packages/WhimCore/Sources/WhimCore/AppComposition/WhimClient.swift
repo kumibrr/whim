@@ -92,40 +92,39 @@ public struct NoteDetailProjection: Codable, Equatable, Sendable {
     public let requiresReview: Bool
     public let hasLocalAudio: Bool
     public let localError: LocalAudioError?
+    public let workflowError: DeliveryWorkflowError?
     public let attempts: [AttemptProjection]
 
-    public init(note: Note, hasLocalAudio: Bool = true) {
+    public init(note: Note, hasLocalAudio: Bool = true, deliveryAttempts: [Attempt]? = nil) {
         let summary = NoteProjection(note: note, hasLocalAudio: hasLocalAudio)
         schemaVersion = summary.schemaVersion; id = summary.id.rawValue.uuidString.lowercased()
         title = summary.title; createdAt = summary.createdAt; durationSeconds = summary.duration
         source = summary.source; status = summary.status; requiresReview = summary.requiresReview
         self.hasLocalAudio = summary.hasLocalAudio; localError = summary.localError
-        var values = note.delivery.activeAttempts.map { Self.project($0, outcome: .sending) }
-        values += note.delivery.failedAttempts.map {
-            var projection = Self.project($0.attempt, outcome: .failed)
-            projection = AttemptProjection(id: projection.id,
-                configurationRevisionID: projection.configurationRevisionID, device: projection.device,
-                startedAt: projection.startedAt, destination: projection.destination, outcome: .failed,
-                failureReason: Self.failure($0.reason), responseStatusCode: Self.status($0.reason))
-            return projection
-        }
-        if let receipt = note.delivery.receipt,
-           let attempt = (note.delivery.activeAttempts + note.delivery.failedAttempts.map(\.attempt))
-            .first(where: { $0.id == receipt.attemptID }) {
-            values.append(AttemptProjection(id: attempt.id.rawValue.uuidString.lowercased(),
-                configurationRevisionID: attempt.configurationRevisionID.rawValue.uuidString.lowercased(),
-                device: attempt.device == .iphone ? .iphone : .appleWatch, startedAt: attempt.startedAt,
-                destination: .init(attempt.endpoint), outcome: .sent, failureReason: nil,
-                responseStatusCode: receipt.statusCode))
+        workflowError = summary.workflowError
+        let sourceAttempts = deliveryAttempts
+            ?? (note.delivery.activeAttempts + note.delivery.failedAttempts.map(\.attempt))
+        let values = sourceAttempts.compactMap { attempt -> AttemptProjection? in
+            if let receipt = note.delivery.receipt, receipt.attemptID == attempt.id {
+                return Self.project(attempt, outcome: .sent, responseStatusCode: receipt.statusCode)
+            }
+            if let failure = note.delivery.failedAttempts.first(where: { $0.attempt.id == attempt.id }) {
+                return Self.project(attempt, outcome: .failed, failureReason: Self.failure(failure.reason),
+                    responseStatusCode: Self.status(failure.reason))
+            }
+            guard note.delivery.activeAttempts.contains(where: { $0.id == attempt.id }) else { return nil }
+            return Self.project(attempt, outcome: .sending)
         }
         attempts = values.sorted { $0.startedAt < $1.startedAt }
     }
 
-    private static func project(_ attempt: Attempt, outcome: AttemptProjection.Outcome) -> AttemptProjection {
+    private static func project(_ attempt: Attempt, outcome: AttemptProjection.Outcome,
+                                failureReason: String? = nil, responseStatusCode: Int? = nil) -> AttemptProjection {
         AttemptProjection(id: attempt.id.rawValue.uuidString.lowercased(),
             configurationRevisionID: attempt.configurationRevisionID.rawValue.uuidString.lowercased(),
             device: attempt.device == .iphone ? .iphone : .appleWatch, startedAt: attempt.startedAt,
-            destination: .init(attempt.endpoint), outcome: outcome, failureReason: nil, responseStatusCode: nil)
+            destination: .init(attempt.endpoint), outcome: outcome, failureReason: failureReason,
+            responseStatusCode: responseStatusCode)
     }
     private static func failure(_ reason: AttemptFailureReason) -> String {
         switch reason { case .network: "network"; case .httpStatus: "http_status" }
@@ -136,7 +135,7 @@ public struct NoteDetailProjection: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, id, title, createdAt, durationSeconds, source, status
-        case requiresReview, hasLocalAudio, localError, attempts
+        case requiresReview, hasLocalAudio, localError, workflowError, attempts
     }
     public func encode(to encoder: Encoder) throws {
         var values = encoder.container(keyedBy: CodingKeys.self)
@@ -145,6 +144,7 @@ public struct NoteDetailProjection: Codable, Equatable, Sendable {
         try values.encode(durationSeconds, forKey: .durationSeconds); try values.encode(source, forKey: .source)
         try values.encode(status, forKey: .status); try values.encode(requiresReview, forKey: .requiresReview)
         try values.encode(hasLocalAudio, forKey: .hasLocalAudio); try values.encode(localError, forKey: .localError)
+        try values.encode(workflowError, forKey: .workflowError)
         try values.encode(attempts, forKey: .attempts)
     }
 }

@@ -1,6 +1,6 @@
 import ExpoModulesCore
 import Foundation
-import WhimCore
+import WhimCorePod
 
 public struct ExpoWhimErrorPayload: Codable, Equatable, Sendable {
     public let code: String
@@ -136,10 +136,45 @@ private actor ExpoWhimServiceProvider {
     }
 }
 
+final class ExpoWhimEventForwarder: @unchecked Sendable {
+    typealias ClientProvider = @Sendable () async throws -> any WhimClient
+    typealias Sink = @Sendable (WhimEvent) async -> Void
+    private let lock = NSLock()
+    private let client: ClientProvider
+    private var task: Task<Void, Never>?
+
+    init(client: @escaping ClientProvider) { self.client = client }
+
+    func start(sink: @escaping Sink) {
+        lock.withLock {
+            guard task == nil else { return }
+            let client = client
+            task = Task {
+                do {
+                    for await event in try await client().events() {
+                        guard !Task.isCancelled else { return }
+                        await sink(event)
+                    }
+                } catch { }
+            }
+        }
+    }
+
+    func stop() {
+        let task = lock.withLock { () -> Task<Void, Never>? in
+            defer { self.task = nil }
+            return self.task
+        }
+        task?.cancel()
+    }
+}
+
 public final class ExpoWhimModule: Module {
     public static let schemaVersion = WhimCoreVersion.schema
     private let provider = ExpoWhimServiceProvider()
-    private var eventTask: Task<Void, Never>?
+    private lazy var eventForwarder = ExpoWhimEventForwarder(client: { [provider] in
+        try await provider.client()
+    })
 
     public func definition() -> ModuleDefinition {
         Name("ExpoWhim")
@@ -169,19 +204,12 @@ public final class ExpoWhimModule: Module {
 
     private func bridge() async throws -> ExpoWhimBridge { ExpoWhimBridge(client: try await provider.client()) }
     private func startEventForwarding() {
-        guard eventTask == nil else { return }
-        eventTask = Task { [weak self] in
-            guard let self else { return }
-            do {
-                let client = try await provider.client()
-                for await event in client.events() {
-                    guard !Task.isCancelled else { return }
-                    if let body = try? ExpoWhimJSON.object(event) { self.sendEvent("onWhimEvent", body) }
-                }
-            } catch { }
+        eventForwarder.start { [weak self] event in
+            guard let self, let body = try? ExpoWhimJSON.object(event) else { return }
+            self.sendEvent("onWhimEvent", body)
         }
     }
-    private func stopEventForwarding() { eventTask?.cancel(); eventTask = nil }
+    private func stopEventForwarding() { eventForwarder.stop() }
 }
 
 extension ExpoWhimModule: @unchecked Sendable {}

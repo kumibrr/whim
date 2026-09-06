@@ -37,12 +37,16 @@ describe('notes-v1 native event contract', () => {
       source: 'apple_watch',
       status: 'failed',
       localError: 'unreadable',
+      workflowError: 'delivery_preparation_failed',
     });
     expect(events.slice(6, 11).map((event) => event.type === 'note.changed' && event.note.status)).toEqual([
       'failed', 'setup_required', 'queued', 'sending', 'sent',
     ]);
     expect(events.slice(6, 11).map((event) => event.type === 'note.changed' && event.note.localError)).toEqual([
       'unreadable', 'storageFull', 'missing', 'durabilityFailure', null,
+    ]);
+    expect(events.slice(6, 11).map((event) => event.type === 'note.changed' && event.note.workflowError)).toEqual([
+      'delivery_preparation_failed', 'delivery_persistence_failed', null, null, null,
     ]);
     expect('note' in events[12]).toBe(false);
   });

@@ -1,5 +1,5 @@
 import XCTest
-import WhimCore
+import WhimCorePod
 @testable import ExpoWhim
 
 final class ExpoWhimModuleIntegrationTests: XCTestCase {
@@ -17,7 +17,7 @@ final class ExpoWhimModuleIntegrationTests: XCTestCase {
         XCTAssertEqual(recording?["noteID"] as? String, "22222222-2222-2222-2222-222222222222")
 
         do {
-            try await bridge.updateWebhook(json: #"{"endpoint":"https://user:super-secret@example.com","bearerToken":"super-secret","hmacSecret":null,"customHeaders":[]}"#)
+            _ = try await bridge.updateWebhook(json: #"{"endpoint":"https://user:super-secret@example.com","bearerToken":"super-secret","hmacSecret":null,"customHeaders":[]}"#)
             XCTFail("Invalid configuration succeeded")
         } catch let error as ExpoWhimBridgeError {
             XCTAssertEqual(error.payload.code, "invalid_configuration")
@@ -38,10 +38,28 @@ final class ExpoWhimModuleIntegrationTests: XCTestCase {
         XCTAssertEqual(events.map(\.sequence), Array(1...13).map(UInt64.init))
         XCTAssertEqual(events.last?.type, .notesReset)
     }
+
+    func testNativeEventForwardingCanStopAndResubscribe() async {
+        let client = BridgeClientFake()
+        let received = BridgeEventRecorder()
+        let forwarder = ExpoWhimEventForwarder(client: { client })
+
+        forwarder.start { await received.append($0) }
+        await client.waitForSubscriptionCount(1)
+        forwarder.stop()
+        forwarder.start { await received.append($0) }
+        await client.waitForSubscriptionCount(2)
+        client.emit(.init(sequence: 1, type: .notesReset))
+        await received.waitForCount(1)
+
+        let receivedTypes = await received.values.map(\.type)
+        XCTAssertEqual(receivedTypes, [.notesReset])
+        forwarder.stop()
+    }
 }
 
 private final class BridgeClientFake: WhimClient, @unchecked Sendable {
-    private let stream = AsyncStream<WhimEvent> { $0.finish() }
+    private let eventSource = BridgeEventSource()
     func startRecording(source: CaptureSource) async throws -> RecordingProjection {
         RecordingProjection(sessionID: "11111111-1111-1111-1111-111111111111",
             noteID: "22222222-2222-2222-2222-222222222222", source: source,
@@ -64,5 +82,58 @@ private final class BridgeClientFake: WhimClient, @unchecked Sendable {
     }
     func updatePreferences(_ input: PreferenceInput) async throws {}
     func reset() async throws {}
-    func events() -> AsyncStream<WhimEvent> { stream }
+    func events() -> AsyncStream<WhimEvent> { eventSource.stream() }
+    func emit(_ event: WhimEvent) { eventSource.emit(event) }
+    func waitForSubscriptionCount(_ count: Int) async { await eventSource.waitForSubscriptionCount(count) }
+}
+
+private final class BridgeEventSource: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuations: [UUID: AsyncStream<WhimEvent>.Continuation] = [:]
+    private var subscriptionCount = 0
+    private var waiters: [(Int, CheckedContinuation<Void, Never>)] = []
+
+    func stream() -> AsyncStream<WhimEvent> {
+        let id = UUID()
+        return AsyncStream { continuation in
+            lock.withLock {
+                subscriptionCount += 1
+                continuations[id] = continuation
+                let ready = waiters.filter { subscriptionCount >= $0.0 }
+                waiters.removeAll { subscriptionCount >= $0.0 }
+                ready.forEach { $0.1.resume() }
+            }
+            continuation.onTermination = { [weak self] _ in
+                self?.lock.withLock { self?.continuations[id] = nil }
+            }
+        }
+    }
+
+    func emit(_ event: WhimEvent) {
+        lock.withLock { Array(continuations.values) }.forEach { $0.yield(event) }
+    }
+
+    func waitForSubscriptionCount(_ count: Int) async {
+        if lock.withLock({ subscriptionCount >= count }) { return }
+        await withCheckedContinuation { continuation in
+            lock.withLock { waiters.append((count, continuation)) }
+        }
+    }
+}
+
+private actor BridgeEventRecorder {
+    private(set) var values: [WhimEvent] = []
+    private var waiters: [(Int, CheckedContinuation<Void, Never>)] = []
+
+    func append(_ event: WhimEvent) {
+        values.append(event)
+        let ready = waiters.filter { values.count >= $0.0 }
+        waiters.removeAll { values.count >= $0.0 }
+        ready.forEach { $0.1.resume() }
+    }
+
+    func waitForCount(_ count: Int) async {
+        if values.count >= count { return }
+        await withCheckedContinuation { waiters.append((count, $0)) }
+    }
 }

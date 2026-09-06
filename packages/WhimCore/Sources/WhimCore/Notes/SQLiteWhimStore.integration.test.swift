@@ -1,9 +1,31 @@
 import Foundation
 import AVFoundation
+import GRDB
 import XCTest
 @testable import WhimCore
 
 final class PersistenceTests: XCTestCase {
+    // Break: a database created before workflow failures existed can no longer open or persist the new state.
+    func testV2DatabaseMigratesWorkflowFailureAcrossReopen() async throws {
+        let h = try PersistenceHarness()
+        defer { h.remove() }
+        let note = try await h.store.saveFinalized(h.recording())
+        let priorSchema = try DatabaseQueue(path: h.databaseURL.path)
+        try await priorSchema.write { db in
+            try db.execute(sql: "ALTER TABLE deliveries DROP COLUMN workflow_error")
+            try db.execute(sql: "DELETE FROM grdb_migrations WHERE identifier = ?",
+                arguments: ["v3-delivery-workflow-error"])
+        }
+
+        let migrated: any WhimStore = try SQLiteWhimStore.open(at: h.databaseURL)
+        _ = try await migrated.apply(.workflowFailed(.deliveryPreparationFailed), to: note.id)
+        let reopened: any WhimStore = try SQLiteWhimStore.open(at: h.databaseURL)
+        let persisted = try await reopened.note(id: note.id)
+
+        XCTAssertEqual(persisted?.delivery.workflowError, .deliveryPreparationFailed)
+        XCTAssertEqual(persisted?.delivery.status, .failed)
+    }
+
     // Break: manual Retry state disappears on restart, erases history, or remains exhausted.
     func testManualRetryCycleAndNotificationMarkerPersistAcrossReopen() async throws {
         let h = try PersistenceHarness()

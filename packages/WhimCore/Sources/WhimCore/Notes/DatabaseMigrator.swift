@@ -55,6 +55,11 @@ enum WhimDatabaseMigrator {
                 table.add(column: "notified_cycle", .integer)
             }
         }
+        migrator.registerMigration("v3-delivery-workflow-error") { db in
+            try db.alter(table: "deliveries") { table in
+                table.add(column: "workflow_error", .text)
+            }
+        }
         try migrator.migrate(queue)
     }
 }

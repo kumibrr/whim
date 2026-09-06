@@ -78,6 +78,15 @@ public struct DeliveryService: Sendable {
     public func events() -> AsyncStream<NoteID> { deliveryEvents }
 
     public func deliver(noteID: NoteID) async throws -> DeliveryResult {
+        do { return try await deliverCurrent(noteID: noteID) }
+        catch is CancellationError { throw CancellationError() }
+        catch {
+            await persistWorkflowFailure(noteID: noteID, error: error)
+            throw error
+        }
+    }
+
+    private func deliverCurrent(noteID: NoteID) async throws -> DeliveryResult {
         guard var note = try await store.note(id: noteID) else { return .failed }
         if let pending = await pendingOutcomes.outcome(for: noteID) {
             return try await persistPendingOutcome(pending, note: note)
@@ -90,6 +99,7 @@ public struct DeliveryService: Sendable {
         for attempt in note.delivery.activeAttempts where
             clock.now.timeIntervalSince(attempt.startedAt) >= DeliveryTimeouts.lease {
             _ = try await store.apply(.attemptFailed(.init(attempt: attempt, failedAt: clock.now, reason: .network)), to: noteID)
+            publish(noteID)
         }
         guard let refreshed = try await store.note(id: noteID) else { return .failed }
         note = refreshed
@@ -179,9 +189,11 @@ public struct DeliveryService: Sendable {
             switch error {
             case .sourceAudioMissing:
                 try await store.recordLocalError(.missing, noteID: note.id)
+                publish(note.id)
                 return .failed
             case .sourceAudioUnreadable:
                 try await store.recordLocalError(.unreadable, noteID: note.id)
+                publish(note.id)
                 return .failed
             case .metadataEncodingUnavailable, .temporaryOutputUnavailable:
                 throw error
@@ -189,10 +201,13 @@ public struct DeliveryService: Sendable {
         }
         defer { request.removeBodyFile() }
         let started = try await store.apply(.attemptStarted(attempt), to: note.id)
+        publish(note.id)
         if started.receipt != nil { return .sent }
         let response: HTTPResponse
         do {
             response = try await transport.send(request)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             return try await recordFailure(attempt: attempt, note: note, reason: .network,
                 retryAfter: nil, excerpt: nil)
@@ -221,6 +236,7 @@ public struct DeliveryService: Sendable {
 
     private func persistPendingOutcome(_ pending: PendingDeliveryOutcome, note: Note) async throws -> DeliveryResult {
         let delivery = try await store.apply(pending.event, to: note.id)
+        publish(note.id)
         await pendingOutcomes.clear(noteID: note.id, token: pending.token)
         switch pending.event {
         case .receipt:
@@ -285,13 +301,26 @@ public struct DeliveryService: Sendable {
     private func scheduled(noteID: NoteID, earliest: Date) async -> DeliveryResult {
         await scheduler.schedule(noteID: noteID, earliest: earliest) {
             _ = try await deliver(noteID: noteID)
-            deliveryEventContinuation.yield(noteID)
         } onFailure: { error in
+            await persistWorkflowFailure(noteID: noteID, error: error)
             await scheduledFailure(noteID, error)
-            deliveryEventContinuation.yield(noteID)
         }
         return .scheduled(earliest)
     }
+
+    private func persistWorkflowFailure(noteID: NoteID, error: any Error) async {
+        guard !(error is CancellationError) else { return }
+        let value: DeliveryWorkflowError
+        if let error = error as? WebhookRequestBuildError,
+           error == .metadataEncodingUnavailable || error == .temporaryOutputUnavailable {
+            value = .deliveryPreparationFailed
+        } else {
+            value = .deliveryPersistenceFailed
+        }
+        if (try? await store.apply(.workflowFailed(value), to: noteID)) != nil { publish(noteID) }
+    }
+
+    private func publish(_ noteID: NoteID) { deliveryEventContinuation.yield(noteID) }
 }
 
 private struct PendingDeliveryOutcome: Sendable {
