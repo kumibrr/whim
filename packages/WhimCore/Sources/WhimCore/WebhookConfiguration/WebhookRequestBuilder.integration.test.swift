@@ -63,6 +63,21 @@ final class WebhookIntegrationTests: XCTestCase {
         }
     }
 
+    // Break: releasing the lease after a known-outcome write failure lets another service resend the active Attempt.
+    func testSeparateServiceDefersActiveAttemptAfterOutcomeWriteFailure() async throws {
+        for statusCode in [204, 400] {
+            let observed = try await runOutcomeWriteFailureIsolation(statusCode: statusCode)
+            XCTAssertEqual(observed.secondResult, .scheduled(Date(timeIntervalSince1970: 1_135)),
+                "HTTP \(statusCode)")
+            XCTAssertEqual(observed.transportCount, 1, "HTTP \(statusCode)")
+            XCTAssertEqual(observed.note.delivery.activeAttempts.count, 1, "HTTP \(statusCode)")
+            XCTAssertTrue(observed.note.delivery.failedAttempts.isEmpty, "HTTP \(statusCode)")
+            XCTAssertNil(observed.note.delivery.receipt, "HTTP \(statusCode)")
+            XCTAssertFalse(observed.note.delivery.hasExecutionLease, "HTTP \(statusCode)")
+            XCTAssertEqual(observed.scheduled, [Date(timeIntervalSince1970: 1_135)], "HTTP \(statusCode)")
+        }
+    }
+
     // Break: URLSession accepts a self-signed local certificate through a custom trust bypass.
     func testURLSessionRejectsSelfSignedTLSCertificate() async throws {
         let server = try LoopbackServer(useTLS: true)
@@ -161,6 +176,52 @@ final class WebhookIntegrationTests: XCTestCase {
         let stored = try await store.note(id: finalized.id)
         let note = try XCTUnwrap(stored)
         return (result, note, await scheduler.count, await notifications.count)
+    }
+
+    private func runOutcomeWriteFailureIsolation(statusCode: Int) async throws
+        -> (secondResult: DeliveryResult, transportCount: Int, note: Note, scheduled: [Date]) {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let audioURL = root.appendingPathComponent("delivery.m4a")
+        try Data("isolated-audio".utf8).write(to: audioURL)
+        let clock = IntegrationClock(Date(timeIntervalSince1970: 1_000))
+        let databaseURL = root.appendingPathComponent("whim.sqlite")
+        let firstDatabase = try SQLiteWhimStore.open(at: databaseURL, now: { clock.now })
+        let secondDatabase = try SQLiteWhimStore.open(at: databaseURL, now: { clock.now })
+        let revision = ConfigurationRevision(id: ConfigurationRevisionID(), changedAt: Date(timeIntervalSince1970: 900),
+            endpoint: SanitizedEndpoint(scheme: "https", host: "example.com", path: "/hook"))
+        try await firstDatabase.saveConfigurationRevision(revision)
+        let finalized = FinalizedRecording(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "Isolation",
+            titleSource: .timestamp, createdAt: Date(timeIntervalSince1970: 900), duration: 1,
+            source: .iphone, captureOutcome: .completed, requiresReview: false, audioURL: audioURL)
+        _ = try await firstDatabase.saveFinalized(finalized)
+        let credentials = IntegrationCredentialStore(revisionID: revision.id,
+            value: StoredWebhookCredentials(endpoint: URL(string: "https://example.com/hook")!, bearerToken: nil,
+                hmacSecret: nil, customHeaders: []))
+        let transport = IntegrationHTTPTransport(statusCode: statusCode)
+        let notifications = IntegrationNotificationAdapter()
+        let firstScheduler = IntegrationDeliveryScheduler()
+        let secondScheduler = IntegrationDeliveryScheduler()
+        let failingStore = OutcomeWriteFailingStore(underlying: firstDatabase,
+            outcome: statusCode == 204 ? .receipt : .attemptFailure)
+        let first = DeliveryService(store: failingStore, credentials: credentials, transport: transport,
+            notifications: notifications, clock: clock, scheduler: firstScheduler, isConnected: { true },
+            requestBuilder: WebhookRequestBuilder(temporaryDirectory: root), scheduledFailure: { _, _ in },
+            appVersion: "1", appBuild: "1")
+        let second = DeliveryService(store: secondDatabase, credentials: credentials, transport: transport,
+            notifications: notifications, clock: clock, scheduler: secondScheduler, isConnected: { true },
+            requestBuilder: WebhookRequestBuilder(temporaryDirectory: root), scheduledFailure: { _, _ in },
+            appVersion: "1", appBuild: "1")
+
+        do {
+            _ = try await first.deliver(noteID: finalized.id)
+            XCTFail("Expected injected HTTP \(statusCode) outcome write failure")
+        } catch is InjectedOutcomeWriteError {}
+        let secondResult = try await second.deliver(noteID: finalized.id)
+        let stored = try await secondDatabase.note(id: finalized.id)
+        let note = try XCTUnwrap(stored)
+        return (secondResult, await transport.count, note, await secondScheduler.earliestDates)
     }
 #endif
     // Break: multipart order/media types, digests, signing, or idempotency headers drift from v1.
@@ -282,15 +343,106 @@ private actor IntegrationCredentialStore: CredentialStore {
 }
 
 private actor IntegrationDeliveryScheduler: DeliveryScheduler {
-    private(set) var count = 0
+    private(set) var entries: [ScheduledDelivery] = []
+    var count: Int { entries.count }
+    var earliestDates: [Date] { entries.map(\.earliest) }
     func schedule(noteID: NoteID, earliest: Date,
                   operation: @escaping @Sendable () async throws -> Void,
-                  onFailure: @escaping @Sendable (any Error) async -> Void) { count += 1 }
+                  onFailure: @escaping @Sendable (any Error) async -> Void) {
+        entries.append(.init(noteID: noteID, earliest: earliest))
+    }
     func cancel(noteID: NoteID) {}
 }
 
 private actor IntegrationNotificationAdapter: DeliveryNotificationAdapter {
     private(set) var count = 0
     func notifyFailure(title: String, reason: String, noteID: NoteID) { count += 1 }
+}
+
+private actor IntegrationHTTPTransport: HTTPTransport {
+    private let statusCode: Int
+    private(set) var count = 0
+    init(statusCode: Int) { self.statusCode = statusCode }
+    func send(_ request: WebhookRequest) -> HTTPResponse {
+        count += 1
+        return HTTPResponse(statusCode: statusCode)
+    }
+}
+
+private enum InjectedOutcomeWriteError: Error { case write }
+
+private actor OutcomeWriteFailingStore: WhimStore {
+    enum Outcome { case receipt, attemptFailure }
+    private let underlying: any WhimStore
+    private let outcome: Outcome
+    private var shouldFail = true
+
+    init(underlying: any WhimStore, outcome: Outcome) {
+        self.underlying = underlying
+        self.outcome = outcome
+    }
+
+    func apply(_ event: DeliveryEvent, to noteID: NoteID) async throws -> Delivery {
+        let matches = switch (outcome, event) {
+        case (.receipt, .receipt), (.attemptFailure, .attemptFailed): true
+        default: false
+        }
+        if matches, shouldFail {
+            shouldFail = false
+            throw InjectedOutcomeWriteError.write
+        }
+        return try await underlying.apply(event, to: noteID)
+    }
+
+    func recordLocalError(_ error: LocalAudioError, noteID: NoteID) async throws {
+        try await underlying.recordLocalError(error, noteID: noteID)
+    }
+    func saveRecoveryError(_ recording: FinalizedRecording, error: LocalAudioError) async throws {
+        try await underlying.saveRecoveryError(recording, error: error)
+    }
+    func send(noteID: NoteID) async throws { try await underlying.send(noteID: noteID) }
+    func saveRecordingSession(_ session: RecordingSession) async throws {
+        try await underlying.saveRecordingSession(session)
+    }
+    func recordingSessions() async throws -> [RecordingSession] { try await underlying.recordingSessions() }
+    func discardRecordingSession(sessionID: RecordingSessionID) async throws {
+        try await underlying.discardRecordingSession(sessionID: sessionID)
+    }
+    func recordSessionError(_ error: LocalAudioError, sessionID: RecordingSessionID) async throws {
+        try await underlying.recordSessionError(error, sessionID: sessionID)
+    }
+    func delete(noteID: NoteID) async throws { try await underlying.delete(noteID: noteID) }
+    func acknowledgeDeletion(noteID: NoteID, endpoint: AttemptDevice) async throws {
+        try await underlying.acknowledgeDeletion(noteID: noteID, endpoint: endpoint)
+    }
+    func deletions() async throws -> [DeletionTombstone] { try await underlying.deletions() }
+    func saveConfigurationRevision(_ revision: ConfigurationRevision) async throws {
+        try await underlying.saveConfigurationRevision(revision)
+    }
+    func configurationRevision(for noteID: NoteID) async throws -> ConfigurationRevision? {
+        try await underlying.configurationRevision(for: noteID)
+    }
+    func note(id: NoteID) async throws -> Note? { try await underlying.note(id: id) }
+    func listNotes(filter: NoteFilter) async throws -> [NoteProjection] {
+        try await underlying.listNotes(filter: filter)
+    }
+    func saveFinalized(_ finalized: FinalizedRecording) async throws -> Note {
+        try await underlying.saveFinalized(finalized)
+    }
+    func updateTitle(noteID: NoteID, title: String, source: TitleSource) async throws {
+        try await underlying.updateTitle(noteID: noteID, title: title, source: source)
+    }
+    func acquireLease(_ kind: LeaseKind, noteID: NoteID, owner: UUID, until: Date) async throws -> Bool {
+        try await underlying.acquireLease(kind, noteID: noteID, owner: owner, until: until)
+    }
+    func releaseLease(_ kind: LeaseKind, noteID: NoteID, owner: UUID) async throws {
+        try await underlying.releaseLease(kind, noteID: noteID, owner: owner)
+    }
+    func beginRetryCycle(noteID: NoteID) async throws -> Bool {
+        try await underlying.beginRetryCycle(noteID: noteID)
+    }
+    func markExhaustionNotified(noteID: NoteID, retryCycle: Int) async throws -> Bool {
+        try await underlying.markExhaustionNotified(noteID: noteID, retryCycle: retryCycle)
+    }
 }
 #endif

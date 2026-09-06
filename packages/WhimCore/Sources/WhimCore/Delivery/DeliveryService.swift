@@ -118,6 +118,11 @@ public struct DeliveryService: Sendable {
                 try await store.releaseLease(.delivery, noteID: noteID, owner: leaseOwner)
                 return .alreadySent
             }
+            if let horizon = freshNote.delivery.activeAttempts
+                .map({ $0.startedAt.addingTimeInterval(DeliveryTimeouts.lease) }).max() {
+                try await store.releaseLease(.delivery, noteID: noteID, owner: leaseOwner)
+                return await scheduled(noteID: noteID, earliest: max(clock.now, horizon))
+            }
             guard let freshRevision = try await revisionForNote(noteID),
                   let freshCredentials = try await credentialStore.credentials(for: freshRevision.id) else {
                 try await store.releaseLease(.delivery, noteID: noteID, owner: leaseOwner)
