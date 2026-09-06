@@ -114,9 +114,13 @@ private final class BridgeEventSource: @unchecked Sendable {
     }
 
     func waitForSubscriptionCount(_ count: Int) async {
-        if lock.withLock({ subscriptionCount >= count }) { return }
         await withCheckedContinuation { continuation in
-            lock.withLock { waiters.append((count, continuation)) }
+            let alreadyObserved = lock.withLock { () -> Bool in
+                guard subscriptionCount < count else { return true }
+                waiters.append((count, continuation))
+                return false
+            }
+            if alreadyObserved { continuation.resume() }
         }
     }
 }

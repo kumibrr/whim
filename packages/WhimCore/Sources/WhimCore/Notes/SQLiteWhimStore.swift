@@ -328,8 +328,15 @@ public actor SQLiteWhimStore: WhimStore {
         try await database.write { db in
             guard let note = try Self.readNote(id: noteID, db: db), note.delivery.receipt == nil,
                   note.delivery.status == .failed else { return false }
-            try db.execute(sql: "UPDATE deliveries SET retry_cycle = retry_cycle + 1, notified_cycle = NULL, workflow_error = NULL WHERE note_id = ?",
-                arguments: [noteID.rawValue.uuidString])
+            if note.delivery.workflowError != nil {
+                // A local workflow error consumed no HTTP Attempt. Clear it so an in-memory known
+                // outcome can be committed, or an active Attempt can retain its safety horizon.
+                try db.execute(sql: "UPDATE deliveries SET notified_cycle = NULL, workflow_error = NULL WHERE note_id = ?",
+                    arguments: [noteID.rawValue.uuidString])
+            } else {
+                try db.execute(sql: "UPDATE deliveries SET retry_cycle = retry_cycle + 1, notified_cycle = NULL WHERE note_id = ?",
+                    arguments: [noteID.rawValue.uuidString])
+            }
             return db.changesCount == 1
         }
     }

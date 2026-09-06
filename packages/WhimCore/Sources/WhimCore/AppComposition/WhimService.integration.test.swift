@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import XCTest
 @testable import WhimCore
 
@@ -163,6 +164,51 @@ final class WhimServiceIntegrationTests: XCTestCase {
         XCTAssertTrue(failed?.attempts.isEmpty == true)
         let requestCount = await harness.transport.requestCount
         XCTAssertEqual(requestCount, 0)
+    }
+
+    // Break: a known HTTP outcome whose local write fails remains Sending and Retry cannot recover it.
+    func testKnownHTTPOutcomeWriteFailureIsActionableWithoutDuplicateTransport() async throws {
+        for statusCode in [204, 400] {
+            let harness = try WhimFacadeHarness(responses: [HTTPResponse(statusCode: statusCode)])
+            defer { harness.remove() }
+            _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"))
+            let injector = try DatabaseQueue(path: harness.databaseURL.path)
+            let trigger = statusCode == 204 ? "fail_receipt_outcome" : "fail_failure_outcome"
+            let target = statusCode == 204
+                ? "BEFORE INSERT ON receipts"
+                : "BEFORE UPDATE OF failure ON attempts WHEN NEW.failure IS NOT NULL"
+            try await injector.write { db in
+                try db.execute(sql: """
+                    CREATE TRIGGER \(trigger) \(target)
+                    BEGIN SELECT RAISE(ABORT, 'injected known outcome write failure'); END
+                    """)
+            }
+            let client: any WhimClient = harness.makeService()
+            let events = FacadeEventProbe(stream: client.events())
+            _ = try await client.startRecording(source: .iphone)
+            let stopped = try await client.stopRecording()
+            let noteID = try XCTUnwrap(stopped?.id)
+
+            await events.waitForWorkflowError(.deliveryPersistenceFailed)
+            let actionable = try await client.note(id: noteID)
+            XCTAssertEqual(actionable?.status, .failed, "HTTP \(statusCode)")
+            XCTAssertEqual(actionable?.workflowError, .deliveryPersistenceFailed, "HTTP \(statusCode)")
+            XCTAssertEqual(actionable?.attempts.map(\.outcome), [.sending], "HTTP \(statusCode)")
+            let requestCountAfterFailure = await harness.transport.requestCount
+            XCTAssertEqual(requestCountAfterFailure, 1, "HTTP \(statusCode)")
+
+            try await injector.write { db in try db.execute(sql: "DROP TRIGGER \(trigger)") }
+            try await client.retry(noteID: noteID)
+            let recovered = try await client.note(id: noteID)
+
+            XCTAssertNil(recovered?.workflowError, "HTTP \(statusCode)")
+            XCTAssertEqual(recovered?.status, statusCode == 204 ? .sent : .failed, "HTTP \(statusCode)")
+            XCTAssertEqual(recovered?.attempts.map(\.outcome), [statusCode == 204 ? .sent : .failed],
+                "HTTP \(statusCode)")
+            XCTAssertEqual(recovered?.attempts.first?.responseStatusCode, statusCode, "HTTP \(statusCode)")
+            let requestCountAfterRecovery = await harness.transport.requestCount
+            XCTAssertEqual(requestCountAfterRecovery, 1, "HTTP \(statusCode)")
+        }
     }
 
     func testInterruptionFinalizationStartsWorkflowAndPublishesResult() async throws {
@@ -381,8 +427,14 @@ private final class BlockingFacadeTranscriber: Transcriber, @unchecked Sendable 
         }
     }
     func waitUntilStarted() async {
-        if callCount > 0 { return }
-        await withCheckedContinuation { waiter in lock.withLock { waiters.append(waiter) } }
+        await withCheckedContinuation { waiter in
+            let alreadyStarted = lock.withLock { () -> Bool in
+                guard calls == 0 else { return true }
+                waiters.append(waiter)
+                return false
+            }
+            if alreadyStarted { waiter.resume() }
+        }
     }
     func finish(with value: String) { resolve(.success(value)) }
     private func resolve(_ value: Result<String, Error>) {
@@ -480,16 +532,24 @@ private final class FacadeEventProbe: @unchecked Sendable {
     deinit { task?.cancel() }
 
     func waitForStatus(_ status: DeliveryStatus, count: Int) async {
-        if lock.withLock({ statuses.count(where: { $0 == status }) >= count }) { return }
         await withCheckedContinuation { continuation in
-            lock.withLock { statusWaiters.append((status, count, continuation)) }
+            let alreadyObserved = lock.withLock { () -> Bool in
+                guard statuses.count(where: { $0 == status }) < count else { return true }
+                statusWaiters.append((status, count, continuation))
+                return false
+            }
+            if alreadyObserved { continuation.resume() }
         }
     }
 
     func waitForWorkflowError(_ error: DeliveryWorkflowError) async {
-        if lock.withLock({ workflowErrors.contains(error) }) { return }
         await withCheckedContinuation { continuation in
-            lock.withLock { errorWaiters.append((error, continuation)) }
+            let alreadyObserved = lock.withLock { () -> Bool in
+                guard !workflowErrors.contains(error) else { return true }
+                errorWaiters.append((error, continuation))
+                return false
+            }
+            if alreadyObserved { continuation.resume() }
         }
     }
 

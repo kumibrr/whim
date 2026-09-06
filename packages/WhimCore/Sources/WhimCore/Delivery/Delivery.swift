@@ -168,8 +168,8 @@ public struct Delivery: Codable, Equatable, Sendable {
 
     public var status: DeliveryStatus {
         if receipt != nil { return .sent }
-        if activeAttempts.contains(where: { $0.retryCycle == currentRetryCycle }) { return .sending }
         if workflowError != nil { return .failed }
+        if activeAttempts.contains(where: { $0.retryCycle == currentRetryCycle }) { return .sending }
         if !hasUsableConfiguration { return .setupRequired }
 
         let currentFailures = failedAttempts.filter { $0.attempt.retryCycle == currentRetryCycle }
