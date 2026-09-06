@@ -94,6 +94,24 @@ final class TitleServiceTests: XCTestCase {
         XCTAssertEqual(persistedTitle, "A later local title.")
         XCTAssertEqual(requestedDuration, .milliseconds(300))
     }
+
+    // Break: delivery joining an already-running title job starts a second transcription.
+    func testConcurrentSnapshotCallersShareOneTitleJob() async {
+        let note = fixtureNote()
+        let transcriber = DedupeTranscriber()
+        let service = TitleService(transcriber: transcriber, store: TitleStoreFake(note: note),
+            sleep: neverReachDeadline)
+        let first = Task { await service.enrich(note) }
+        await transcriber.waitUntilStarted()
+        let second = Task { await service.enrich(note) }
+        for _ in 0..<100 { await Task.yield() }
+        let startsBeforeRelease = await transcriber.startCount
+        await transcriber.release(with: "Shared title.")
+        let values = await [first.value, second.value]
+
+        XCTAssertEqual(startsBeforeRelease, 1)
+        XCTAssertEqual(values.map(\.title), ["Shared title.", "Shared title."])
+    }
 }
 
 private func fixtureNote() -> Note {
@@ -134,6 +152,32 @@ private actor SuspendedTranscriber: Transcriber {
     func complete(with transcript: String) {
         resultWaiter?.resume(returning: transcript)
         resultWaiter = nil
+    }
+}
+
+private actor DedupeTranscriber: Transcriber {
+    private(set) var startCount = 0
+    private var resolved: String?
+    private var startedWaiters: [CheckedContinuation<Void, Never>] = []
+    private var resultWaiters: [CheckedContinuation<String, Never>] = []
+
+    func transcribe(audioAt url: URL, locale: Locale) async throws -> String {
+        startCount += 1
+        if let resolved { return resolved }
+        for waiter in startedWaiters { waiter.resume() }
+        startedWaiters.removeAll()
+        return await withCheckedContinuation { resultWaiters.append($0) }
+    }
+
+    func waitUntilStarted() async {
+        if startCount > 0 { return }
+        await withCheckedContinuation { startedWaiters.append($0) }
+    }
+
+    func release(with result: String) {
+        resolved = result
+        for waiter in resultWaiters { waiter.resume(returning: result) }
+        resultWaiters.removeAll()
     }
 }
 

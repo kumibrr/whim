@@ -48,6 +48,7 @@ public struct Attempt: Codable, Equatable, Sendable {
     public let device: AttemptDevice
     public let endpoint: SanitizedEndpoint
     public let startedAt: Date
+    public let retryCycle: Int
 
     public init(
         id: AttemptID = AttemptID(),
@@ -55,7 +56,8 @@ public struct Attempt: Codable, Equatable, Sendable {
         configurationRevisionID: ConfigurationRevisionID,
         device: AttemptDevice,
         endpoint: SanitizedEndpoint,
-        startedAt: Date
+        startedAt: Date,
+        retryCycle: Int = 0
     ) {
         self.id = id
         self.noteID = noteID
@@ -63,6 +65,22 @@ public struct Attempt: Codable, Equatable, Sendable {
         self.device = device
         self.endpoint = endpoint
         self.startedAt = startedAt
+        self.retryCycle = retryCycle
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, noteID, configurationRevisionID, device, endpoint, startedAt, retryCycle
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(AttemptID.self, forKey: .id)
+        noteID = try container.decode(NoteID.self, forKey: .noteID)
+        configurationRevisionID = try container.decode(ConfigurationRevisionID.self, forKey: .configurationRevisionID)
+        device = try container.decode(AttemptDevice.self, forKey: .device)
+        endpoint = try container.decode(SanitizedEndpoint.self, forKey: .endpoint)
+        startedAt = try container.decode(Date.self, forKey: .startedAt)
+        retryCycle = try container.decodeIfPresent(Int.self, forKey: .retryCycle) ?? 0
     }
 }
 
@@ -118,6 +136,7 @@ public struct Delivery: Codable, Equatable, Sendable {
     public internal(set) var activeAttempts: [Attempt]
     public internal(set) var failedAttempts: [AttemptFailure]
     public internal(set) var receipt: Receipt?
+    public internal(set) var currentRetryCycle: Int
 
     public init(
         hasUsableConfiguration: Bool = false,
@@ -125,7 +144,8 @@ public struct Delivery: Codable, Equatable, Sendable {
         hasExecutionLease: Bool = false,
         activeAttempts: [Attempt] = [],
         failedAttempts: [AttemptFailure] = [],
-        receipt: Receipt? = nil
+        receipt: Receipt? = nil,
+        currentRetryCycle: Int = 0
     ) {
         self.hasUsableConfiguration = hasUsableConfiguration
         self.isConnected = isConnected
@@ -133,19 +153,21 @@ public struct Delivery: Codable, Equatable, Sendable {
         self.activeAttempts = activeAttempts
         self.failedAttempts = failedAttempts
         self.receipt = receipt
+        self.currentRetryCycle = currentRetryCycle
     }
 
     public static let pending = Delivery()
 
     public var status: DeliveryStatus {
         if receipt != nil { return .sent }
-        if !activeAttempts.isEmpty { return .sending }
+        if activeAttempts.contains(where: { $0.retryCycle == currentRetryCycle }) { return .sending }
         if !hasUsableConfiguration { return .setupRequired }
 
-        let hasPermanentFailure = failedAttempts.contains {
+        let currentFailures = failedAttempts.filter { $0.attempt.retryCycle == currentRetryCycle }
+        let hasPermanentFailure = currentFailures.contains {
             RetryPolicy.classification(for: $0.reason) == .permanent
         }
-        let retryableFailureCount = failedAttempts.count {
+        let retryableFailureCount = currentFailures.count {
             RetryPolicy.classification(for: $0.reason) == .retryable
         }
         if hasPermanentFailure || retryableFailureCount >= RetryPolicy.maximumFailedAttempts {

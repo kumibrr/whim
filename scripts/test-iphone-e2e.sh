@@ -7,6 +7,7 @@ whim_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$whim_root/scripts/apple-toolchain.sh"
 whim_derived_data="${WHIM_DERIVED_DATA_PATH:-$whim_root/ios/build/DerivedData}"
 whim_metro_log="$whim_root/ios/build/metro-e2e.log"
+whim_webhook_log="$whim_root/ios/build/webhook-e2e.log"
 whim_bundle_id="app.whim.ios"
 mkdir -p "$(dirname "$whim_metro_log")"
 
@@ -32,6 +33,7 @@ if [[ -z "$whim_maestro" ]]; then
 fi
 
 whim_metro_pid=''
+whim_webhook_pid=''
 whim_cleanup() {
   xcrun simctl terminate "$WHIM_IPHONE_SIMULATOR_UDID" "$whim_bundle_id" >/dev/null 2>&1 || true
   xcrun simctl uninstall "$WHIM_IPHONE_SIMULATOR_UDID" "$whim_bundle_id" >/dev/null 2>&1 || true
@@ -39,8 +41,41 @@ whim_cleanup() {
     node "$whim_root/scripts/terminate-process-tree.mjs" "$whim_metro_pid" >/dev/null 2>&1 || true
     wait "$whim_metro_pid" >/dev/null 2>&1 || true
   fi
+  if [[ -n "$whim_webhook_pid" ]]; then
+    node "$whim_root/scripts/terminate-process-tree.mjs" "$whim_webhook_pid" >/dev/null 2>&1 || true
+    wait "$whim_webhook_pid" >/dev/null 2>&1 || true
+  fi
 }
 trap whim_cleanup EXIT
+
+env WHIM_WEBHOOK_PORT=0 \
+  node "$whim_root/packages/WhimCore/Sources/WhimCore/WebhookConfiguration/Fixtures/webhook-server.mjs" \
+  >"$whim_webhook_log" 2>&1 &
+whim_webhook_pid=$!
+whim_webhook_port="$(node - "$whim_webhook_log" "$whim_webhook_pid" <<'NODE'
+const fs = require('node:fs');
+const [log, pidText] = process.argv.slice(2);
+const pid = Number(pidText);
+(async () => {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      const line = fs.readFileSync(log, 'utf8').split('\n')[0];
+      const value = JSON.parse(line);
+      if (Number.isInteger(value.port)) {
+        process.stdout.write(String(value.port));
+        return;
+      }
+    } catch {}
+    try { process.kill(pid, 0); } catch { process.exit(1); }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  process.exit(1);
+})();
+NODE
+)" || {
+  echo "Loopback webhook did not become ready. See $whim_webhook_log" >&2
+  exit 1
+}
 
 (
   cd "$whim_root"
@@ -79,4 +114,5 @@ MAESTRO_CLI_NO_ANALYTICS=1 MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED=true \
   "$whim_maestro" test \
   --device "$WHIM_IPHONE_SIMULATOR_UDID" \
   -e "EXPO_DEV_CLIENT_URL=$whim_expo_url" \
+  -e "WHIM_WEBHOOK_TEST_URL=http://127.0.0.1:$whim_webhook_port/receive" \
   "$whim_root/e2e/iphone/smoke.e2e.test.yaml"

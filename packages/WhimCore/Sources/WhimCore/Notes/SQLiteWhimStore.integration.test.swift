@@ -4,6 +4,38 @@ import XCTest
 @testable import WhimCore
 
 final class PersistenceTests: XCTestCase {
+    // Break: manual Retry state disappears on restart, erases history, or remains exhausted.
+    func testManualRetryCycleAndNotificationMarkerPersistAcrossReopen() async throws {
+        let h = try PersistenceHarness()
+        defer { h.remove() }
+        let note = try await h.store.saveFinalized(h.recording())
+        let revision = ConfigurationRevision(id: ConfigurationRevisionID(), changedAt: Date(),
+            endpoint: SanitizedEndpoint(scheme: "https", host: "example.com", path: "/hook"))
+        try await h.store.saveConfigurationRevision(revision)
+        for offset in 0..<3 {
+            let attempt = Attempt(noteID: note.id, configurationRevisionID: revision.id, device: .iphone,
+                endpoint: revision.endpoint, startedAt: Date(timeIntervalSince1970: Double(offset)), retryCycle: 0)
+            _ = try await h.store.apply(.attemptFailed(.init(attempt: attempt, failedAt: Date(), reason: .network)), to: note.id)
+        }
+        let began = try await h.store.beginRetryCycle(noteID: note.id)
+        let firstMarker = try await h.store.markExhaustionNotified(noteID: note.id, retryCycle: 1)
+        let duplicateMarker = try await h.store.markExhaustionNotified(noteID: note.id, retryCycle: 1)
+        XCTAssertTrue(began)
+        XCTAssertTrue(firstMarker)
+        XCTAssertFalse(duplicateMarker)
+        let freshAttempt = Attempt(noteID: note.id, configurationRevisionID: revision.id, device: .iphone,
+            endpoint: revision.endpoint, startedAt: Date(), retryCycle: 1)
+        _ = try await h.store.apply(.attemptFailed(.init(attempt: freshAttempt, failedAt: Date(), reason: .network)), to: note.id)
+
+        let reopened: any WhimStore = try SQLiteWhimStore.open(at: h.databaseURL)
+        let persisted = try await reopened.note(id: note.id)!
+        XCTAssertEqual(persisted.delivery.currentRetryCycle, 1)
+        XCTAssertEqual(persisted.delivery.failedAttempts.count, 4)
+        XCTAssertEqual(persisted.delivery.status, .queued)
+        let reopenedMarker = try await reopened.markExhaustionNotified(noteID: note.id, retryCycle: 1)
+        XCTAssertFalse(reopenedMarker)
+    }
+
     // Break: retrying an imported Note inserts a duplicate or resets its persisted Delivery state.
     func testFinalizedImportReplayIsIdempotent() async throws {
         let h = try PersistenceHarness()

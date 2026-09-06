@@ -49,6 +49,12 @@ enum WhimDatabaseMigrator {
                 );
                 """)
         }
+        migrator.registerMigration("v2-delivery-retry-cycles") { db in
+            try db.alter(table: "deliveries") { table in
+                table.add(column: "retry_cycle", .integer).notNull().defaults(to: 0)
+                table.add(column: "notified_cycle", .integer)
+            }
+        }
         try migrator.migrate(queue)
     }
 }

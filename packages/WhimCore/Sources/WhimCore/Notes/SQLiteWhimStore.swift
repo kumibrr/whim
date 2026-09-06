@@ -29,7 +29,10 @@ public actor SQLiteWhimStore: WhimStore {
     private static func readNote(id: NoteID, db: Database, time: Date = Date(), connected: Bool = true) throws -> Note? {
         guard let data = try Data.fetchOne(db, sql: "SELECT metadata FROM notes WHERE id = ?", arguments: [id.rawValue.uuidString]) else { return nil }
         let recording = try JSONDecoder().decode(FinalizedRecording.self, from: data)
-        var delivery = Delivery(hasUsableConfiguration: try Self.latestRevision(db: db) != nil)
+        let retryCycle = try Int.fetchOne(db, sql: "SELECT retry_cycle FROM deliveries WHERE note_id = ?",
+            arguments: [id.rawValue.uuidString]) ?? 0
+        var delivery = Delivery(hasUsableConfiguration: try Self.latestRevision(db: db) != nil,
+            currentRetryCycle: retryCycle)
         delivery.isConnected = connected
         delivery.hasExecutionLease = try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM leases WHERE note_id = ? AND kind = 'delivery' AND expires_at > ?)", arguments: [id.rawValue.uuidString, time.timeIntervalSince1970]) == true
         for row in try Row.fetchAll(db, sql: "SELECT metadata, failure FROM attempts WHERE note_id = ? ORDER BY rowid", arguments: [id.rawValue.uuidString]) {
@@ -248,7 +251,8 @@ public actor SQLiteWhimStore: WhimStore {
 
     private static func sanitized(_ attempt: Attempt) -> Attempt {
         return Attempt(id: attempt.id, noteID: attempt.noteID, configurationRevisionID: attempt.configurationRevisionID,
-            device: attempt.device, endpoint: Self.sanitized(attempt.endpoint), startedAt: attempt.startedAt)
+            device: attempt.device, endpoint: Self.sanitized(attempt.endpoint), startedAt: attempt.startedAt,
+            retryCycle: attempt.retryCycle)
     }
 
     private static func sanitized(_ endpoint: SanitizedEndpoint) -> SanitizedEndpoint {
@@ -283,6 +287,27 @@ public actor SQLiteWhimStore: WhimStore {
     public func releaseLease(_ kind: LeaseKind, noteID: NoteID, owner: UUID) async throws {
         try await database.write { db in
             try db.execute(sql: "DELETE FROM leases WHERE note_id = ? AND kind = ? AND owner = ?", arguments: [noteID.rawValue.uuidString, kind.rawValue, owner.uuidString])
+        }
+    }
+
+    public func beginRetryCycle(noteID: NoteID) async throws -> Bool {
+        try await database.write { db in
+            guard let note = try Self.readNote(id: noteID, db: db), note.delivery.receipt == nil,
+                  note.delivery.status == .failed else { return false }
+            try db.execute(sql: "UPDATE deliveries SET retry_cycle = retry_cycle + 1, notified_cycle = NULL WHERE note_id = ?",
+                arguments: [noteID.rawValue.uuidString])
+            return db.changesCount == 1
+        }
+    }
+
+    public func markExhaustionNotified(noteID: NoteID, retryCycle: Int) async throws -> Bool {
+        try await database.write { db in
+            try db.execute(sql: """
+                UPDATE deliveries SET notified_cycle = ?
+                WHERE note_id = ? AND retry_cycle = ?
+                  AND (notified_cycle IS NULL OR notified_cycle != ?)
+                """, arguments: [retryCycle, noteID.rawValue.uuidString, retryCycle, retryCycle])
+            return db.changesCount == 1
         }
     }
 }

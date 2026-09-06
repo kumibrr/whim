@@ -31,6 +31,13 @@ public protocol WhimStore: Sendable {
         until: Date
     ) async throws -> Bool
     func releaseLease(_ kind: LeaseKind, noteID: NoteID, owner: UUID) async throws
+    func beginRetryCycle(noteID: NoteID) async throws -> Bool
+    func markExhaustionNotified(noteID: NoteID, retryCycle: Int) async throws -> Bool
+}
+
+public extension WhimStore {
+    func beginRetryCycle(noteID: NoteID) async throws -> Bool { false }
+    func markExhaustionNotified(noteID: NoteID, retryCycle: Int) async throws -> Bool { true }
 }
 
 public enum LocalAudioError: String, Codable, Sendable {

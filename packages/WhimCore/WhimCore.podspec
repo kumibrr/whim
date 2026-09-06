@@ -16,4 +16,9 @@ Pod::Spec.new do |spec|
     'Sources/WhimCore/**/*.test.swift',
     'Sources/WhimCore/**/*.integration.test.swift',
   ]
+  spec.resource_bundles = {
+    'WhimCoreConfigurationTest' => [
+      'Sources/WhimCore/WebhookConfiguration/Fixtures/configuration-test-fixture.m4a',
+    ],
+  }
 end

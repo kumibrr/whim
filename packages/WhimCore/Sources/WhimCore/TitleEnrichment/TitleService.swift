@@ -21,6 +21,7 @@ public struct TitleService: Sendable {
     private let locale: @Sendable () -> Locale
     private let timestampTitle: @Sendable (Date) -> String
     private let sleep: @Sendable (Duration) async throws -> Void
+    private let jobs = TitleJobs()
 
     public init(
         transcriber: any Transcriber,
@@ -41,6 +42,10 @@ public struct TitleService: Sendable {
     /// Returns the immutable metadata available to delivery at 300 ms. Recognition keeps
     /// running after that deadline and may update only the local Note title.
     public func enrich(_ note: Note) async -> TitleSnapshot {
+        await jobs.snapshot(for: note.id) { await produceSnapshot(note) }
+    }
+
+    private func produceSnapshot(_ note: Note) async -> TitleSnapshot {
         let fallback = TitleSnapshot(noteID: note.id, title: timestampTitle(note.createdAt), source: .timestamp)
         let resolution = TitleResolution()
         return await withCheckedContinuation { continuation in
@@ -88,6 +93,18 @@ public struct TitleService: Sendable {
             !CharacterSet.whitespacesAndNewlines.contains($0)
                 && !CharacterSet.punctuationCharacters.contains($0)
         }
+    }
+}
+
+private actor TitleJobs {
+    private var tasks: [NoteID: Task<TitleSnapshot, Never>] = [:]
+
+    func snapshot(for noteID: NoteID,
+                  operation: @escaping @Sendable () async -> TitleSnapshot) async -> TitleSnapshot {
+        if let existing = tasks[noteID] { return await existing.value }
+        let task = Task { await operation() }
+        tasks[noteID] = task
+        return await task.value
     }
 }
 
