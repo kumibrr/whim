@@ -130,25 +130,57 @@ public struct WebhookRequest: Sendable, CustomStringConvertible {
     }
 }
 
+public enum WebhookRequestBuildError: Error, Equatable, Sendable, CustomStringConvertible {
+    case sourceAudioMissing
+    case sourceAudioUnreadable
+    case metadataEncodingUnavailable
+    case temporaryOutputUnavailable
+
+    public var description: String {
+        switch self {
+        case .sourceAudioMissing: "The source audio is missing."
+        case .sourceAudioUnreadable: "The source audio cannot be read."
+        case .metadataEncodingUnavailable: "Webhook metadata could not be prepared."
+        case .temporaryOutputUnavailable: "The webhook request could not be prepared locally."
+        }
+    }
+}
+
 public struct WebhookRequestBuilder: Sendable {
     private let temporaryDirectory: URL
+    private let makeBodyFileURL: @Sendable (URL) throws -> URL
 
-    public init(temporaryDirectory: URL = FileManager.default.temporaryDirectory) {
+    public init(temporaryDirectory: URL = FileManager.default.temporaryDirectory,
+                makeBodyFileURL: @escaping @Sendable (URL) throws -> URL = { directory in
+                    directory.appendingPathComponent("whim-multipart-\(UUID().uuidString).tmp")
+                }) {
         self.temporaryDirectory = temporaryDirectory
+        self.makeBodyFileURL = makeBodyFileURL
     }
 
     public func build(note: Note, attemptID: AttemptID, credentials: StoredWebhookCredentials,
                       timestamp: Int64, event: String = "note.created", appVersion: String,
                       appBuild: String, boundary: String = "whim-\(UUID().uuidString.lowercased())") throws -> WebhookRequest {
-        let audioDigest = try WebhookDigest.sha256(fileAt: note.audioURL)
-        let audioSize = try FileManager.default.attributesOfItem(atPath: note.audioURL.path)[.size] as? NSNumber
+        guard FileManager.default.fileExists(atPath: note.audioURL.path) else {
+            throw WebhookRequestBuildError.sourceAudioMissing
+        }
+        let audioDigest: String
+        let audioSize: NSNumber?
+        do {
+            audioDigest = try WebhookDigest.sha256(fileAt: note.audioURL)
+            audioSize = try FileManager.default.attributesOfItem(atPath: note.audioURL.path)[.size] as? NSNumber
+        } catch {
+            throw WebhookRequestBuildError.sourceAudioUnreadable
+        }
         let metadata = WebhookMetadata(event: event, noteID: note.id, attemptID: attemptID,
             createdAt: note.createdAt, durationMilliseconds: Int((note.duration * 1_000).rounded()),
             source: note.source, title: note.title, titleSource: note.titleSource,
             captureOutcome: note.captureOutcome, workflowID: note.workflowID,
             audioSHA256: audioDigest, audioSizeBytes: audioSize?.int64Value ?? 0,
             appVersion: appVersion, appBuild: appBuild)
-        let metadataBytes = try WebhookJSON.encode(metadata)
+        let metadataBytes: Data
+        do { metadataBytes = try WebhookJSON.encode(metadata) }
+        catch { throw WebhookRequestBuildError.metadataEncodingUnavailable }
         let metadataDigest = WebhookDigest.sha256(metadataBytes)
         var headers: [String: String] = [
             "Content-Type": "multipart/form-data; boundary=\(boundary)",
@@ -166,30 +198,48 @@ public struct WebhookRequestBuilder: Sendable {
         }
         for header in credentials.customHeaders { headers[header.name] = header.value }
 
-        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
-        let bodyURL = temporaryDirectory.appendingPathComponent("whim-multipart-\(UUID().uuidString).tmp")
-        FileManager.default.createFile(atPath: bodyURL.path, contents: nil)
+        var bodyURL: URL?
         do {
+            try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+            let createdBodyURL = try makeBodyFileURL(temporaryDirectory)
+            bodyURL = createdBodyURL
+            guard FileManager.default.createFile(atPath: createdBodyURL.path, contents: nil) else {
+                throw WebhookRequestBuildError.temporaryOutputUnavailable
+            }
+            let bodyURL = createdBodyURL
             let output = try FileHandle(forWritingTo: bodyURL)
             defer { try? output.close() }
             try output.write(contentsOf: Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"metadata\"\r\nContent-Type: application/json\r\n\r\n".utf8))
             try output.write(contentsOf: metadataBytes)
             let filename = note.id.rawValue.uuidString.lowercased() + ".m4a"
             try output.write(contentsOf: Data("\r\n--\(boundary)\r\nContent-Disposition: form-data; name=\"audio\"; filename=\"\(filename)\"\r\nContent-Type: audio/mp4\r\n\r\n".utf8))
-            let input = try FileHandle(forReadingFrom: note.audioURL)
+            let input: FileHandle
+            do { input = try FileHandle(forReadingFrom: note.audioURL) }
+            catch { throw WebhookRequestBuildError.sourceAudioUnreadable }
             defer { try? input.close() }
             while true {
-                let chunk = try input.read(upToCount: 64 * 1024) ?? Data()
+                let chunk: Data
+                do { chunk = try input.read(upToCount: 64 * 1024) ?? Data() }
+                catch { throw WebhookRequestBuildError.sourceAudioUnreadable }
                 if chunk.isEmpty { break }
                 try output.write(contentsOf: chunk)
             }
             try output.write(contentsOf: Data("\r\n--\(boundary)--\r\n".utf8))
             try output.synchronize()
-        } catch {
-            try? FileManager.default.removeItem(at: bodyURL)
+        } catch let error as WebhookRequestBuildError {
+            if let bodyURL { try? FileManager.default.removeItem(at: bodyURL) }
             throw error
+        } catch {
+            if let bodyURL { try? FileManager.default.removeItem(at: bodyURL) }
+            throw WebhookRequestBuildError.temporaryOutputUnavailable
         }
-        let length = try FileManager.default.attributesOfItem(atPath: bodyURL.path)[.size] as? NSNumber
+        guard let bodyURL else { throw WebhookRequestBuildError.temporaryOutputUnavailable }
+        let length: NSNumber?
+        do { length = try FileManager.default.attributesOfItem(atPath: bodyURL.path)[.size] as? NSNumber }
+        catch {
+            try? FileManager.default.removeItem(at: bodyURL)
+            throw WebhookRequestBuildError.temporaryOutputUnavailable
+        }
         headers["Content-Length"] = String(length?.int64Value ?? 0)
         return WebhookRequest(url: credentials.endpoint, method: "POST", headers: headers,
             bodyFileURL: bodyURL, contentLength: length?.int64Value ?? 0)

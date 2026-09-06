@@ -19,6 +19,7 @@ public actor InProcessDeliveryScheduler: DeliveryScheduler {
         let earliest: Date
         let token: UUID
         let task: Task<Void, Never>
+        var isExecuting: Bool
     }
 
     private let clock: any Clock
@@ -31,32 +32,67 @@ public actor InProcessDeliveryScheduler: DeliveryScheduler {
     }
 
     public func schedule(noteID: NoteID, earliest: Date,
-                         operation: @escaping @Sendable () async -> Void) {
-        if let existing = pending[noteID], existing.earliest <= earliest { return }
+                         operation: @escaping @Sendable () async throws -> Void,
+                         onFailure: @escaping @Sendable (any Error) async -> Void) {
+        if let existing = pending[noteID], !existing.isExecuting, existing.earliest <= earliest { return }
         pending[noteID]?.task.cancel()
 
         let token = UUID()
         let task = Task { [weak self] in
             guard let self else { return }
-            await self.run(noteID: noteID, earliest: earliest, token: token, operation: operation)
+            await self.run(noteID: noteID, earliest: earliest, token: token,
+                operation: operation, onFailure: onFailure)
         }
-        pending[noteID] = Pending(earliest: earliest, token: token, task: task)
+        pending[noteID] = Pending(earliest: earliest, token: token, task: task, isExecuting: false)
+    }
+
+    public func cancel(noteID: NoteID) {
+        pending.removeValue(forKey: noteID)?.task.cancel()
     }
 
     private func run(noteID: NoteID, earliest: Date, token: UUID,
-                     operation: @escaping @Sendable () async -> Void) async {
+                     operation: @escaping @Sendable () async throws -> Void,
+                     onFailure: @escaping @Sendable (any Error) async -> Void) async {
         do {
             try await sleeper.sleep(for: max(0, earliest.timeIntervalSince(clock.now)))
         } catch {
             remove(noteID: noteID, token: token)
+            if !(error is CancellationError) { await onFailure(error) }
             return
         }
-        guard !Task.isCancelled, pending[noteID]?.token == token else { return }
-        pending[noteID] = nil
-        await operation()
+        guard markExecuting(noteID: noteID, token: token) else { return }
+        var attempts = 0
+        while !Task.isCancelled, pending[noteID]?.token == token {
+            do {
+                attempts += 1
+                try await operation()
+                remove(noteID: noteID, token: token)
+                return
+            } catch {
+                guard attempts < DeliveryTimeouts.maximumScheduledOperationAttempts else {
+                    remove(noteID: noteID, token: token)
+                    await onFailure(error)
+                    return
+                }
+                do {
+                    try await sleeper.sleep(for: DeliveryTimeouts.scheduledOperationRetry)
+                } catch {
+                    remove(noteID: noteID, token: token)
+                    if !(error is CancellationError) { await onFailure(error) }
+                    return
+                }
+            }
+        }
     }
 
     private func remove(noteID: NoteID, token: UUID) {
         if pending[noteID]?.token == token { pending[noteID] = nil }
+    }
+
+    private func markExecuting(noteID: NoteID, token: UUID) -> Bool {
+        guard var current = pending[noteID], current.token == token else { return false }
+        current.isExecuting = true
+        pending[noteID] = current
+        return true
     }
 }

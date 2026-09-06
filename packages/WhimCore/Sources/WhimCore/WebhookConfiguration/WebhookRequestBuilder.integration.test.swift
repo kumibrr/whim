@@ -4,6 +4,29 @@ import XCTest
 @testable import WhimCore
 
 final class WebhookIntegrationTests: XCTestCase {
+    // Break: request construction cannot distinguish missing/corrupt source audio from temp-output failures.
+    func testBuilderReturnsTypedMissingAndUnreadableSourceErrors() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let credentials = StoredWebhookCredentials(endpoint: URL(string: "https://example.com/hook")!,
+            bearerToken: nil, hmacSecret: nil, customHeaders: [])
+
+        for (source, expected) in [
+            (root.appendingPathComponent("missing.m4a"), WebhookRequestBuildError.sourceAudioMissing),
+            (root, WebhookRequestBuildError.sourceAudioUnreadable),
+        ] {
+            let note = Note(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "Audio error",
+                titleSource: .timestamp, createdAt: Date(), duration: 1, source: .iphone,
+                captureOutcome: .completed, requiresReview: false, audioURL: source)
+            XCTAssertThrowsError(try WebhookRequestBuilder(temporaryDirectory: root).build(note: note,
+                attemptID: AttemptID(), credentials: credentials, timestamp: 1_000,
+                appVersion: "1", appBuild: "1")) { error in
+                    XCTAssertEqual(error as? WebhookRequestBuildError, expected)
+                }
+        }
+    }
+
     // Break: the bundled configuration test asset is absent, sensitive speech, or not playable AAC/M4A.
     func testBundledConfigurationAudioFixtureIsPlayableDeterministicTone() throws {
         let url = try XCTUnwrap(Bundle.module.url(forResource: "configuration-test-fixture", withExtension: "m4a",
@@ -13,6 +36,60 @@ final class WebhookIntegrationTests: XCTestCase {
         XCTAssertLessThan(Double(audio.length) / audio.fileFormat.sampleRate, 1)
     }
 #if os(macOS)
+    // Break: real HTTP responses are tested only at the transport seam, not through DeliveryService and SQLite.
+    func testDeliveryServicePersistsRealLoopbackFailureMatrix() async throws {
+        let server = try LoopbackServer()
+        defer { server.stop() }
+        let retryAt = Date(timeIntervalSince1970: 1_120)
+        let cases: [(path: String, result: DeliveryResult, reason: AttemptFailureReason,
+                     retryAfter: Date?, scheduled: Int, notifications: Int)] = [
+            ("/drop", .scheduled(Date(timeIntervalSince1970: 1_060)), .network, nil, 1, 0),
+            ("/receive?delay_ms=1000", .scheduled(Date(timeIntervalSince1970: 1_060)), .network, nil, 1, 0),
+            ("/receive?status=408", .scheduled(Date(timeIntervalSince1970: 1_060)), .httpStatus(408), nil, 1, 0),
+            ("/receive?status=425", .scheduled(Date(timeIntervalSince1970: 1_060)), .httpStatus(425), nil, 1, 0),
+            ("/receive?status=429&retry_after=120", .scheduled(retryAt), .httpStatus(429), retryAt, 1, 0),
+            ("/receive?status=400", .failed, .httpStatus(400), nil, 0, 1),
+            ("/receive?status=500", .scheduled(Date(timeIntervalSince1970: 1_060)), .httpStatus(500), nil, 1, 0),
+        ]
+
+        for item in cases {
+            let observed = try await runDelivery(server: server, path: item.path,
+                responseTimeout: item.path.contains("delay_ms") ? 0.2 : 2)
+            XCTAssertEqual(observed.result, item.result, item.path)
+            XCTAssertEqual(observed.note.delivery.failedAttempts.map(\.reason), [item.reason], item.path)
+            XCTAssertEqual(observed.note.delivery.failedAttempts.first?.retryAfter, item.retryAfter, item.path)
+            XCTAssertEqual(observed.scheduledCount, item.scheduled, item.path)
+            XCTAssertEqual(observed.notificationCount, item.notifications, item.path)
+        }
+    }
+
+    // Break: URLSession accepts a self-signed local certificate through a custom trust bypass.
+    func testURLSessionRejectsSelfSignedTLSCertificate() async throws {
+        let server = try LoopbackServer(useTLS: true)
+        defer { server.stop() }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let audioURL = root.appendingPathComponent("tls.m4a")
+        try Data("tls-audio".utf8).write(to: audioURL)
+        let note = Note(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "TLS",
+            titleSource: .timestamp, createdAt: Date(), duration: 1, source: .iphone,
+            captureOutcome: .completed, requiresReview: false, audioURL: audioURL)
+        let credentials = StoredWebhookCredentials(endpoint: server.url(path: "/receive"), bearerToken: nil,
+            hmacSecret: "receiver-secret", customHeaders: [])
+        let request = try WebhookRequestBuilder(temporaryDirectory: root).build(note: note,
+            attemptID: AttemptID(), credentials: credentials, timestamp: 1_000,
+            appVersion: "1", appBuild: "1")
+        defer { request.removeBodyFile() }
+
+        do {
+            _ = try await URLSessionHTTPTransport(requestTimeout: 1, resourceTimeout: 2).send(request)
+            XCTFail("Expected normal TLS validation to reject the self-signed certificate")
+        } catch let error as HTTPTransportError {
+            XCTAssertEqual(error, .network)
+        }
+    }
+
     // Break: URLSession follows redirects, skips receiver verification, or retains an oversized response.
     func testLoopbackReceiverVerifiesContractRejectsRedirectsAndCapsBodies() async throws {
         let server = try LoopbackServer()
@@ -51,6 +128,39 @@ final class WebhookIntegrationTests: XCTestCase {
         defer { oversized.removeBodyFile() }
         let capped = try await URLSessionHTTPTransport().send(oversized)
         XCTAssertEqual(capped.body.count, DeliveryTimeouts.maximumErrorExcerptBytes)
+    }
+
+    private func runDelivery(server: LoopbackServer, path: String, responseTimeout: TimeInterval) async throws
+        -> (result: DeliveryResult, note: Note, scheduledCount: Int, notificationCount: Int) {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let audioURL = root.appendingPathComponent("delivery.m4a")
+        try Data("pipeline-audio".utf8).write(to: audioURL)
+        let clock = IntegrationClock(Date(timeIntervalSince1970: 1_000))
+        let store = try SQLiteWhimStore.open(at: root.appendingPathComponent("whim.sqlite"), now: { clock.now })
+        let revision = ConfigurationRevision(id: ConfigurationRevisionID(), changedAt: Date(timeIntervalSince1970: 900),
+            endpoint: SanitizedEndpoint(url: server.url(path: path))!)
+        try await store.saveConfigurationRevision(revision)
+        let finalized = FinalizedRecording(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "Pipeline",
+            titleSource: .timestamp, createdAt: Date(timeIntervalSince1970: 900), duration: 1,
+            source: .iphone, captureOutcome: .completed, requiresReview: false, audioURL: audioURL)
+        _ = try await store.saveFinalized(finalized)
+        let credentials = IntegrationCredentialStore(revisionID: revision.id,
+            value: StoredWebhookCredentials(endpoint: server.url(path: path), bearerToken: nil,
+                hmacSecret: "receiver-secret", customHeaders: []))
+        let scheduler = IntegrationDeliveryScheduler()
+        let notifications = IntegrationNotificationAdapter()
+        let service = DeliveryService(store: store, credentials: credentials,
+            transport: URLSessionHTTPTransport(requestTimeout: responseTimeout, resourceTimeout: responseTimeout),
+            notifications: notifications, clock: clock, scheduler: scheduler, isConnected: { true },
+            requestBuilder: WebhookRequestBuilder(temporaryDirectory: root), scheduledFailure: { _, _ in },
+            appVersion: "1", appBuild: "1")
+
+        let result = try await service.deliver(noteID: finalized.id)
+        let stored = try await store.note(id: finalized.id)
+        let note = try XCTUnwrap(stored)
+        return (result, note, await scheduler.count, await notifications.count)
     }
 #endif
     // Break: multipart order/media types, digests, signing, or idempotency headers drift from v1.
@@ -96,30 +206,91 @@ final class WebhookIntegrationTests: XCTestCase {
 private final class LoopbackServer {
     private let process = Process()
     private let port: Int
+    private let scheme: String
+    private let tlsDirectory: URL?
 
-    init() throws {
+    init(useTLS: Bool = false) throws {
         let script = try XCTUnwrap(Bundle.module.url(forResource: "webhook-server", withExtension: "mjs",
             subdirectory: "Fixtures"))
+        var additions = ["WHIM_WEBHOOK_PORT": "0", "WHIM_HMAC_SECRET": "receiver-secret"]
+        if useTLS {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let key = directory.appendingPathComponent("key.pem")
+            let certificate = directory.appendingPathComponent("certificate.pem")
+            let openssl = Process()
+            openssl.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            openssl.arguments = ["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+                "-keyout", key.path, "-out", certificate.path, "-subj", "/CN=127.0.0.1", "-days", "1"]
+            openssl.standardOutput = FileHandle.nullDevice
+            openssl.standardError = FileHandle.nullDevice
+            try openssl.run()
+            openssl.waitUntilExit()
+            guard openssl.terminationStatus == 0 else { throw HTTPTransportError.invalidResponse }
+            additions["WHIM_TLS_KEY_PATH"] = key.path
+            additions["WHIM_TLS_CERT_PATH"] = certificate.path
+            tlsDirectory = directory
+            scheme = "https"
+        } else {
+            tlsDirectory = nil
+            scheme = "http"
+        }
         let pipe = Pipe()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["node", script.path]
-        process.environment = ProcessInfo.processInfo.environment.merging([
-            "WHIM_WEBHOOK_PORT": "0", "WHIM_HMAC_SECRET": "receiver-secret",
-        ]) { _, new in new }
+        process.environment = ProcessInfo.processInfo.environment.merging(additions) { _, new in new }
         process.standardOutput = pipe
         process.standardError = pipe
         try process.run()
         let data = pipe.fileHandleForReading.availableData
         guard let line = String(data: data, encoding: .utf8)?.split(separator: "\n").first,
               let json = try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
-              let port = json["port"] as? Int else {
+              let port = json["port"] as? Int,
+              json["tls"] as? Bool == useTLS else {
             process.terminate()
             throw HTTPTransportError.invalidResponse
         }
         self.port = port
     }
 
-    func url(path: String) -> URL { URL(string: "http://127.0.0.1:\(port)\(path)")! }
-    func stop() { if process.isRunning { process.terminate(); process.waitUntilExit() } }
+    func url(path: String) -> URL { URL(string: "\(scheme)://127.0.0.1:\(port)\(path)")! }
+    func stop() {
+        if process.isRunning { process.terminate(); process.waitUntilExit() }
+        if let tlsDirectory { try? FileManager.default.removeItem(at: tlsDirectory) }
+    }
+}
+
+private final class IntegrationClock: Clock, @unchecked Sendable {
+    private let value: Date
+    init(_ value: Date) { self.value = value }
+    var now: Date { value }
+}
+
+private actor IntegrationCredentialStore: CredentialStore {
+    private let revisionID: ConfigurationRevisionID
+    private let value: StoredWebhookCredentials
+    init(revisionID: ConfigurationRevisionID, value: StoredWebhookCredentials) {
+        self.revisionID = revisionID
+        self.value = value
+    }
+    func save(_ credentials: StoredWebhookCredentials, for revisionID: ConfigurationRevisionID) throws {}
+    func credentials(for revisionID: ConfigurationRevisionID) -> StoredWebhookCredentials? {
+        revisionID == self.revisionID ? value : nil
+    }
+    func remove(for revisionID: ConfigurationRevisionID) throws {}
+    func removeAll() throws {}
+}
+
+private actor IntegrationDeliveryScheduler: DeliveryScheduler {
+    private(set) var count = 0
+    func schedule(noteID: NoteID, earliest: Date,
+                  operation: @escaping @Sendable () async throws -> Void,
+                  onFailure: @escaping @Sendable (any Error) async -> Void) { count += 1 }
+    func cancel(noteID: NoteID) {}
+}
+
+private actor IntegrationNotificationAdapter: DeliveryNotificationAdapter {
+    private(set) var count = 0
+    func notifyFailure(title: String, reason: String, noteID: NoteID) { count += 1 }
 }
 #endif

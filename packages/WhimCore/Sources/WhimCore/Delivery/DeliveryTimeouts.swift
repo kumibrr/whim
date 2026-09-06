@@ -4,5 +4,7 @@ public enum DeliveryTimeouts {
     public static let request: TimeInterval = 15
     public static let resource: TimeInterval = 120
     public static let lease: TimeInterval = resource + 15
+    public static let scheduledOperationRetry: TimeInterval = 5
+    public static let maximumScheduledOperationAttempts = 3
     public static let maximumErrorExcerptBytes = 4 * 1_024
 }

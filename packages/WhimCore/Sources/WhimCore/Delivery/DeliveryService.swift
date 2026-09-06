@@ -18,7 +18,9 @@ public struct ScheduledDelivery: Equatable, Sendable {
 
 public protocol DeliveryScheduler: Sendable {
     func schedule(noteID: NoteID, earliest: Date,
-                  operation: @escaping @Sendable () async -> Void) async
+                  operation: @escaping @Sendable () async throws -> Void,
+                  onFailure: @escaping @Sendable (any Error) async -> Void) async
+    func cancel(noteID: NoteID) async
 }
 
 public struct DeliveryService: Sendable {
@@ -36,6 +38,8 @@ public struct DeliveryService: Sendable {
     private let device: AttemptDevice
     private let makeLeaseOwner: @Sendable () -> UUID
     private let titleSnapshot: @Sendable (Note) async -> TitleSnapshot
+    private let scheduledFailure: @Sendable (NoteID, any Error) async -> Void
+    private let pendingOutcomes = PendingDeliveryOutcomes()
 
     public init(store: any WhimStore, credentials: any CredentialStore, transport: any HTTPTransport,
                 notifications: any DeliveryNotificationAdapter, clock: any Clock = SystemClock(),
@@ -46,6 +50,7 @@ public struct DeliveryService: Sendable {
                 titleSnapshot: @escaping @Sendable (Note) async -> TitleSnapshot = {
                     TitleSnapshot(noteID: $0.id, title: $0.title, source: $0.titleSource)
                 },
+                scheduledFailure: @escaping @Sendable (NoteID, any Error) async -> Void,
                 device: AttemptDevice = .iphone, appVersion: String, appBuild: String,
                 makeLeaseOwner: @escaping @Sendable () -> UUID = { UUID() }) {
         self.store = store
@@ -62,10 +67,15 @@ public struct DeliveryService: Sendable {
         self.device = device
         self.makeLeaseOwner = makeLeaseOwner
         self.titleSnapshot = titleSnapshot
+        self.scheduledFailure = scheduledFailure
     }
 
     public func deliver(noteID: NoteID) async throws -> DeliveryResult {
-        guard var note = try await store.note(id: noteID), note.isDeliveryEligible else {
+        guard var note = try await store.note(id: noteID) else { return .failed }
+        if let pending = await pendingOutcomes.outcome(for: noteID) {
+            return try await persistPendingOutcome(pending, note: note)
+        }
+        guard note.isDeliveryEligible else {
             return (try await store.note(id: noteID))?.delivery.receipt == nil ? .failed : .alreadySent
         }
         if note.delivery.receipt != nil { return .alreadySent }
@@ -153,43 +163,73 @@ public struct DeliveryService: Sendable {
         do {
             request = try requestBuilder.build(note: deliveryNote, attemptID: attempt.id, credentials: credentials,
                 timestamp: Int64(clock.now.timeIntervalSince1970), appVersion: appVersion, appBuild: appBuild)
-        } catch {
-            try await store.recordLocalError(FileManager.default.fileExists(atPath: note.audioURL.path) ? .unreadable : .missing,
-                noteID: note.id)
-            return .failed
+        } catch let error as WebhookRequestBuildError {
+            switch error {
+            case .sourceAudioMissing:
+                try await store.recordLocalError(.missing, noteID: note.id)
+                return .failed
+            case .sourceAudioUnreadable:
+                try await store.recordLocalError(.unreadable, noteID: note.id)
+                return .failed
+            case .metadataEncodingUnavailable, .temporaryOutputUnavailable:
+                throw error
+            }
         }
         defer { request.removeBodyFile() }
         let started = try await store.apply(.attemptStarted(attempt), to: note.id)
         if started.receipt != nil { return .sent }
+        let response: HTTPResponse
         do {
-            let response = try await transport.send(request)
-            if (200...299).contains(response.statusCode) {
-                let receipt = Receipt(attemptID: attempt.id, noteID: note.id, receivedAt: clock.now,
-                    statusCode: response.statusCode)
-                _ = try await store.apply(.receipt(receipt), to: note.id)
-                return .sent
-            }
-            return try await recordFailure(attempt: attempt, note: note, reason: .httpStatus(response.statusCode),
-                retryAfter: retryAfter(response.header("Retry-After")), excerpt: sanitizedExcerpt(response.body,
-                    note: note, credentials: credentials))
+            response = try await transport.send(request)
         } catch {
             return try await recordFailure(attempt: attempt, note: note, reason: .network,
                 retryAfter: nil, excerpt: nil)
         }
+        if (200...299).contains(response.statusCode) {
+            let receipt = Receipt(attemptID: attempt.id, noteID: note.id, receivedAt: clock.now,
+                statusCode: response.statusCode)
+            return try await persistKnownOutcome(.receipt(receipt), note: note)
+        }
+        return try await recordFailure(attempt: attempt, note: note, reason: .httpStatus(response.statusCode),
+            retryAfter: retryAfter(response.header("Retry-After")), excerpt: sanitizedExcerpt(response.body,
+                note: note, credentials: credentials))
     }
 
     private func recordFailure(attempt: Attempt, note: Note, reason: AttemptFailureReason,
                                retryAfter: Date?, excerpt: String?) async throws -> DeliveryResult {
-        let delivery = try await store.apply(.attemptFailed(.init(attempt: attempt, failedAt: clock.now,
-            reason: reason, retryAfter: retryAfter, responseExcerpt: excerpt)), to: note.id)
-        if delivery.receipt != nil { return .sent }
-        let current = delivery.failedAttempts.filter { $0.attempt.retryCycle == delivery.currentRetryCycle }
-        if RetryPolicy.classification(for: reason) == .permanent || current.count >= RetryPolicy.maximumFailedAttempts {
-            let updated = (try await store.note(id: note.id)) ?? note
-            await notifyOnce(note: updated, reason: concise(reason))
+        let failure = AttemptFailure(attempt: attempt, failedAt: clock.now, reason: reason,
+            retryAfter: retryAfter, responseExcerpt: excerpt)
+        return try await persistKnownOutcome(.attemptFailed(failure), note: note)
+    }
+
+    private func persistKnownOutcome(_ event: DeliveryEvent, note: Note) async throws -> DeliveryResult {
+        let pending = await pendingOutcomes.remember(event, for: note.id)
+        return try await persistPendingOutcome(pending, note: note)
+    }
+
+    private func persistPendingOutcome(_ pending: PendingDeliveryOutcome, note: Note) async throws -> DeliveryResult {
+        let delivery = try await store.apply(pending.event, to: note.id)
+        await pendingOutcomes.clear(noteID: note.id, token: pending.token)
+        switch pending.event {
+        case .receipt:
+            return .sent
+        case .attemptFailed(let failure):
+            return try await result(for: failure, delivery: delivery, note: note)
+        default:
             return .failed
         }
-        let next = RetryPolicy.nextEligibility(after: current.count, now: clock.now, retryAfter: retryAfter)!
+    }
+
+    private func result(for failure: AttemptFailure, delivery: Delivery, note: Note) async throws -> DeliveryResult {
+        if delivery.receipt != nil { return .sent }
+        let current = delivery.failedAttempts.filter { $0.attempt.retryCycle == delivery.currentRetryCycle }
+        if RetryPolicy.classification(for: failure.reason) == .permanent || current.count >= RetryPolicy.maximumFailedAttempts {
+            let updated = (try await store.note(id: note.id)) ?? note
+            await notifyOnce(note: updated, reason: concise(failure.reason))
+            return .failed
+        }
+        let next = RetryPolicy.nextEligibility(after: current.count, now: failure.failedAt,
+            retryAfter: failure.retryAfter)!
         return await scheduled(noteID: note.id, earliest: next)
     }
 
@@ -232,8 +272,31 @@ public struct DeliveryService: Sendable {
 
     private func scheduled(noteID: NoteID, earliest: Date) async -> DeliveryResult {
         await scheduler.schedule(noteID: noteID, earliest: earliest) {
-            _ = try? await deliver(noteID: noteID)
+            _ = try await deliver(noteID: noteID)
+        } onFailure: { error in
+            await scheduledFailure(noteID, error)
         }
         return .scheduled(earliest)
+    }
+}
+
+private struct PendingDeliveryOutcome: Sendable {
+    let token: UUID
+    let event: DeliveryEvent
+}
+
+private actor PendingDeliveryOutcomes {
+    private var outcomes: [NoteID: PendingDeliveryOutcome] = [:]
+
+    func remember(_ event: DeliveryEvent, for noteID: NoteID) -> PendingDeliveryOutcome {
+        let outcome = PendingDeliveryOutcome(token: UUID(), event: event)
+        outcomes[noteID] = outcome
+        return outcome
+    }
+
+    func outcome(for noteID: NoteID) -> PendingDeliveryOutcome? { outcomes[noteID] }
+
+    func clear(noteID: NoteID, token: UUID) {
+        if outcomes[noteID]?.token == token { outcomes[noteID] = nil }
     }
 }

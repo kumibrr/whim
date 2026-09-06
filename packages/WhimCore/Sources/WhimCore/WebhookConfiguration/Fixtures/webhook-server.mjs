@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
 import http from "node:http";
+import https from "node:https";
 
 const host = "127.0.0.1";
 const port = Number(process.env.WHIM_WEBHOOK_PORT ?? "0");
@@ -60,7 +62,7 @@ function verify(req, body) {
   return { noteID, attemptID, json, duplicate: noteIDs.has(noteID), body: body.toString("base64") };
 }
 
-const server = http.createServer((req, res) => {
+const handleRequest = (req, res) => {
   const url = new URL(req.url ?? "/", `http://${host}`);
   if (req.method === "POST" && url.pathname === "/reset") {
     received.length = 0;
@@ -103,11 +105,21 @@ const server = http.createServer((req, res) => {
     const delay = Number(url.searchParams.get("delay_ms") ?? "0");
     if (delay > 0) setTimeout(respond, delay); else respond();
   });
-});
+};
+
+const tlsKeyPath = process.env.WHIM_TLS_KEY_PATH;
+const tlsCertificatePath = process.env.WHIM_TLS_CERT_PATH;
+const usesTLS = Boolean(tlsKeyPath && tlsCertificatePath);
+const server = usesTLS
+  ? https.createServer({
+      key: fs.readFileSync(tlsKeyPath),
+      cert: fs.readFileSync(tlsCertificatePath),
+    }, handleRequest)
+  : http.createServer(handleRequest);
 
 server.listen(port, host, () => {
   const address = server.address();
-  process.stdout.write(`${JSON.stringify({ host, port: address.port })}\n`);
+  process.stdout.write(`${JSON.stringify({ host, port: address.port, tls: usesTLS })}\n`);
 });
 
 for (const signal of ["SIGTERM", "SIGINT"]) {

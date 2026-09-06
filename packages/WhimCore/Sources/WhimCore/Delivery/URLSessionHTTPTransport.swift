@@ -18,15 +18,22 @@ struct BoundedResponseAccumulator: Sendable {
 }
 
 public struct URLSessionHTTPTransport: HTTPTransport {
-    public init() {}
+    private let requestTimeout: TimeInterval
+    private let resourceTimeout: TimeInterval
+
+    public init(requestTimeout: TimeInterval = DeliveryTimeouts.request,
+                resourceTimeout: TimeInterval = DeliveryTimeouts.resource) {
+        self.requestTimeout = max(0.001, requestTimeout)
+        self.resourceTimeout = max(0.001, resourceTimeout)
+    }
 
     public func send(_ request: WebhookRequest) async throws -> HTTPResponse {
-        var urlRequest = URLRequest(url: request.url, timeoutInterval: DeliveryTimeouts.request)
+        var urlRequest = URLRequest(url: request.url, timeoutInterval: requestTimeout)
         urlRequest.httpMethod = request.method
         for (name, value) in request.headers { urlRequest.setValue(value, forHTTPHeaderField: name) }
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = DeliveryTimeouts.request
-        configuration.timeoutIntervalForResource = DeliveryTimeouts.resource
+        configuration.timeoutIntervalForRequest = requestTimeout
+        configuration.timeoutIntervalForResource = resourceTimeout
         configuration.httpShouldSetCookies = false
         do {
             return try await BoundedUploadDelegate().send(urlRequest, bodyFileURL: request.bodyFileURL,

@@ -13,9 +13,13 @@ final class DeliveryServiceTests: XCTestCase {
 
         await scheduler.schedule(noteID: noteID, earliest: Date(timeIntervalSince1970: 1_060)) {
             await callbacks.append(noteID)
+        } onFailure: { _ in
+            XCTFail("The scheduled callback unexpectedly failed")
         }
         await scheduler.schedule(noteID: noteID, earliest: Date(timeIntervalSince1970: 1_120)) {
             XCTFail("A later duplicate wake replaced the existing retry")
+        } onFailure: { _ in
+            XCTFail("The scheduled callback unexpectedly failed")
         }
 
         await sleeper.waitUntilCalled()
@@ -27,11 +31,118 @@ final class DeliveryServiceTests: XCTestCase {
         XCTAssertEqual(values, [noteID])
     }
 
+    // Break: a transient local callback error drops the only retry wake without recovery or error reporting.
+    func testInProcessSchedulerRetriesLocalCallbackFailureWithBoundAndDelay() async throws {
+        let clock = MutableClock(Date(timeIntervalSince1970: 1_000))
+        let sleeper = ControlledDeliverySleeper()
+        let operation = RecoveringScheduledOperation()
+        let failures = NoteIDRecorder()
+        let scheduler = InProcessDeliveryScheduler(clock: clock, sleeper: sleeper)
+        let noteID = NoteID()
+
+        await scheduler.schedule(noteID: noteID, earliest: Date(timeIntervalSince1970: 1_060), operation: {
+            try await operation.run()
+        }, onFailure: { _ in
+            await failures.append(noteID)
+        })
+        await sleeper.waitForCallCount(1)
+        await sleeper.resumeNext()
+        await sleeper.waitForCallCount(2)
+        let requestedIntervals = await sleeper.requestedIntervals
+        XCTAssertEqual(requestedIntervals, [60, 5])
+        await sleeper.resumeNext()
+        await operation.waitForSuccess()
+
+        let attempts = await operation.attempts
+        let reportedFailures = await failures.values
+        XCTAssertEqual(attempts, 2)
+        XCTAssertTrue(reportedFailures.isEmpty)
+    }
+
+    // Break: cancelling a pending retry still invokes its delivery operation.
+    func testInProcessSchedulerCancellationPreventsCallback() async throws {
+        let sleeper = ControlledDeliverySleeper()
+        let callbacks = NoteIDRecorder()
+        let scheduler = InProcessDeliveryScheduler(clock: MutableClock(Date(timeIntervalSince1970: 1_000)),
+            sleeper: sleeper)
+        let noteID = NoteID()
+        await scheduler.schedule(noteID: noteID, earliest: Date(timeIntervalSince1970: 1_060), operation: {
+            await callbacks.append(noteID)
+        }, onFailure: { _ in })
+        await sleeper.waitForCallCount(1)
+
+        await scheduler.cancel(noteID: noteID)
+        await sleeper.resumeNext()
+        for _ in 0..<10 { await Task.yield() }
+
+        let values = await callbacks.values
+        XCTAssertTrue(values.isEmpty)
+    }
+
+    // Break: persistent local callback failures retry rapidly forever or disappear without surfacing an error.
+    func testInProcessSchedulerReportsFailureAfterThreeDelayedAttempts() async throws {
+        let sleeper = ControlledDeliverySleeper()
+        let operation = RecoveringScheduledOperation(succeedsOnAttempt: .max)
+        let failures = NoteIDRecorder()
+        let scheduler = InProcessDeliveryScheduler(clock: MutableClock(Date(timeIntervalSince1970: 1_000)),
+            sleeper: sleeper)
+        let noteID = NoteID()
+        await scheduler.schedule(noteID: noteID, earliest: Date(timeIntervalSince1970: 1_060), operation: {
+            try await operation.run()
+        }, onFailure: { _ in
+            await failures.append(noteID)
+        })
+
+        for count in 1...3 {
+            await sleeper.waitForCallCount(count)
+            await sleeper.resumeNext()
+        }
+        await failures.waitForCount(1)
+
+        let intervals = await sleeper.requestedIntervals
+        let attempts = await operation.attempts
+        let reported = await failures.values
+        XCTAssertEqual(intervals, [60, 5, 5])
+        XCTAssertEqual(attempts, 3)
+        XCTAssertEqual(reported, [noteID])
+    }
+
+    // Break: a delivery wake that schedules the next HTTP retry loses that replacement wake when it returns.
+    func testInProcessSchedulerPreservesRetryScheduledByRunningOperation() async throws {
+        let clock = MutableClock(Date(timeIntervalSince1970: 1_000))
+        let sleeper = ControlledDeliverySleeper()
+        let firstWake = NoteIDRecorder()
+        let secondWake = NoteIDRecorder()
+        let scheduler = InProcessDeliveryScheduler(clock: clock, sleeper: sleeper)
+        let noteID = NoteID()
+
+        await scheduler.schedule(noteID: noteID, earliest: Date(timeIntervalSince1970: 1_060), operation: {
+            await scheduler.schedule(noteID: noteID, earliest: Date(timeIntervalSince1970: 1_960), operation: {
+                await secondWake.append(noteID)
+            }, onFailure: { _ in })
+            await firstWake.append(noteID)
+        }, onFailure: { _ in })
+        await sleeper.waitForCallCount(1)
+        clock.set(Date(timeIntervalSince1970: 1_060))
+        await sleeper.resumeNext()
+        await firstWake.waitForCount(1)
+        for _ in 0..<20 { await Task.yield() }
+
+        let intervals = await sleeper.requestedIntervals
+        XCTAssertEqual(intervals, [60, 900])
+        guard intervals.count == 2 else { return }
+        clock.set(Date(timeIntervalSince1970: 1_960))
+        await sleeper.resumeNext()
+        await secondWake.waitForCount(1)
+        let secondValues = await secondWake.values
+        XCTAssertEqual(secondValues, [noteID])
+    }
+
     // Break: being offline creates an Attempt or acquires delivery execution resources.
     func testOfflineQueuesWithoutAttempt() async throws {
         let h = try DeliveryHarness(connected: false)
         let result = try await h.service.deliver(noteID: h.note.id)
-        let stored = await h.store.note(id: h.note.id)
+        let stored = try await h.store.note(id: h.note.id)
         let requestCount = await h.fakeTransport.requestCount
         let leaseAcquireCount = await h.store.leaseAcquireCount
         XCTAssertEqual(result, .queued)
@@ -44,7 +155,7 @@ final class DeliveryServiceTests: XCTestCase {
     func testSuccessPersistsReceiptAndNeverResends() async throws {
         let h = try DeliveryHarness(responses: [.success(.init(statusCode: 204))])
         let first = try await h.service.deliver(noteID: h.note.id)
-        let persisted = await h.store.note(id: h.note.id)
+        let persisted = try await h.store.note(id: h.note.id)
         let leaseHeld = await h.store.leaseHeld
         let second = try await h.service.deliver(noteID: h.note.id)
         let count = await h.fakeTransport.requestCount
@@ -53,6 +164,46 @@ final class DeliveryServiceTests: XCTestCase {
         XCTAssertFalse(leaseHeld)
         XCTAssertEqual(second, .alreadySent)
         XCTAssertEqual(count, 1)
+    }
+
+    // Break: a Receipt write failure is reclassified as a network failure and the successful request is sent again.
+    func testSuccessfulHTTPOutcomeIsRetriedLocallyWithoutSecondTransportAfterReceiptWriteFailure() async throws {
+        let h = try DeliveryHarness(responses: [.success(.init(statusCode: 204))])
+        await h.store.failNextReceiptWrite()
+
+        do {
+            _ = try await h.service.deliver(noteID: h.note.id)
+            XCTFail("Expected the local Receipt write error")
+        } catch is InjectedStoreError {}
+        let requestCountAfterFailure = await h.fakeTransport.count()
+        XCTAssertEqual(requestCountAfterFailure, 1)
+
+        let recovered = try await h.service.deliver(noteID: h.note.id)
+        let persisted = try await h.store.note(id: h.note.id)
+        XCTAssertEqual(recovered, .sent)
+        XCTAssertEqual(persisted?.delivery.receipt?.statusCode, 204)
+        let finalRequestCount = await h.fakeTransport.count()
+        XCTAssertEqual(finalRequestCount, 1)
+    }
+
+    // Break: a permanent HTTP failure whose first persistence write fails is rewritten as a retryable network failure.
+    func testPermanentHTTPOutcomeIsRetriedLocallyWithoutSecondTransportAfterFailureWriteFailure() async throws {
+        let h = try DeliveryHarness(responses: [.success(.init(statusCode: 400))])
+        await h.store.failNextAttemptFailureWrite()
+
+        do {
+            _ = try await h.service.deliver(noteID: h.note.id)
+            XCTFail("Expected the local Attempt failure write error")
+        } catch is InjectedStoreError {}
+        let requestCountAfterFailure = await h.fakeTransport.count()
+        XCTAssertEqual(requestCountAfterFailure, 1)
+
+        let recovered = try await h.service.deliver(noteID: h.note.id)
+        let persisted = try await h.store.note(id: h.note.id)
+        XCTAssertEqual(recovered, .failed)
+        XCTAssertEqual(persisted?.delivery.failedAttempts.first?.reason, .httpStatus(400))
+        let finalRequestCount = await h.fakeTransport.count()
+        XCTAssertEqual(finalRequestCount, 1)
     }
 
     // Break: concurrent workers overlap transport or a thrown transport path retains the lease.
@@ -99,32 +250,94 @@ final class DeliveryServiceTests: XCTestCase {
         let scheduler = SchedulerFake()
         let h = try DeliveryHarness(responses: [.success(.init(statusCode: 500))], scheduler: scheduler)
         _ = try await h.service.deliver(noteID: h.note.id)
-        let attempt = await h.store.note(id: h.note.id)!.delivery.failedAttempts[0].attempt
+        let attempt = try await h.store.note(id: h.note.id)!.delivery.failedAttempts[0].attempt
         await h.store.seed(.receipt(.init(attemptID: attempt.id, noteID: h.note.id,
             receivedAt: Date(timeIntervalSince1970: 1_010), statusCode: 200)))
 
-        await scheduler.run(noteID: h.note.id)
+        try await scheduler.run(noteID: h.note.id)
 
         let requestCount = await h.fakeTransport.count()
         XCTAssertEqual(requestCount, 1)
+    }
+
+    // Break: a transient SQLite read failure inside the scheduled DeliveryService callback loses the retry.
+    func testScheduledDeliveryRecoversFromLocalStoreFailureWithoutConsumingHTTPAttempt() async throws {
+        let sleeper = ControlledDeliverySleeper()
+        let clock = MutableClock(Date(timeIntervalSince1970: 1_000))
+        let scheduler = InProcessDeliveryScheduler(clock: clock, sleeper: sleeper)
+        let h = try DeliveryHarness(responses: [
+            .success(.init(statusCode: 500)),
+            .success(.init(statusCode: 204)),
+        ], scheduler: scheduler, clock: clock)
+        let first = try await h.service.deliver(noteID: h.note.id)
+        XCTAssertEqual(first, .scheduled(Date(timeIntervalSince1970: 1_060)))
+        await sleeper.waitForCallCount(1)
+
+        clock.set(Date(timeIntervalSince1970: 1_060))
+        await h.store.failNextNoteRead()
+        await sleeper.resumeNext()
+        await sleeper.waitForCallCount(2)
+        clock.set(Date(timeIntervalSince1970: 1_065))
+        await sleeper.resumeNext()
+        await h.store.waitForReceipt()
+
+        let persisted = try await h.store.note(id: h.note.id)
+        let requests = await h.fakeTransport.count()
+        XCTAssertEqual(persisted?.delivery.failedAttempts.count, 1)
+        XCTAssertNotNil(persisted?.delivery.receipt)
+        XCTAssertEqual(requests, 2)
     }
 
     // Break: missing local audio consumes retry state as a network Attempt.
     func testMissingAudioBecomesLocalFailureWithoutAttempt() async throws {
         let h = try DeliveryHarness(responses: [], writeAudio: false)
         let result = try await h.service.deliver(noteID: h.note.id)
-        let note = await h.store.note(id: h.note.id)!
+        let note = try await h.store.note(id: h.note.id)!
         XCTAssertEqual(result, .failed)
         XCTAssertEqual(note.localError, .missing)
         XCTAssertTrue(note.delivery.failedAttempts.isEmpty)
         XCTAssertTrue(note.delivery.activeAttempts.isEmpty)
     }
 
+    // Break: ENOSPC while creating the multipart temp file permanently marks valid source audio unreadable.
+    func testTemporaryMultipartStorageFailureRemainsRecoverableWithoutAttempt() async throws {
+        let builder = WebhookRequestBuilder(makeBodyFileURL: { _ in throw POSIXError(.ENOSPC) })
+        let h = try DeliveryHarness(responses: [.success(.init(statusCode: 204))], requestBuilder: builder)
+
+        do {
+            _ = try await h.service.deliver(noteID: h.note.id)
+            XCTFail("Expected the local multipart storage error")
+        } catch let error as WebhookRequestBuildError {
+            XCTAssertEqual(error, .temporaryOutputUnavailable)
+        }
+
+        let note = try await h.store.note(id: h.note.id)!
+        let requestCount = await h.fakeTransport.count()
+        XCTAssertNil(note.localError)
+        XCTAssertTrue(note.delivery.activeAttempts.isEmpty)
+        XCTAssertTrue(note.delivery.failedAttempts.isEmpty)
+        XCTAssertEqual(requestCount, 0)
+
+        let credentials = CredentialFake(revision: h.revision.id, credentials: StoredWebhookCredentials(
+            endpoint: URL(string: "https://example.com/hook")!, bearerToken: nil, hmacSecret: nil,
+            customHeaders: []))
+        let revision = h.revision
+        let recoveredService = DeliveryService(store: h.store, credentials: credentials, transport: h.fakeTransport,
+            notifications: h.notifications, clock: h.clock, scheduler: SchedulerFake(), isConnected: { true },
+            configurationRevision: { _ in revision }, requestBuilder: WebhookRequestBuilder(),
+            scheduledFailure: { _, _ in },
+            appVersion: "1", appBuild: "1")
+        let recovered = try await recoveredService.deliver(noteID: h.note.id)
+        XCTAssertEqual(recovered, .sent)
+        let recoveredRequestCount = await h.fakeTransport.count()
+        XCTAssertEqual(recoveredRequestCount, 1)
+    }
+
     // Break: Watch delivery records an iPhone Attempt.
     func testAttemptUsesInjectedDeviceIdentity() async throws {
         let h = try DeliveryHarness(responses: [.success(.init(statusCode: 500))], device: .appleWatch)
         _ = try await h.service.deliver(noteID: h.note.id)
-        let attempt = await h.store.note(id: h.note.id)!.delivery.failedAttempts.first?.attempt
+        let attempt = try await h.store.note(id: h.note.id)!.delivery.failedAttempts.first?.attempt
         XCTAssertEqual(attempt?.device, .appleWatch)
     }
 
@@ -142,7 +355,7 @@ final class DeliveryServiceTests: XCTestCase {
         _ = try await h.service.deliver(noteID: h.note.id)
         h.clock.set(Date(timeIntervalSince1970: 2_020))
         let third = try await h.service.deliver(noteID: h.note.id)
-        let persisted = await h.store.note(id: h.note.id)!
+        let persisted = try await h.store.note(id: h.note.id)!
         XCTAssertEqual(third, .failed)
         XCTAssertEqual(persisted.delivery.failedAttempts.count, 3)
         XCTAssertLessThanOrEqual(persisted.delivery.failedAttempts[0].responseExcerpt?.utf8.count ?? 0,
@@ -165,7 +378,7 @@ final class DeliveryServiceTests: XCTestCase {
         h.clock.set(Date(timeIntervalSince1970: 1_060)); _ = try await h.service.deliver(noteID: h.note.id)
         h.clock.set(Date(timeIntervalSince1970: 1_960)); _ = try await h.service.deliver(noteID: h.note.id)
         let retry = try await h.service.retry(noteID: h.note.id)
-        let persisted = await h.store.note(id: h.note.id)!
+        let persisted = try await h.store.note(id: h.note.id)!
         XCTAssertEqual(retry, .scheduled(Date(timeIntervalSince1970: 2_020)))
         XCTAssertEqual(persisted.delivery.failedAttempts.count, 4)
         XCTAssertEqual(persisted.delivery.currentRetryCycle, 1)
@@ -181,7 +394,7 @@ final class DeliveryServiceTests: XCTestCase {
         let reconciliation = try await h.service.deliver(noteID: h.note.id)
         h.clock.set(Date(timeIntervalSince1970: 1_060))
         let result = try await h.service.deliver(noteID: h.note.id)
-        let delivery = await h.store.note(id: h.note.id)!.delivery
+        let delivery = try await h.store.note(id: h.note.id)!.delivery
         XCTAssertEqual(reconciliation, .scheduled(Date(timeIntervalSince1970: 1_060)))
         XCTAssertEqual(result, .sent)
         XCTAssertEqual(delivery.failedAttempts.first?.attempt.id, stale.id)
@@ -196,7 +409,7 @@ final class DeliveryServiceTests: XCTestCase {
         await h.store.seed(.attemptStarted(stale))
 
         let result = try await h.service.deliver(noteID: h.note.id)
-        let delivery = await h.store.note(id: h.note.id)!.delivery
+        let delivery = try await h.store.note(id: h.note.id)!.delivery
         let requests = await h.fakeTransport.count()
 
         XCTAssertEqual(result, .queued)
@@ -242,16 +455,18 @@ private actor NotificationFake: DeliveryNotificationAdapter {
 }
 
 private actor SchedulerFake: DeliveryScheduler {
-    typealias Operation = @Sendable () async -> Void
+    typealias Operation = @Sendable () async throws -> Void
     private(set) var entries: [ScheduledDelivery] = []
     private var operations: [NoteID: Operation] = [:]
-    func schedule(noteID: NoteID, earliest: Date, operation: @escaping @Sendable () async -> Void) {
+    func schedule(noteID: NoteID, earliest: Date, operation: @escaping @Sendable () async throws -> Void,
+                  onFailure: @escaping @Sendable (any Error) async -> Void) {
         entries.append(.init(noteID: noteID, earliest: earliest))
         operations[noteID] = operation
     }
-    func run(noteID: NoteID) async {
+    func cancel(noteID: NoteID) { operations[noteID] = nil }
+    func run(noteID: NoteID) async throws {
         let operation = operations.removeValue(forKey: noteID)
-        await operation?()
+        try await operation?()
     }
 }
 
@@ -268,13 +483,36 @@ private actor ControlledDeliverySleeper: DeliverySleeper {
     }
 
     func waitUntilCalled() async {
-        if !requestedIntervals.isEmpty { return }
+        await waitForCallCount(1)
+    }
+
+    func waitForCallCount(_ count: Int) async {
+        if requestedIntervals.count >= count { return }
         await withCheckedContinuation { callWaiters.append($0) }
     }
 
     func resumeNext() {
         guard !continuations.isEmpty else { return }
         continuations.removeFirst().resume()
+    }
+}
+
+private enum ScheduledOperationError: Error { case transient }
+
+private actor RecoveringScheduledOperation {
+    private let succeedsOnAttempt: Int
+    private(set) var attempts = 0
+    private var successWaiters: [CheckedContinuation<Void, Never>] = []
+    init(succeedsOnAttempt: Int = 2) { self.succeedsOnAttempt = succeedsOnAttempt }
+    func run() throws {
+        attempts += 1
+        if attempts < succeedsOnAttempt { throw ScheduledOperationError.transient }
+        for waiter in successWaiters { waiter.resume() }
+        successWaiters.removeAll()
+    }
+    func waitForSuccess() async {
+        if attempts >= 2 { return }
+        await withCheckedContinuation { successWaiters.append($0) }
     }
 }
 
@@ -299,10 +537,37 @@ private actor DeliveryStoreFake: WhimStore {
     private(set) var leaseOwners: [UUID] = []
     private var receiptOnAcquire = false
     private var notifiedCycles: Set<Int> = []
+    private var receiptWriteFailures = 0
+    private var attemptFailureWriteFailures = 0
+    private var noteReadFailures = 0
+    private var receiptWaiters: [CheckedContinuation<Void, Never>] = []
     init(note: Note) { stored = note }
-    func seed(_ event: DeliveryEvent) { stored = replacing(delivery: DeliveryReducer.reduce(stored.delivery, event: event)) }
-    func note(id: NoteID) -> Note? { id == stored.id ? stored : nil }
-    func apply(_ event: DeliveryEvent, to noteID: NoteID) throws -> Delivery { seed(event); return stored.delivery }
+    func seed(_ event: DeliveryEvent) {
+        stored = replacing(delivery: DeliveryReducer.reduce(stored.delivery, event: event))
+        if stored.delivery.receipt != nil {
+            for waiter in receiptWaiters { waiter.resume() }
+            receiptWaiters.removeAll()
+        }
+    }
+    func note(id: NoteID) throws -> Note? {
+        if noteReadFailures > 0 {
+            noteReadFailures -= 1
+            throw InjectedStoreError.write
+        }
+        return id == stored.id ? stored : nil
+    }
+    func apply(_ event: DeliveryEvent, to noteID: NoteID) throws -> Delivery {
+        if case .receipt = event, receiptWriteFailures > 0 {
+            receiptWriteFailures -= 1
+            throw InjectedStoreError.write
+        }
+        if case .attemptFailed = event, attemptFailureWriteFailures > 0 {
+            attemptFailureWriteFailures -= 1
+            throw InjectedStoreError.write
+        }
+        seed(event)
+        return stored.delivery
+    }
     func acquireLease(_ kind: LeaseKind, noteID: NoteID, owner: UUID, until: Date) -> Bool {
         leaseAcquireCount += 1; leaseOwners.append(owner)
         if receiptOnAcquire {
@@ -321,6 +586,13 @@ private actor DeliveryStoreFake: WhimStore {
     }
     func markExhaustionNotified(noteID: NoteID, retryCycle: Int) -> Bool { notifiedCycles.insert(retryCycle).inserted }
     func setReceiptOnAcquire(_ value: Bool) { receiptOnAcquire = value }
+    func failNextReceiptWrite() { receiptWriteFailures += 1 }
+    func failNextAttemptFailureWrite() { attemptFailureWriteFailures += 1 }
+    func failNextNoteRead() { noteReadFailures += 1 }
+    func waitForReceipt() async {
+        if stored.delivery.receipt != nil { return }
+        await withCheckedContinuation { receiptWaiters.append($0) }
+    }
     func isLeaseHeld() -> Bool { leaseHeld }
     private func replacing(delivery: Delivery) -> Note {
         Note(id: stored.id, recordingSessionID: stored.recordingSessionID, title: stored.title,
@@ -350,6 +622,8 @@ private actor DeliveryStoreFake: WhimStore {
     func updateTitle(noteID: NoteID, title: String, source: TitleSource) throws {}
 }
 
+private enum InjectedStoreError: Error { case write }
+
 private struct DeliveryHarness {
     let note: Note
     let revision: ConfigurationRevision
@@ -361,7 +635,9 @@ private struct DeliveryHarness {
     let service: DeliveryService
 
     init(connected: Bool = true, responses: [Result<HTTPResponse, Error>] = [], transport supplied: (any HTTPTransport)? = nil,
-         scheduler: (any DeliveryScheduler)? = nil, writeAudio: Bool = true, device: AttemptDevice = .iphone) throws {
+         scheduler: (any DeliveryScheduler)? = nil, requestBuilder: WebhookRequestBuilder = WebhookRequestBuilder(),
+         clock suppliedClock: MutableClock? = nil,
+         writeAudio: Bool = true, device: AttemptDevice = .iphone) throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let audioURL = root.appendingPathComponent("note.m4a")
@@ -376,14 +652,16 @@ private struct DeliveryHarness {
         let fakeTransport = TransportFake(responses)
         self.fakeTransport = fakeTransport
         self.transport = supplied ?? fakeTransport
-        clock = MutableClock(Date(timeIntervalSince1970: 1_000))
+        clock = suppliedClock ?? MutableClock(Date(timeIntervalSince1970: 1_000))
         let credentialStore = CredentialFake(revision: revision.id, credentials: StoredWebhookCredentials(
             endpoint: URL(string: "https://example.com/hook?key=QUERY")!, bearerToken: "TOKEN", hmacSecret: nil,
             customHeaders: [.init(name: "X-Value", value: "HEADER")]))
         let selectedRevision = revision
         service = DeliveryService(store: store, credentials: credentialStore, transport: self.transport,
             notifications: notifications, clock: clock, scheduler: scheduler ?? SchedulerFake(), isConnected: { connected },
-            configurationRevision: { _ in selectedRevision }, device: device, appVersion: "1", appBuild: "1")
+            configurationRevision: { _ in selectedRevision }, requestBuilder: requestBuilder,
+            scheduledFailure: { _, _ in },
+            device: device, appVersion: "1", appBuild: "1")
     }
 }
 
