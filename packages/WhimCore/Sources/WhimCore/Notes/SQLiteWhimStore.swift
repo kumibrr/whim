@@ -145,6 +145,20 @@ public actor SQLiteWhimStore: WhimStore {
             endpoint: try JSONDecoder().decode(SanitizedEndpoint.self, from: row["endpoint"]))
     }
 
+    public func latestConfigurationRevision() async throws -> ConfigurationRevision? {
+        try await database.read { db in try Self.latestRevision(db: db) }
+    }
+
+    public func reset() async throws {
+        try await database.write { db in
+            for table in ["tombstone_acknowledgements", "tombstones", "leases", "workflow_steps",
+                          "receipts", "attempts", "deliveries", "notes", "recording_sessions",
+                          "configuration_revisions"] {
+                try db.execute(sql: "DELETE FROM \(table)")
+            }
+        }
+    }
+
     public func saveConfigurationRevision(_ revision: ConfigurationRevision) async throws {
         try await database.write { db in
             try db.execute(sql: """

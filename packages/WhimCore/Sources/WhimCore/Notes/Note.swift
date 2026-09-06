@@ -122,6 +122,7 @@ public struct FinalizedRecording: Codable, Equatable, Sendable {
 }
 
 public struct NoteProjection: Codable, Equatable, Sendable {
+    public let schemaVersion: Int
     public let id: NoteID
     public let title: String
     public let createdAt: Date
@@ -133,6 +134,7 @@ public struct NoteProjection: Codable, Equatable, Sendable {
     public let localError: LocalAudioError?
 
     public init(note: Note, hasLocalAudio: Bool = true) {
+        schemaVersion = WhimCoreVersion.schema
         id = note.id
         title = note.title
         createdAt = note.createdAt
@@ -142,5 +144,39 @@ public struct NoteProjection: Codable, Equatable, Sendable {
         requiresReview = note.requiresReview
         self.hasLocalAudio = hasLocalAudio && note.localError == nil
         localError = note.localError
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, id, title, createdAt, durationSeconds, source, status
+        case requiresReview, hasLocalAudio, localError
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try values.decode(Int.self, forKey: .schemaVersion)
+        let rawID = try values.decode(String.self, forKey: .id)
+        guard let uuid = UUID(uuidString: rawID) else {
+            throw DecodingError.dataCorruptedError(forKey: .id, in: values, debugDescription: "Invalid Note ID")
+        }
+        id = NoteID(rawValue: uuid)
+        title = try values.decode(String.self, forKey: .title)
+        createdAt = try values.decode(Date.self, forKey: .createdAt)
+        duration = try values.decode(TimeInterval.self, forKey: .durationSeconds)
+        source = try values.decode(CaptureSource.self, forKey: .source)
+        status = try values.decode(DeliveryStatus.self, forKey: .status)
+        requiresReview = try values.decode(Bool.self, forKey: .requiresReview)
+        hasLocalAudio = try values.decode(Bool.self, forKey: .hasLocalAudio)
+        localError = try values.decodeIfPresent(LocalAudioError.self, forKey: .localError)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(schemaVersion, forKey: .schemaVersion)
+        try values.encode(id.rawValue.uuidString.lowercased(), forKey: .id)
+        try values.encode(title, forKey: .title); try values.encode(createdAt, forKey: .createdAt)
+        try values.encode(duration, forKey: .durationSeconds); try values.encode(source, forKey: .source)
+        try values.encode(status, forKey: .status); try values.encode(requiresReview, forKey: .requiresReview)
+        try values.encode(hasLocalAudio, forKey: .hasLocalAudio)
+        try values.encode(localError, forKey: .localError)
     }
 }

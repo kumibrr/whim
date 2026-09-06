@@ -1,0 +1,261 @@
+import Foundation
+
+public protocol WhimClient: Sendable {
+    func startRecording(source: CaptureSource) async throws -> RecordingProjection
+    func activeRecording() async throws -> RecordingProjection?
+    func stopRecording() async throws -> NoteProjection?
+    func discardRecording() async throws
+    func listNotes(filter: NoteFilter) async throws -> [NoteProjection]
+    func note(id: NoteID) async throws -> NoteDetailProjection?
+    func retry(noteID: NoteID) async throws
+    func retryAllFailed() async throws -> Int
+    func sendRecovered(noteID: NoteID) async throws
+    func delete(noteID: NoteID) async throws
+    func updateWebhook(_ input: WebhookConfigurationInput) async throws -> ConfigurationUpdateResult
+    func testWebhook() async throws -> ConfigurationTestResult
+    func updatePreferences(_ input: PreferenceInput) async throws
+    func reset() async throws
+    func events() -> AsyncStream<WhimEvent>
+}
+
+public struct RecordingProjection: Codable, Equatable, Sendable {
+    public let schemaVersion = WhimCoreVersion.schema
+    public let sessionID: String
+    public let noteID: String
+    public let source: CaptureSource
+    public let createdAt: Date
+
+    public init(_ snapshot: RecordingSnapshot) {
+        sessionID = snapshot.sessionID.rawValue.uuidString.lowercased()
+        noteID = snapshot.noteID.rawValue.uuidString.lowercased()
+        source = snapshot.source
+        createdAt = snapshot.createdAt
+    }
+
+    public init(schemaVersion: Int = WhimCoreVersion.schema, sessionID: String, noteID: String,
+                source: CaptureSource, createdAt: Date) {
+        self.sessionID = sessionID; self.noteID = noteID; self.source = source; self.createdAt = createdAt
+    }
+
+    private enum CodingKeys: String, CodingKey { case schemaVersion, sessionID, noteID, source, createdAt }
+}
+
+public struct AttemptProjection: Codable, Equatable, Sendable {
+    public enum Outcome: String, Codable, Sendable { case sending, failed, sent }
+    public let id: String
+    public let configurationRevisionID: String
+    public let device: CaptureSource
+    public let startedAt: Date
+    public let destination: SanitizedEndpointProjection
+    public let outcome: Outcome
+    public let failureReason: String?
+    public let responseStatusCode: Int?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, configurationRevisionID, device, startedAt, destination, outcome
+        case failureReason, responseStatusCode
+    }
+    public func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(id, forKey: .id); try values.encode(configurationRevisionID, forKey: .configurationRevisionID)
+        try values.encode(device, forKey: .device); try values.encode(startedAt, forKey: .startedAt)
+        try values.encode(destination, forKey: .destination); try values.encode(outcome, forKey: .outcome)
+        try values.encode(failureReason, forKey: .failureReason)
+        try values.encode(responseStatusCode, forKey: .responseStatusCode)
+    }
+}
+
+public struct SanitizedEndpointProjection: Codable, Equatable, Sendable {
+    public let scheme: String
+    public let host: String
+    public let port: Int?
+    public let path: String
+    public init(_ endpoint: SanitizedEndpoint) {
+        scheme = endpoint.scheme; host = endpoint.host; port = endpoint.port; path = endpoint.path
+    }
+    private enum CodingKeys: String, CodingKey { case scheme, host, port, path }
+    public func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(scheme, forKey: .scheme); try values.encode(host, forKey: .host)
+        try values.encode(port, forKey: .port); try values.encode(path, forKey: .path)
+    }
+}
+
+public struct NoteDetailProjection: Codable, Equatable, Sendable {
+    public let schemaVersion: Int
+    public let id: String
+    public let title: String
+    public let createdAt: Date
+    public let durationSeconds: TimeInterval
+    public let source: CaptureSource
+    public let status: DeliveryStatus
+    public let requiresReview: Bool
+    public let hasLocalAudio: Bool
+    public let localError: LocalAudioError?
+    public let attempts: [AttemptProjection]
+
+    public init(note: Note, hasLocalAudio: Bool = true) {
+        let summary = NoteProjection(note: note, hasLocalAudio: hasLocalAudio)
+        schemaVersion = summary.schemaVersion; id = summary.id.rawValue.uuidString.lowercased()
+        title = summary.title; createdAt = summary.createdAt; durationSeconds = summary.duration
+        source = summary.source; status = summary.status; requiresReview = summary.requiresReview
+        self.hasLocalAudio = summary.hasLocalAudio; localError = summary.localError
+        var values = note.delivery.activeAttempts.map { Self.project($0, outcome: .sending) }
+        values += note.delivery.failedAttempts.map {
+            var projection = Self.project($0.attempt, outcome: .failed)
+            projection = AttemptProjection(id: projection.id,
+                configurationRevisionID: projection.configurationRevisionID, device: projection.device,
+                startedAt: projection.startedAt, destination: projection.destination, outcome: .failed,
+                failureReason: Self.failure($0.reason), responseStatusCode: Self.status($0.reason))
+            return projection
+        }
+        if let receipt = note.delivery.receipt,
+           let attempt = (note.delivery.activeAttempts + note.delivery.failedAttempts.map(\.attempt))
+            .first(where: { $0.id == receipt.attemptID }) {
+            values.append(AttemptProjection(id: attempt.id.rawValue.uuidString.lowercased(),
+                configurationRevisionID: attempt.configurationRevisionID.rawValue.uuidString.lowercased(),
+                device: attempt.device == .iphone ? .iphone : .appleWatch, startedAt: attempt.startedAt,
+                destination: .init(attempt.endpoint), outcome: .sent, failureReason: nil,
+                responseStatusCode: receipt.statusCode))
+        }
+        attempts = values.sorted { $0.startedAt < $1.startedAt }
+    }
+
+    private static func project(_ attempt: Attempt, outcome: AttemptProjection.Outcome) -> AttemptProjection {
+        AttemptProjection(id: attempt.id.rawValue.uuidString.lowercased(),
+            configurationRevisionID: attempt.configurationRevisionID.rawValue.uuidString.lowercased(),
+            device: attempt.device == .iphone ? .iphone : .appleWatch, startedAt: attempt.startedAt,
+            destination: .init(attempt.endpoint), outcome: outcome, failureReason: nil, responseStatusCode: nil)
+    }
+    private static func failure(_ reason: AttemptFailureReason) -> String {
+        switch reason { case .network: "network"; case .httpStatus: "http_status" }
+    }
+    private static func status(_ reason: AttemptFailureReason) -> Int? {
+        if case .httpStatus(let value) = reason { value } else { nil }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, id, title, createdAt, durationSeconds, source, status
+        case requiresReview, hasLocalAudio, localError, attempts
+    }
+    public func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(schemaVersion, forKey: .schemaVersion); try values.encode(id, forKey: .id)
+        try values.encode(title, forKey: .title); try values.encode(createdAt, forKey: .createdAt)
+        try values.encode(durationSeconds, forKey: .durationSeconds); try values.encode(source, forKey: .source)
+        try values.encode(status, forKey: .status); try values.encode(requiresReview, forKey: .requiresReview)
+        try values.encode(hasLocalAudio, forKey: .hasLocalAudio); try values.encode(localError, forKey: .localError)
+        try values.encode(attempts, forKey: .attempts)
+    }
+}
+
+public struct WebhookProjection: Codable, Equatable, Sendable {
+    public let schemaVersion: Int
+    public let revisionID: String
+    public let destination: SanitizedEndpointProjection
+    public let customHeaderNames: [String]
+    public init(revisionID: String, destination: SanitizedEndpointProjection, customHeaderNames: [String]) {
+        schemaVersion = WhimCoreVersion.schema; self.revisionID = revisionID
+        self.destination = destination; self.customHeaderNames = customHeaderNames
+    }
+}
+
+public struct ConfigurationUpdateResult: Codable, Equatable, Sendable {
+    public let revisionID: String
+    public let failedCount: Int
+    public let setupRequiredCount: Int
+    public init(revisionID: ConfigurationRevisionID, failedCount: Int, setupRequiredCount: Int) {
+        self.revisionID = revisionID.rawValue.uuidString.lowercased()
+        self.failedCount = failedCount; self.setupRequiredCount = setupRequiredCount
+    }
+}
+
+public struct PreferenceInput: Equatable, Sendable {
+    public let retentionPolicy: RetentionPolicy
+    public let transcriptionEnabled: Bool
+    public let transcriptionLocaleIdentifier: String?
+    public init(retentionPolicy: RetentionPolicy, transcriptionEnabled: Bool,
+                transcriptionLocaleIdentifier: String?) {
+        self.retentionPolicy = retentionPolicy; self.transcriptionEnabled = transcriptionEnabled
+        self.transcriptionLocaleIdentifier = transcriptionLocaleIdentifier
+    }
+    public static let `default` = PreferenceInput(retentionPolicy: .thirtyDays,
+        transcriptionEnabled: true, transcriptionLocaleIdentifier: nil)
+}
+
+extension PreferenceInput: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case retentionPolicy, transcriptionEnabled, transcriptionLocaleIdentifier
+    }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let raw = try values.decode(String.self, forKey: .retentionPolicy)
+        guard let policy = RetentionPolicy(externalRawValue: raw) else {
+            throw DecodingError.dataCorruptedError(forKey: .retentionPolicy, in: values,
+                debugDescription: "Unknown retention policy")
+        }
+        self.init(retentionPolicy: policy,
+            transcriptionEnabled: try values.decode(Bool.self, forKey: .transcriptionEnabled),
+            transcriptionLocaleIdentifier: try values.decodeIfPresent(String.self,
+                forKey: .transcriptionLocaleIdentifier))
+    }
+    public func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(retentionPolicy.externalRawValue, forKey: .retentionPolicy)
+        try values.encode(transcriptionEnabled, forKey: .transcriptionEnabled)
+        try values.encodeIfPresent(transcriptionLocaleIdentifier, forKey: .transcriptionLocaleIdentifier)
+    }
+}
+
+public extension RetentionPolicy {
+    var externalRawValue: String {
+        switch self {
+        case .immediately: "immediately"; case .oneDay: "one_day"; case .sevenDays: "seven_days"
+        case .thirtyDays: "thirty_days"; case .ninetyDays: "ninety_days"; case .never: "never"
+        }
+    }
+    init?(externalRawValue: String) {
+        switch externalRawValue {
+        case "immediately": self = .immediately; case "one_day": self = .oneDay
+        case "seven_days": self = .sevenDays; case "thirty_days": self = .thirtyDays
+        case "ninety_days": self = .ninetyDays; case "never": self = .never
+        default: return nil
+        }
+    }
+}
+
+public protocol PreferenceStoring: Sendable {
+    func load() async throws -> PreferenceInput
+    func save(_ input: PreferenceInput) async throws
+    func reset() async throws
+}
+
+public struct WhimEvent: Codable, Equatable, Sendable {
+    public enum Kind: String, Codable, Sendable {
+        case recordingStarted = "recording.started"
+        case recordingProgress = "recording.progress"
+        case recordingStopped = "recording.stopped"
+        case recordingDiscarded = "recording.discarded"
+        case recordingRouteChanged = "recording.route_changed"
+        case recordingMaximumDurationWarning = "recording.maximum_duration_warning"
+        case noteChanged = "note.changed"
+        case noteDeleted = "note.deleted"
+        case notesReset = "notes.reset"
+    }
+    public let schemaVersion: Int
+    public let sequence: UInt64
+    public let type: Kind
+    public let recording: RecordingProjection?
+    public let note: NoteProjection?
+    public let noteID: String?
+    public let elapsedSeconds: TimeInterval?
+    public let peakPowerDBFS: Float?
+
+    public init(sequence: UInt64, type: Kind, recording: RecordingProjection? = nil,
+                note: NoteProjection? = nil, noteID: String? = nil,
+                elapsedSeconds: TimeInterval? = nil, peakPowerDBFS: Float? = nil) {
+        schemaVersion = WhimCoreVersion.schema; self.sequence = sequence; self.type = type
+        self.recording = recording; self.note = note; self.noteID = noteID
+        self.elapsedSeconds = elapsedSeconds; self.peakPowerDBFS = peakPowerDBFS
+    }
+}

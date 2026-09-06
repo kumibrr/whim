@@ -4,6 +4,8 @@ import PackageDescription
 
 let productionSources = [
     "AppComposition/WhimCoreVersion.swift",
+    "AppComposition/WhimClient.swift",
+    "AppComposition/WhimService.swift",
     "Delivery/Delivery.swift",
     "Delivery/DeliveryReducer.swift",
     "Delivery/RetryPolicy.swift",
@@ -59,6 +61,8 @@ let unitTestSources = [
 ]
 let integrationTestSources = [
     "AppComposition/WhimCoreVersion.integration.test.swift",
+    "AppComposition/WhimClient.integration.test.swift",
+    "AppComposition/WhimService.integration.test.swift",
     "Notes/SQLiteWhimStore.integration.test.swift",
     "Recovery/RecoveryScanner.integration.test.swift",
     "Recording/RecordingService.integration.test.swift",
@@ -66,6 +70,7 @@ let integrationTestSources = [
     "WebhookConfiguration/WebhookRequestBuilder.integration.test.swift",
 ]
 let fixtureResources = ["WebhookConfiguration/Fixtures"]
+let contractFixtureResources = ["AppComposition/Fixtures/notes-v1.fixture.json"]
 
 let package = Package(
     name: "WhimCore",
@@ -77,14 +82,15 @@ let package = Package(
             name: "WhimCore",
             dependencies: [.product(name: "GRDB", package: "GRDB.swift")],
             path: "Sources/WhimCore",
-            exclude: unitTestSources + integrationTestSources + fixtureResources,
-            sources: productionSources
+            exclude: unitTestSources + integrationTestSources + fixtureResources + contractFixtureResources,
+            sources: productionSources,
+            resources: [.copy("WebhookConfiguration/Fixtures/configuration-test-fixture.m4a")]
         ),
         .testTarget(
             name: "WhimCoreUnitTests",
             dependencies: ["WhimCore"],
             path: "Sources/WhimCore",
-            exclude: productionSources + integrationTestSources + fixtureResources,
+            exclude: productionSources + integrationTestSources + fixtureResources + contractFixtureResources,
             sources: unitTestSources
         ),
         .testTarget(
@@ -93,7 +99,10 @@ let package = Package(
             path: "Sources/WhimCore",
             exclude: productionSources + unitTestSources,
             sources: integrationTestSources,
-            resources: [.copy("WebhookConfiguration/Fixtures")]
+            resources: [
+                .copy("WebhookConfiguration/Fixtures"),
+                .copy("AppComposition/Fixtures/notes-v1.fixture.json"),
+            ]
         ),
     ]
 )

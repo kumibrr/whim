@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ConfigurationTestResult: Equatable, Sendable {
+public struct ConfigurationTestResult: Codable, Equatable, Sendable {
     public let passed: Bool
     public let statusCode: Int?
     public let idempotencyConfirmed: Bool
@@ -9,6 +9,12 @@ public struct ConfigurationTestResult: Equatable, Sendable {
         self.passed = passed
         self.statusCode = statusCode
         self.idempotencyConfirmed = idempotencyConfirmed
+    }
+    private enum CodingKeys: String, CodingKey { case passed, statusCode, idempotencyConfirmed }
+    public func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(passed, forKey: .passed); try values.encode(statusCode, forKey: .statusCode)
+        try values.encode(idempotencyConfirmed, forKey: .idempotencyConfirmed)
     }
 }
 

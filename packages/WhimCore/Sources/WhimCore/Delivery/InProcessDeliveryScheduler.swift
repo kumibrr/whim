@@ -46,8 +46,10 @@ public actor InProcessDeliveryScheduler: DeliveryScheduler {
         pending[noteID] = Pending(earliest: earliest, token: token, task: task, isExecuting: false)
     }
 
-    public func cancel(noteID: NoteID) {
-        pending.removeValue(forKey: noteID)?.task.cancel()
+    public func cancel(noteID: NoteID) async {
+        guard let task = pending.removeValue(forKey: noteID)?.task else { return }
+        task.cancel()
+        await task.value
     }
 
     private func run(noteID: NoteID, earliest: Date, token: UUID,
@@ -60,6 +62,10 @@ public actor InProcessDeliveryScheduler: DeliveryScheduler {
             if !(error is CancellationError) { await onFailure(error) }
             return
         }
+        guard !Task.isCancelled else {
+            remove(noteID: noteID, token: token)
+            return
+        }
         guard markExecuting(noteID: noteID, token: token) else { return }
         var attempts = 0
         while !Task.isCancelled, pending[noteID]?.token == token {
@@ -69,6 +75,10 @@ public actor InProcessDeliveryScheduler: DeliveryScheduler {
                 remove(noteID: noteID, token: token)
                 return
             } catch {
+                guard !Task.isCancelled else {
+                    remove(noteID: noteID, token: token)
+                    return
+                }
                 guard attempts < DeliveryTimeouts.maximumScheduledOperationAttempts else {
                     remove(noteID: noteID, token: token)
                     await onFailure(error)

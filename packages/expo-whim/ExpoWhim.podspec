@@ -21,4 +21,7 @@ Pod::Spec.new do |spec|
     'ios/**/*.test.swift',
     'ios/**/*.integration.test.swift',
   ]
+  spec.resource_bundles = {
+    'ExpoWhimContracts' => ['src/events/notes-v1.fixture.json'],
+  }
 end

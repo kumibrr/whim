@@ -72,11 +72,30 @@ final class DeliveryServiceTests: XCTestCase {
         await sleeper.waitForCallCount(1)
 
         await scheduler.cancel(noteID: noteID)
-        await sleeper.resumeNext()
         for _ in 0..<10 { await Task.yield() }
 
         let values = await callbacks.values
         XCTAssertTrue(values.isEmpty)
+    }
+
+    // Break: reset/delete returns while an executing scheduled callback can still mutate its Note.
+    func testInProcessSchedulerCancellationJoinsExecutingCallback() async throws {
+        let sleeper = ControlledDeliverySleeper()
+        let operation = BlockingScheduledOperation()
+        let scheduler = InProcessDeliveryScheduler(clock: MutableClock(Date(timeIntervalSince1970: 1_000)),
+            sleeper: sleeper)
+        let noteID = NoteID()
+        await scheduler.schedule(noteID: noteID, earliest: Date(timeIntervalSince1970: 1_000), operation: {
+            try await operation.run()
+        }, onFailure: { _ in })
+        await sleeper.waitUntilCalled()
+        await sleeper.resumeNext()
+        await operation.waitUntilStarted()
+
+        await scheduler.cancel(noteID: noteID)
+
+        let wasCancelled = await operation.wasCancelled
+        XCTAssertTrue(wasCancelled)
     }
 
     // Break: persistent local callback failures retry rapidly forever or disappear without surfacing an error.
@@ -471,15 +490,26 @@ private actor SchedulerFake: DeliveryScheduler {
 }
 
 private actor ControlledDeliverySleeper: DeliverySleeper {
-    private var continuations: [CheckedContinuation<Void, Error>] = []
+    private struct PendingSleep {
+        let token: UUID
+        let continuation: CheckedContinuation<Void, Error>
+    }
+    private var continuations: [PendingSleep] = []
     private var callWaiters: [CheckedContinuation<Void, Never>] = []
     private(set) var requestedIntervals: [TimeInterval] = []
 
     func sleep(for interval: TimeInterval) async throws {
+        let token = UUID()
         requestedIntervals.append(interval)
         for waiter in callWaiters { waiter.resume() }
         callWaiters.removeAll()
-        try await withCheckedThrowingContinuation { continuations.append($0) }
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation {
+                continuations.append(PendingSleep(token: token, continuation: $0))
+            }
+        } onCancel: {
+            Task { await self.cancel(token: token) }
+        }
     }
 
     func waitUntilCalled() async {
@@ -493,7 +523,12 @@ private actor ControlledDeliverySleeper: DeliverySleeper {
 
     func resumeNext() {
         guard !continuations.isEmpty else { return }
-        continuations.removeFirst().resume()
+        continuations.removeFirst().continuation.resume()
+    }
+
+    private func cancel(token: UUID) {
+        guard let index = continuations.firstIndex(where: { $0.token == token }) else { return }
+        continuations.remove(at: index).continuation.resume(throwing: CancellationError())
     }
 }
 
@@ -513,6 +548,26 @@ private actor RecoveringScheduledOperation {
     func waitForSuccess() async {
         if attempts >= 2 { return }
         await withCheckedContinuation { successWaiters.append($0) }
+    }
+}
+
+private actor BlockingScheduledOperation {
+    private var started = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private(set) var wasCancelled = false
+    func run() async throws {
+        started = true
+        waiters.forEach { $0.resume() }; waiters.removeAll()
+        do {
+            while true { try await Task.sleep(for: .milliseconds(10)) }
+        } catch {
+            wasCancelled = true
+            throw error
+        }
+    }
+    func waitUntilStarted() async {
+        if started { return }
+        await withCheckedContinuation { waiters.append($0) }
     }
 }
 

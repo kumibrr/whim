@@ -40,6 +40,8 @@ public struct DeliveryService: Sendable {
     private let titleSnapshot: @Sendable (Note) async -> TitleSnapshot
     private let scheduledFailure: @Sendable (NoteID, any Error) async -> Void
     private let pendingOutcomes = PendingDeliveryOutcomes()
+    private let deliveryEvents: AsyncStream<NoteID>
+    private let deliveryEventContinuation: AsyncStream<NoteID>.Continuation
 
     public init(store: any WhimStore, credentials: any CredentialStore, transport: any HTTPTransport,
                 notifications: any DeliveryNotificationAdapter, clock: any Clock = SystemClock(),
@@ -68,7 +70,12 @@ public struct DeliveryService: Sendable {
         self.makeLeaseOwner = makeLeaseOwner
         self.titleSnapshot = titleSnapshot
         self.scheduledFailure = scheduledFailure
+        let pair = AsyncStream.makeStream(of: NoteID.self)
+        deliveryEvents = pair.stream
+        deliveryEventContinuation = pair.continuation
     }
+
+    public func events() -> AsyncStream<NoteID> { deliveryEvents }
 
     public func deliver(noteID: NoteID) async throws -> DeliveryResult {
         guard var note = try await store.note(id: noteID) else { return .failed }
@@ -278,8 +285,10 @@ public struct DeliveryService: Sendable {
     private func scheduled(noteID: NoteID, earliest: Date) async -> DeliveryResult {
         await scheduler.schedule(noteID: noteID, earliest: earliest) {
             _ = try await deliver(noteID: noteID)
+            deliveryEventContinuation.yield(noteID)
         } onFailure: { error in
             await scheduledFailure(noteID, error)
+            deliveryEventContinuation.yield(noteID)
         }
         return .scheduled(earliest)
     }

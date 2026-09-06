@@ -42,31 +42,46 @@ public struct TitleService: Sendable {
     /// Returns the immutable metadata available to delivery at 300 ms. Recognition keeps
     /// running after that deadline and may update only the local Note title.
     public func enrich(_ note: Note) async -> TitleSnapshot {
-        await jobs.snapshot(for: note.id) { await produceSnapshot(note) }
-    }
-
-    private func produceSnapshot(_ note: Note) async -> TitleSnapshot {
-        let fallback = TitleSnapshot(noteID: note.id, title: timestampTitle(note.createdAt), source: .timestamp)
+        let fallback = fallback(for: note)
+        let job = await jobs.job(for: note.id) { await produceFinalSnapshot(note, fallback: fallback) }
         let resolution = TitleResolution()
-        return await withCheckedContinuation { continuation in
-            resolution.install(continuation)
-            Task {
-                do {
-                    let transcript = try await transcriber.transcribe(audioAt: note.audioURL, locale: locale())
-                    guard let title = Self.title(from: transcript) else {
-                        resolution.resolve(fallback)
-                        return
-                    }
-                    try await store.updateTitle(noteID: note.id, title: title, source: .transcription)
-                    resolution.resolve(TitleSnapshot(noteID: note.id, title: title, source: .transcription))
-                } catch {
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                resolution.install(continuation)
+                Task { resolution.resolve(await job.value) }
+                Task {
+                    try? await sleep(Self.deliveryDeadline)
                     resolution.resolve(fallback)
                 }
             }
-            Task {
-                try? await sleep(Self.deliveryDeadline)
-                resolution.resolve(fallback)
-            }
+        } onCancel: {
+            resolution.resolve(fallback)
+        }
+    }
+
+    /// Joins the shared transcription job through its final local persistence. The façade uses
+    /// this to publish the late title update without creating a second recognition request.
+    public func complete(_ note: Note) async -> TitleSnapshot {
+        let fallback = fallback(for: note)
+        return await jobs.job(for: note.id) {
+            await produceFinalSnapshot(note, fallback: fallback)
+        }.value
+    }
+
+    public func cancel(noteID: NoteID) async { await jobs.cancel(noteID: noteID) }
+
+    private func fallback(for note: Note) -> TitleSnapshot {
+        TitleSnapshot(noteID: note.id, title: timestampTitle(note.createdAt), source: .timestamp)
+    }
+
+    private func produceFinalSnapshot(_ note: Note, fallback: TitleSnapshot) async -> TitleSnapshot {
+        do {
+            let transcript = try await transcriber.transcribe(audioAt: note.audioURL, locale: locale())
+            guard !Task.isCancelled, let title = Self.title(from: transcript) else { return fallback }
+            try await store.updateTitle(noteID: note.id, title: title, source: .transcription)
+            return TitleSnapshot(noteID: note.id, title: title, source: .transcription)
+        } catch {
+            return fallback
         }
     }
 
@@ -99,12 +114,18 @@ public struct TitleService: Sendable {
 private actor TitleJobs {
     private var tasks: [NoteID: Task<TitleSnapshot, Never>] = [:]
 
-    func snapshot(for noteID: NoteID,
-                  operation: @escaping @Sendable () async -> TitleSnapshot) async -> TitleSnapshot {
-        if let existing = tasks[noteID] { return await existing.value }
+    func job(for noteID: NoteID,
+             operation: @escaping @Sendable () async -> TitleSnapshot) -> Task<TitleSnapshot, Never> {
+        if let existing = tasks[noteID] { return existing }
         let task = Task { await operation() }
         tasks[noteID] = task
-        return await task.value
+        return task
+    }
+
+    func cancel(noteID: NoteID) async {
+        guard let task = tasks.removeValue(forKey: noteID) else { return }
+        task.cancel()
+        _ = await task.value
     }
 }
 

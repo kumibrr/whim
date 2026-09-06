@@ -20,6 +20,8 @@ public enum RecordingServiceEvent: Sendable, Equatable {
     case peakPower(Float)
     case routeChanged
     case maximumDurationWarning
+    case finalized(Note?)
+    case finalizationFailed
 }
 
 public enum RecordingServiceError: Error, Sendable, Equatable {
@@ -71,6 +73,7 @@ public actor RecordingService {
     }
 
     public func events() -> AsyncStream<RecordingServiceEvent> { serviceEvents }
+    public func snapshot() -> RecordingSnapshot? { active ?? activating }
 
     public func start(source: CaptureSource) async throws -> RecordingSnapshot {
         if let discardTask { try await discardTask.value }
@@ -262,6 +265,7 @@ public actor RecordingService {
                 try files.deleteTemporary(sessionID: snapshot.sessionID)
                 try await store.discardRecordingSession(sessionID: snapshot.sessionID)
                 active = nil
+                serviceEventContinuation.yield(.finalized(nil))
                 return nil
             }
             let audio = try files.finalize(sessionID: snapshot.sessionID, noteID: snapshot.noteID)
@@ -271,6 +275,7 @@ public actor RecordingService {
                 audioURL: audio.url)
             let note = try await store.saveFinalized(finalized)
             active = nil
+            serviceEventContinuation.yield(.finalized(note))
             return note
         } catch {
             active = nil
@@ -284,6 +289,7 @@ public actor RecordingService {
             }
             if error is RecordingServiceError { await recorder.discard() }
             try? await store.recordSessionError(localError, sessionID: snapshot.sessionID)
+            serviceEventContinuation.yield(.finalizationFailed)
             throw error
         }
     }

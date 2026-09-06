@@ -6,6 +6,8 @@ public enum LeaseKind: String, Codable, Sendable {
 }
 
 public protocol WhimStore: Sendable {
+    func latestConfigurationRevision() async throws -> ConfigurationRevision?
+    func reset() async throws
     func recordLocalError(_ error: LocalAudioError, noteID: NoteID) async throws
     func saveRecoveryError(_ recording: FinalizedRecording, error: LocalAudioError) async throws
     func send(noteID: NoteID) async throws
@@ -36,6 +38,8 @@ public protocol WhimStore: Sendable {
 }
 
 public extension WhimStore {
+    func latestConfigurationRevision() async throws -> ConfigurationRevision? { nil }
+    func reset() async throws { throw WhimStoreError.unsupportedOperation }
     func beginRetryCycle(noteID: NoteID) async throws -> Bool { false }
     func markExhaustionNotified(noteID: NoteID, retryCycle: Int) async throws -> Bool { true }
 }
