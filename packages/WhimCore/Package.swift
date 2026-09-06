@@ -14,9 +14,16 @@ let productionSources = [
     "Notes/AudioFileStore.swift",
     "Notes/FileProtection.swift",
     "Notes/SQLiteWhimStore.swift",
+    "Recording/AudioRecorder.swift",
+    "Recording/AVAudioRecorderAdapter.swift",
+    "Recording/RecordingLimits.swift",
+    "Recording/RecordingService.swift",
     "Recording/RecordingSessionID.swift",
     "Recovery/RecoveryScanner.swift",
     "Retention/RetentionPolicy.swift",
+    "TitleEnrichment/Transcriber.swift",
+    "TitleEnrichment/OnDeviceTranscriber.swift",
+    "TitleEnrichment/TitleService.swift",
     "WebhookConfiguration/WebhookConfiguration.swift",
 ]
 let unitTestSources = [
@@ -26,6 +33,8 @@ let unitTestSources = [
     "Delivery/RetryPolicy.test.swift",
     "Delivery/Workflow.test.swift",
     "Notes/Note.test.swift",
+    "Recording/RecordingService.test.swift",
+    "TitleEnrichment/TitleService.test.swift",
     "Retention/RetentionPolicy.test.swift",
     "WebhookConfiguration/WebhookConfiguration.test.swift",
 ]
@@ -33,6 +42,7 @@ let integrationTestSources = [
     "AppComposition/WhimCoreVersion.integration.test.swift",
     "Notes/SQLiteWhimStore.integration.test.swift",
     "Recovery/RecoveryScanner.integration.test.swift",
+    "Recording/RecordingService.integration.test.swift",
 ]
 
 let package = Package(

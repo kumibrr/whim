@@ -1,0 +1,255 @@
+import Foundation
+
+public struct RecordingSnapshot: Sendable, Equatable {
+    public let sessionID: RecordingSessionID
+    public let noteID: NoteID
+    public let source: CaptureSource
+    public let createdAt: Date
+
+    public init(sessionID: RecordingSessionID, noteID: NoteID, source: CaptureSource, createdAt: Date) {
+        self.sessionID = sessionID
+        self.noteID = noteID
+        self.source = source
+        self.createdAt = createdAt
+    }
+}
+
+/// UI-safe progress shared by iPhone, Watch, and Live Activity clients.
+public enum RecordingServiceEvent: Sendable, Equatable {
+    case elapsed(TimeInterval)
+    case peakPower(Float)
+    case routeChanged
+    case maximumDurationWarning
+}
+
+public enum RecordingServiceError: Error, Sendable, Equatable {
+    case encoderFailed
+    case eventStreamEnded
+}
+
+public actor RecordingService {
+    private typealias EncoderMetrics = (duration: TimeInterval, peakPowerDBFS: Float)
+
+    private let recorder: any AudioRecorder
+    private let store: any WhimStore
+    private let files: any AudioFileManaging
+    private let now: @Sendable () -> Date
+    private let timestampTitle: @Sendable (Date) -> String
+    private let serviceEvents: AsyncStream<RecordingServiceEvent>
+    private let serviceEventContinuation: AsyncStream<RecordingServiceEvent>.Continuation
+    private var active: RecordingSnapshot?
+    private var startTask: Task<RecordingSnapshot, Error>?
+    private var recorderEventTask: Task<Void, Never>?
+    private var finalizationTask: Task<Note?, Error>?
+    private var encoderCompletion: EncoderMetrics?
+    private var encoderFailure: RecordingServiceError?
+    private var encoderWaiter: CheckedContinuation<EncoderMetrics, Error>?
+    private var recorderStreamEnded = false
+    private var warningEmitted = false
+    private var maximumStopRequested = false
+
+    public init(
+        recorder: any AudioRecorder,
+        store: any WhimStore,
+        files: any AudioFileManaging,
+        now: @escaping @Sendable () -> Date = { Date() },
+        timestampTitle: @escaping @Sendable (Date) -> String = {
+            $0.formatted(date: .abbreviated, time: .shortened)
+        }
+    ) {
+        self.recorder = recorder
+        self.store = store
+        self.files = files
+        self.now = now
+        self.timestampTitle = timestampTitle
+        let pair = AsyncStream.makeStream(of: RecordingServiceEvent.self)
+        serviceEvents = pair.stream
+        serviceEventContinuation = pair.continuation
+    }
+
+    public func events() -> AsyncStream<RecordingServiceEvent> { serviceEvents }
+
+    public func start(source: CaptureSource) async throws -> RecordingSnapshot {
+        if let active { return active }
+        if let startTask { return try await startTask.value }
+
+        let snapshot = RecordingSnapshot(sessionID: RecordingSessionID(), noteID: NoteID(),
+            source: source, createdAt: now())
+        let task = Task { try await self.activate(snapshot) }
+        startTask = task
+        do {
+            let started = try await task.value
+            startTask = nil
+            return started
+        } catch {
+            startTask = nil
+            throw error
+        }
+    }
+
+    private func activate(_ snapshot: RecordingSnapshot) async throws -> RecordingSnapshot {
+        let session = RecordingSession(id: snapshot.sessionID, noteID: snapshot.noteID,
+            createdAt: snapshot.createdAt, source: snapshot.source)
+        do {
+            try await store.saveRecordingSession(session)
+            beginConsumingRecorderEvents()
+            try await recorder.start(at: files.temporaryURL(for: snapshot.sessionID))
+            encoderCompletion = nil
+            encoderFailure = nil
+            warningEmitted = false
+            maximumStopRequested = false
+            active = snapshot
+            return snapshot
+        } catch {
+            await recorder.discard()
+            try? files.deleteTemporary(sessionID: snapshot.sessionID)
+            try? await store.discardRecordingSession(sessionID: snapshot.sessionID)
+            throw error
+        }
+    }
+
+    public func stop() async throws -> Note? {
+        try await beginFinalization(outcome: .completed)
+    }
+
+    public func handleInterruption() async throws -> Note? {
+        try await beginFinalization(outcome: .interrupted)
+    }
+
+    private func beginFinalization(outcome: CaptureOutcome) async throws -> Note? {
+        if let startTask { _ = try await startTask.value }
+        if let finalizationTask { return try await finalizationTask.value }
+        guard let snapshot = active else { return nil }
+
+        let task = Task { try await self.finalize(snapshot, outcome: outcome) }
+        finalizationTask = task
+        do {
+            let note = try await task.value
+            finalizationTask = nil
+            return note
+        } catch {
+            finalizationTask = nil
+            throw error
+        }
+    }
+
+    public func discard() async throws {
+        if let startTask { _ = try await startTask.value }
+        if let finalizationTask {
+            _ = try await finalizationTask.value
+            return
+        }
+        guard let snapshot = active else { return }
+        active = nil
+        await recorder.discard()
+        try files.deleteTemporary(sessionID: snapshot.sessionID)
+        try await store.discardRecordingSession(sessionID: snapshot.sessionID)
+    }
+
+    private func beginConsumingRecorderEvents() {
+        guard recorderEventTask == nil else { return }
+        let recorder = recorder
+        recorderEventTask = Task { [weak self] in
+            let events = await recorder.events()
+            for await event in events { await self?.consume(event) }
+            await self?.recorderEventsEnded()
+        }
+    }
+
+    private func consume(_ event: RecordingEvent) {
+        switch event {
+        case .elapsed(let elapsed):
+            guard active != nil else { return }
+            serviceEventContinuation.yield(.elapsed(elapsed))
+            let warningTime = RecordingLimits.maximumDuration.timeInterval
+                - RecordingLimits.warningLeadTime.timeInterval
+            if elapsed >= warningTime, !warningEmitted {
+                warningEmitted = true
+                serviceEventContinuation.yield(.maximumDurationWarning)
+            }
+            if elapsed >= RecordingLimits.maximumDuration.timeInterval, !maximumStopRequested {
+                maximumStopRequested = true
+                Task { try? await self.stop() }
+            }
+        case .peakPower(let power):
+            guard active != nil else { return }
+            serviceEventContinuation.yield(.peakPower(power))
+        case .routeChanged:
+            guard active != nil else { return }
+            serviceEventContinuation.yield(.routeChanged)
+        case .interruption:
+            guard active != nil else { return }
+            Task { try? await self.handleInterruption() }
+        case .encoderCompleted(let duration, let peakPowerDBFS):
+            guard active != nil else { return }
+            guard encoderCompletion == nil, encoderFailure == nil else { return }
+            let metrics = EncoderMetrics(duration: duration, peakPowerDBFS: peakPowerDBFS)
+            encoderCompletion = metrics
+            encoderWaiter?.resume(returning: metrics)
+            encoderWaiter = nil
+        case .failure:
+            guard active != nil else { return }
+            failEncoderWaiter(with: .encoderFailed)
+        }
+    }
+
+    private func recorderEventsEnded() {
+        recorderStreamEnded = true
+        failEncoderWaiter(with: .eventStreamEnded)
+    }
+
+    private func failEncoderWaiter(with error: RecordingServiceError) {
+        guard encoderCompletion == nil, encoderFailure == nil else { return }
+        encoderFailure = error
+        encoderWaiter?.resume(throwing: error)
+        encoderWaiter = nil
+    }
+
+    private func waitForEncoderCompletion() async throws -> EncoderMetrics {
+        if let encoderCompletion { return encoderCompletion }
+        if let encoderFailure { throw encoderFailure }
+        return try await withCheckedThrowingContinuation { encoderWaiter = $0 }
+    }
+
+    private func finalize(_ snapshot: RecordingSnapshot, outcome: CaptureOutcome) async throws -> Note? {
+        if recorderStreamEnded { encoderFailure = .eventStreamEnded }
+        do {
+            try await recorder.stop()
+            let metrics = try await waitForEncoderCompletion()
+            if metrics.duration < RecordingLimits.silenceDiscardDuration.timeInterval
+                && metrics.peakPowerDBFS <= RecordingLimits.meaningfulPeakPowerDBFS {
+                try files.deleteTemporary(sessionID: snapshot.sessionID)
+                try await store.discardRecordingSession(sessionID: snapshot.sessionID)
+                active = nil
+                return nil
+            }
+            let audio = try files.finalize(sessionID: snapshot.sessionID, noteID: snapshot.noteID)
+            let finalized = FinalizedRecording(id: snapshot.noteID, recordingSessionID: snapshot.sessionID,
+                title: timestampTitle(snapshot.createdAt), titleSource: .timestamp, createdAt: snapshot.createdAt,
+                duration: audio.duration, source: snapshot.source, captureOutcome: outcome, requiresReview: false,
+                audioURL: audio.url)
+            let note = try await store.saveFinalized(finalized)
+            active = nil
+            return note
+        } catch {
+            active = nil
+            let localError: LocalAudioError
+            if let posix = error as? POSIXError, posix.code == .ENOSPC {
+                localError = .storageFull
+            } else if error is RecordingServiceError {
+                localError = .unreadable
+            } else {
+                localError = .durabilityFailure
+            }
+            try? await store.recordSessionError(localError, sessionID: snapshot.sessionID)
+            throw error
+        }
+    }
+}
+
+private extension Duration {
+    var timeInterval: TimeInterval {
+        let components = self.components
+        return TimeInterval(components.seconds) + TimeInterval(components.attoseconds) / 1e18
+    }
+}

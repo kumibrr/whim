@@ -104,6 +104,12 @@ public actor SQLiteWhimStore: WhimStore {
         }
     }
 
+    public func discardRecordingSession(sessionID: RecordingSessionID) async throws {
+        try await database.write { db in
+            try db.execute(sql: "DELETE FROM recording_sessions WHERE id = ?", arguments: [sessionID.rawValue.uuidString])
+        }
+    }
+
     public func recordSessionError(_ error: LocalAudioError, sessionID: RecordingSessionID) async throws {
         try await database.write { db in
             guard let data = try Data.fetchOne(db, sql: "SELECT metadata FROM recording_sessions WHERE id = ?", arguments: [sessionID.rawValue.uuidString]) else { return }
@@ -163,6 +169,18 @@ public actor SQLiteWhimStore: WhimStore {
                 titleSource: note.titleSource, createdAt: note.createdAt, duration: note.duration, source: note.source,
                 captureOutcome: note.captureOutcome, requiresReview: false, audioURL: note.audioURL)
             try db.execute(sql: "UPDATE notes SET metadata = ? WHERE id = ?", arguments: [try JSONEncoder().encode(recording), noteID.rawValue.uuidString])
+        }
+    }
+
+    public func updateTitle(noteID: NoteID, title: String, source: TitleSource) async throws {
+        try await database.write { db in
+            guard let note = try Self.readNote(id: noteID, db: db) else { throw WhimStoreError.missingNote }
+            let recording = FinalizedRecording(id: note.id, recordingSessionID: note.recordingSessionID,
+                title: title, titleSource: source, createdAt: note.createdAt, duration: note.duration,
+                source: note.source, captureOutcome: note.captureOutcome, requiresReview: note.requiresReview,
+                audioURL: note.audioURL)
+            try db.execute(sql: "UPDATE notes SET metadata = ? WHERE id = ?",
+                arguments: [try JSONEncoder().encode(recording), noteID.rawValue.uuidString])
         }
     }
 

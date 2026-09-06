@@ -11,6 +11,7 @@ public protocol WhimStore: Sendable {
     func send(noteID: NoteID) async throws
     func saveRecordingSession(_ session: RecordingSession) async throws
     func recordingSessions() async throws -> [RecordingSession]
+    func discardRecordingSession(sessionID: RecordingSessionID) async throws
     func recordSessionError(_ error: LocalAudioError, sessionID: RecordingSessionID) async throws
     /// Persist deletion before removing audio, so recovery cannot resurrect a remaining file.
     func delete(noteID: NoteID) async throws
@@ -21,6 +22,7 @@ public protocol WhimStore: Sendable {
     func note(id: NoteID) async throws -> Note?
     func listNotes(filter: NoteFilter) async throws -> [NoteProjection]
     func saveFinalized(_ finalized: FinalizedRecording) async throws -> Note
+    func updateTitle(noteID: NoteID, title: String, source: TitleSource) async throws
     func apply(_ event: DeliveryEvent, to noteID: NoteID) async throws -> Delivery
     func acquireLease(
         _ kind: LeaseKind,
