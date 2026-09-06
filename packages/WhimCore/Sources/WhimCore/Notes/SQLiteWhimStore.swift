@@ -142,7 +142,8 @@ public actor SQLiteWhimStore: WhimStore {
                 INSERT INTO configuration_revisions (id, known_at, endpoint) VALUES (?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET known_at = excluded.known_at, endpoint = excluded.endpoint
                 WHERE configuration_revisions.known_at IS NULL
-                """, arguments: [revision.id.rawValue.uuidString, revision.changedAt.timeIntervalSince1970, try JSONEncoder().encode(revision.endpoint)])
+                """, arguments: [revision.id.rawValue.uuidString, revision.changedAt.timeIntervalSince1970,
+                    try JSONEncoder().encode(Self.sanitized(revision.endpoint))])
         }
     }
 
@@ -228,10 +229,13 @@ public actor SQLiteWhimStore: WhimStore {
     }
 
     private static func sanitized(_ attempt: Attempt) -> Attempt {
-        let endpoint = attempt.endpoint
         return Attempt(id: attempt.id, noteID: attempt.noteID, configurationRevisionID: attempt.configurationRevisionID,
-            device: attempt.device, endpoint: SanitizedEndpoint(scheme: endpoint.scheme, host: endpoint.host,
-                port: endpoint.port, path: String(endpoint.path.prefix { $0 != "?" && $0 != "#" })), startedAt: attempt.startedAt)
+            device: attempt.device, endpoint: Self.sanitized(attempt.endpoint), startedAt: attempt.startedAt)
+    }
+
+    private static func sanitized(_ endpoint: SanitizedEndpoint) -> SanitizedEndpoint {
+        SanitizedEndpoint(scheme: endpoint.scheme, host: endpoint.host, port: endpoint.port,
+            path: String(endpoint.path.prefix { $0 != "?" && $0 != "#" }))
     }
 
     private static func persist(_ attempt: Attempt, noteID: NoteID, db: Database) throws {

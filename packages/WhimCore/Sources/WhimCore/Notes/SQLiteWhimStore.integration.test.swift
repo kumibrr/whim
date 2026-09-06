@@ -148,6 +148,21 @@ final class PersistenceTests: XCTestCase {
         XCTAssertEqual(persisted?.delivery.failedAttempts.first?.attempt.endpoint.path, "/hook")
     }
 
+    // Break: caller-supplied endpoint query values are copied into persisted Configuration Revisions.
+    func testConfigurationRevisionEndpointDropsQueryAndFragmentAtPersistenceBoundary() async throws {
+        let h = try PersistenceHarness()
+        defer { h.remove() }
+        let note = try await h.store.saveFinalized(h.recording())
+        let revision = ConfigurationRevision(id: ConfigurationRevisionID(), changedAt: Date(),
+            endpoint: SanitizedEndpoint(scheme: "https", host: "example.com", path: "/hook?token=SECRET#fragment"))
+
+        try await h.store.saveConfigurationRevision(revision)
+        let reopened: any WhimStore = try SQLiteWhimStore.open(at: h.databaseURL)
+        let persisted = try await reopened.configurationRevision(for: note.id)
+
+        XCTAssertEqual(persisted?.endpoint.path, "/hook")
+    }
+
     // Break: an offline import resurrects a deleted Note after process restart.
     func testTombstonePreventsResurrectionAndRetainsEndpointAcknowledgements() async throws {
         let h = try PersistenceHarness()
