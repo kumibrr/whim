@@ -1,5 +1,6 @@
 import XCTest
 import AVFoundation
+import GRDB
 import WhimCore
 @testable import WhimWatch
 
@@ -116,6 +117,79 @@ final class WatchModelIntegrationTests: XCTestCase {
         XCTAssertEqual(detail?.attempts.first?.device, .appleWatch)
     }
 
+    func testPendingRetryCannotBlockStopOrSkipDeletion() async throws {
+        for deleting in [false, true] {
+            let fixture = try WatchFixture(connected: true)
+            defer { fixture.remove() }
+            await fixture.transport.setResponses([400, 204])
+            _ = try await fixture.client.updateWebhook(.init(endpoint: "https://example.com/receive"))
+            let model = WatchModel(client: fixture.client, haptic: { _ in })
+            await model.activate()
+            await model.stop()
+            let old = try await failedNote(fixture.client)
+            await model.record()
+            await fixture.transport.suspend()
+            let retry = Task { await model.retry(old) }
+            try await fixture.transport.waitForRequests(2)
+            let completed = expectation(description: "User command completes before retry response")
+            let command = Task {
+                if deleting { await model.delete(old) } else { await model.stop() }
+                completed.fulfill()
+            }
+            await fulfillment(of: [completed], timeout: 1)
+            await fixture.transport.resume()
+            await retry.value
+            await command.value
+            if deleting {
+                let remaining = try await fixture.client.note(id: old.id)
+                XCTAssertNil(remaining, "Delete must execute while Retry is pending")
+                await model.discard()
+            } else {
+                let active = try await fixture.client.activeRecording()
+                XCTAssertNil(active, "Stop must not be dropped while Retry is pending")
+            }
+        }
+    }
+
+    func testEventRefreshFailureIsVisibleAndLaterEventClearsIt() async throws {
+        let fixture = try WatchFixture(connected: true)
+        defer { fixture.remove() }
+        _ = try await fixture.client.updateWebhook(.init(endpoint: "https://example.com/receive"))
+        await fixture.transport.suspend()
+        let model = WatchModel(client: fixture.client, haptic: { _ in })
+        await model.activate()
+        await model.stop()
+        try await fixture.transport.waitForRequests(1)
+        let database = try DatabaseQueue(path: fixture.root.appendingPathComponent("whim.sqlite").path)
+        defer { try? database.close() }
+        // Fixture-only schema fault breaks the timeline query while Note-by-ID delivery
+        // writes still succeed, so the real delivery event exercises the failing refresh.
+        try await database.write { try $0.execute(sql: "ALTER TABLE notes RENAME COLUMN created_at TO unavailable_created_at") }
+        await fixture.transport.resume()
+        for _ in 0..<100 {
+            if model.error != nil { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(model.error, "Recent Notes could not be refreshed. Try again.")
+        try await database.write { try $0.execute(sql: "ALTER TABLE notes RENAME COLUMN unavailable_created_at TO created_at") }
+        _ = try await fixture.client.startRecording(source: .appleWatch)
+        _ = try await fixture.client.stopRecording()
+        for _ in 0..<100 {
+            if model.notes.count == 2, model.error == nil { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertNil(model.error)
+        XCTAssertEqual(model.notes.count, 2)
+    }
+
+    private func failedNote(_ client: WhimService) async throws -> NoteProjection {
+        for _ in 0..<100 {
+            if let note = try await client.listNotes(filter: .failed).first { return note }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        throw WhimServiceError.setupRequired("Fixture did not produce a failed Note")
+    }
+
     private func waitForNote(_ client: WhimService) async throws {
         for _ in 0..<100 {
             if try await !client.listNotes(filter: .all).isEmpty { return }
@@ -130,6 +204,7 @@ private final class WatchFixture {
     let root: URL
     let client: WhimService
     let microphone: WatchMicrophone
+    let transport = WatchTransport()
     init(permission: PermissionStatus = .granted, connected: Bool = false) throws {
         root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -140,7 +215,6 @@ private final class WatchFixture {
             now: { Date(timeIntervalSince1970: 1_000) }, timestampTitle: { _ in "Sep 4, 2026 at 10:00" })
         let title = TitleService(transcriber: WatchNoTranscription(), store: store)
         let credentials = WatchCredentials()
-        let transport = WatchTransport()
         let scheduler = InProcessDeliveryScheduler()
         let delivery = DeliveryService(store: store, credentials: credentials, transport: transport,
             notifications: WatchNotifications(), scheduler: scheduler, isConnected: { connected },
@@ -182,8 +256,25 @@ private actor WatchCredentials: CredentialStore {
     func remove(for revisionID: ConfigurationRevisionID) { values[revisionID] = nil }
     func removeAll() { values.removeAll() }
 }
-private struct WatchTransport: HTTPTransport {
-    func send(_ request: WebhookRequest) async throws -> HTTPResponse { .init(statusCode: 204) }
+private actor WatchTransport: HTTPTransport {
+    private var responses: [Int] = []
+    private var suspended = false
+    private var requests = 0
+    func send(_ request: WebhookRequest) async throws -> HTTPResponse {
+        requests += 1
+        while suspended { try await Task.sleep(for: .milliseconds(5)) }
+        return .init(statusCode: responses.isEmpty ? 204 : responses.removeFirst())
+    }
+    func setResponses(_ responses: [Int]) { self.responses = responses }
+    func suspend() { suspended = true }
+    func resume() { suspended = false }
+    func waitForRequests(_ count: Int) async throws {
+        for _ in 0..<200 {
+            if requests >= count { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        throw WhimServiceError.setupRequired("Fixture HTTP request did not start")
+    }
 }
 private struct WatchNotifications: DeliveryNotificationAdapter {
     func notifyFailure(title: String, reason: String, noteID: NoteID) async {}

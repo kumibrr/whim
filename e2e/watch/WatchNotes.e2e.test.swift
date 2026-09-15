@@ -61,6 +61,43 @@ final class WatchNotesUITests: XCTestCase {
         XCTAssertEqual(metadata["title_source"] as? String, "timestamp")
     }
 
+    func testSlowRetryLeavesStopAndConfirmedDeleteUsable() async throws {
+        let base = try XCTUnwrap(ProcessInfo.processInfo.environment["WHIM_WATCH_WEBHOOK_URL"])
+        try await control(base, path: "/reset")
+        try await control(base, path: "/response", body: "{\"status\":400}")
+        let app = XCUIApplication()
+        app.launchArguments = WatchUITestConfiguration.arguments + ["-WhimWatchConfigured",
+            "-WhimFixtureWebhookURL", base + "/receive"]
+        app.launch()
+        XCTAssertTrue(app.buttons["watch-stop"].waitForExistence(timeout: 10))
+        app.buttons["watch-stop"].tap()
+        app.buttons["watch-recent-notes"].tap()
+        XCTAssertTrue(app.staticTexts["Failed"].waitForExistence(timeout: 10))
+        let oldRow = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "watch-note-")).firstMatch
+        let oldID = oldRow.identifier
+        app.buttons["BackButton"].tap()
+        app.buttons["watch-record"].tap()
+        app.buttons["watch-recent-notes"].tap()
+        app.buttons[oldID].tap()
+        try await control(base, path: "/response", body: "{\"status\":200,\"delay_ms\":30000}")
+        app.swipeUp()
+        app.buttons["watch-retry"].tap()
+        XCTAssertTrue(app.staticTexts["Sending"].waitForExistence(timeout: 5))
+        app.buttons["BackButton"].tap()
+        app.buttons["BackButton"].tap()
+        XCTAssertTrue(app.buttons["watch-stop"].isEnabled)
+        app.buttons["watch-stop"].tap()
+        XCTAssertTrue(app.buttons["watch-record"].waitForExistence(timeout: 5))
+        app.buttons["watch-recent-notes"].tap()
+        app.buttons[oldID].tap()
+        XCTAssertTrue(app.staticTexts["Sending"].exists)
+        app.swipeUp()
+        app.buttons["watch-delete"].tap()
+        app.buttons["Delete Note"].tap()
+        XCTAssertTrue(app.navigationBars["Recent Notes"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons[oldID].exists)
+    }
+
     private func control(_ base: String, path: String, body: String? = nil) async throws {
         var request = URLRequest(url: URL(string: base + path)!)
         request.httpMethod = "POST"

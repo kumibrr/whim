@@ -36,6 +36,57 @@ final class WebhookIntegrationTests: XCTestCase {
         XCTAssertLessThan(Double(audio.length) / audio.fileFormat.sampleRate, 1)
     }
 #if os(macOS)
+    func testURLSessionCancellationBeforeStartAndDuringUploadPreservesCancellation() async throws {
+        for cancelBeforeStart in [true, false] {
+            let server = try await LoopbackServer()
+            addTeardownBlock { try await server.stop() }
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: root) }
+            let audio = root.appendingPathComponent("audio.m4a")
+            try Data("fixture".utf8).write(to: audio)
+            let note = Note(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "Cancellation",
+                titleSource: .timestamp, createdAt: Date(), duration: 1, source: .appleWatch,
+                captureOutcome: .completed, requiresReview: false, audioURL: audio)
+            let credentials = StoredWebhookCredentials(endpoint: server.url(path: "/receive?delay_ms=2000"),
+                bearerToken: nil, hmacSecret: "receiver-secret", customHeaders: [])
+            let request = try WebhookRequestBuilder(temporaryDirectory: root).build(note: note,
+                attemptID: AttemptID(), credentials: credentials, timestamp: 1000, appVersion: "1", appBuild: "1")
+            defer { request.removeBodyFile() }
+            let gate = AsyncStream.makeStream(of: Bool.self)
+            let operation = Task {
+                if cancelBeforeStart { for await _ in gate.stream { break } }
+                return try await URLSessionHTTPTransport().send(request)
+            }
+            if !cancelBeforeStart {
+                var reachedReceiver = false
+                for _ in 0..<100 {
+                    let (data, _) = try await URLSession.shared.data(from: server.url(path: "/state"))
+                    let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+                    if (json["received"] as? [Any])?.count == 1 { reachedReceiver = true; break }
+                    try await Task.sleep(for: .milliseconds(10))
+                }
+                XCTAssertTrue(reachedReceiver, "Exercise cancellation after the upload starts")
+            }
+            operation.cancel()
+            gate.continuation.yield(true)
+            gate.continuation.finish()
+            let cancelled = expectation(description: "Transport joins cancellation promptly")
+            let observed = Task {
+                do { _ = try await operation.value; XCTFail("Cancellation must not return HTTP success") }
+                catch { XCTAssertTrue(error is CancellationError) }
+                cancelled.fulfill()
+            }
+            await fulfillment(of: [cancelled], timeout: 0.5)
+            await observed.value
+            if cancelBeforeStart {
+                let (data, _) = try await URLSession.shared.data(from: server.url(path: "/state"))
+                let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+                XCTAssertEqual((json["received"] as? [Any])?.count, 0)
+            }
+        }
+    }
+
     func testLoopbackStopsWithinDeadlineAfterExecutorHandoff() async throws {
         let server = try await Task.detached { try await LoopbackServer() }.value
         try await server.stop(timeout: 2)

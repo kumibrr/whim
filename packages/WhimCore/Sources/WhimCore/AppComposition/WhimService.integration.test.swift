@@ -4,6 +4,61 @@ import XCTest
 @testable import WhimCore
 
 final class WhimServiceIntegrationTests: XCTestCase {
+    func testSlowManualRetryDoesNotBlockStoppingAnActiveRecording() async throws {
+        let harness = try WhimFacadeHarness(responses: [.init(statusCode: 400), .init(statusCode: 204)])
+        defer { harness.remove() }
+        _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"))
+        let client = harness.makeService()
+        _ = try await client.startRecording(source: .appleWatch)
+        let finalized = try await client.stopRecording()
+        let old = try XCTUnwrap(finalized)
+        _ = try await waitForNote(client: client, status: .failed)
+        _ = try await client.startRecording(source: .appleWatch)
+        await harness.transport.suspendResponses()
+        let retry = Task { try await client.retry(noteID: old.id) }
+        await harness.transport.waitForRequestCount(2)
+        let stopped = expectation(description: "Stop completes while retry HTTP remains suspended")
+        let stop = Task {
+            let note = try await client.stopRecording()
+            stopped.fulfill()
+            return note
+        }
+        await fulfillment(of: [stopped], timeout: 1)
+        await harness.transport.resumeResponses()
+        _ = try await retry.value
+        let saved = try await stop.value
+        XCTAssertNotNil(saved)
+    }
+
+    func testDeleteAndResetCancelAndJoinPendingManualRetry() async throws {
+        for reset in [false, true] {
+            let harness = try WhimFacadeHarness(responses: [.init(statusCode: 400), .init(statusCode: 204)])
+            defer { harness.remove() }
+            _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"))
+            let client = harness.makeService()
+            _ = try await client.startRecording(source: .appleWatch)
+            let finalized = try await client.stopRecording()
+            let old = try XCTUnwrap(finalized)
+            _ = try await waitForNote(client: client, status: .failed)
+            await harness.transport.suspendResponses()
+            let retry = Task { try await client.retry(noteID: old.id) }
+            await harness.transport.waitForRequestCount(2)
+            let deleted = expectation(description: "Deletion cancels the suspended retry")
+            let deletion = Task {
+                if reset { try await client.reset() } else { try await client.delete(noteID: old.id) }
+                deleted.fulfill()
+            }
+            await fulfillment(of: [deleted], timeout: 1)
+            await harness.transport.resumeResponses()
+            _ = try? await retry.value
+            try await deletion.value
+            let remaining = try await client.listNotes(filter: .all)
+            XCTAssertTrue(remaining.isEmpty)
+            let cancellations = await harness.transport.cancellationCount
+            XCTAssertEqual(cancellations, 1)
+        }
+    }
+
     func testReconnectDuringTranscriptionResumesQueuedDeliveryAfterWorkflowCompletes() async throws {
         let harness = try WhimFacadeHarness()
         defer { harness.remove() }

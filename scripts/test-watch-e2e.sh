@@ -21,7 +21,7 @@ whim_webhook_log="$whim_root/ios/build/watch-webhook-e2e.log"
 mkdir -p "$(dirname "$whim_webhook_log")"
 env WHIM_WEBHOOK_PORT=0 node "$whim_root/packages/WhimCore/Sources/WhimCore/WebhookConfiguration/Fixtures/webhook-server.mjs" >"$whim_webhook_log" 2>&1 &
 whim_webhook_pid=$!
-trap 'rm -rf "$whim_fixture_directory"; kill "$whim_webhook_pid" 2>/dev/null || true; wait "$whim_webhook_pid" 2>/dev/null || true' EXIT
+trap 'rm -rf "$whim_fixture_directory"; node "$whim_root/scripts/terminate-process-tree.mjs" "$whim_webhook_pid" >/dev/null 2>&1 || true; wait "$whim_webhook_pid" 2>/dev/null || true' EXIT
 whim_webhook_port="$(node - "$whim_webhook_log" <<'NODE'
 const fs = require('node:fs');
 (async () => {
@@ -42,6 +42,6 @@ xcodebuild test -quiet \
   -workspace "$whim_root/ios/Whim.xcworkspace" \
   -scheme WhimWatchUITests \
   -derivedDataPath "$whim_derived_data" \
-  -only-testing:WhimWatchUITests \
+  -only-testing:"${WHIM_WATCH_E2E_TEST:-WhimWatchUITests}" \
   -destination "id=${WHIM_WATCH_SIMULATOR_UDID}" \
   CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-

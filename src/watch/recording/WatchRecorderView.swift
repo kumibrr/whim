@@ -10,9 +10,9 @@ struct WatchRecorderView: View {
                 .font(.title.monospacedDigit()).accessibilityIdentifier("watch-elapsed")
             if model.warned { Text("Stopping at five minutes").accessibilityIdentifier("watch-limit-warning") }
             Button("Stop") { Task { await model.stop() } }
-                .accessibilityIdentifier("watch-stop").disabled(model.busy)
+                .accessibilityIdentifier("watch-stop").disabled(model.captureBusy)
             Button("Discard", role: .destructive) { confirmsDiscard = true }
-                .accessibilityIdentifier("watch-discard").disabled(model.busy)
+                .accessibilityIdentifier("watch-discard").disabled(model.captureBusy)
         }
         .confirmationDialog("Discard this Recording Session?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
             Button("Discard Recording", role: .destructive) { Task { await model.discard() } }

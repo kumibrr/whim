@@ -9,6 +9,7 @@ const hmacSecret = process.env.WHIM_HMAC_SECRET ?? "";
 const received = [];
 const noteIDs = new Set();
 let responseStatus = 200;
+let responseDelayMS = 0;
 
 function sha256(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
@@ -69,6 +70,7 @@ const handleRequest = (req, res) => {
     received.length = 0;
     noteIDs.clear();
     responseStatus = 200;
+    responseDelayMS = 0;
     res.writeHead(204).end();
     return;
   }
@@ -82,9 +84,11 @@ const handleRequest = (req, res) => {
   req.on("end", () => {
     if (req.method === "POST" && url.pathname === "/response") {
       try {
-        const { status } = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        const { status, delay_ms = 0 } = JSON.parse(Buffer.concat(chunks).toString("utf8"));
         if (!Number.isInteger(status) || status < 200 || status > 599) throw new Error("invalid status");
+        if (!Number.isInteger(delay_ms) || delay_ms < 0 || delay_ms > 30000) throw new Error("invalid delay");
         responseStatus = status;
+        responseDelayMS = delay_ms;
         res.writeHead(204).end();
       } catch {
         res.writeHead(400).end("invalid response status");
@@ -115,7 +119,7 @@ const handleRequest = (req, res) => {
         res.writeHead(status, headers).end(body);
       }
     };
-    const delay = Number(url.searchParams.get("delay_ms") ?? "0");
+    const delay = Number(url.searchParams.get("delay_ms") ?? responseDelayMS);
     if (delay > 0) setTimeout(respond, delay); else respond();
   });
 };

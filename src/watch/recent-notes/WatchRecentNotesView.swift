@@ -5,6 +5,11 @@ struct WatchRecentNotesView: View {
     @Bindable var model: WatchModel
     var body: some View {
         List {
+            if let error = model.error {
+                Text(error).accessibilityIdentifier("watch-notes-error")
+                Button("Refresh Notes") { Task { await model.refreshNotes() } }
+                    .accessibilityIdentifier("watch-refresh-notes")
+            }
             if model.notes.isEmpty { Text("No Notes yet") }
             ForEach(model.notes, id: \.id) { note in
                 NavigationLink {

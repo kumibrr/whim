@@ -44,6 +44,8 @@ public actor WhimService: WhimClient {
     private var deliveryEventTask: Task<Void, Never>?
     private struct Workflow: Sendable { let token: UUID; let task: Task<Void, Never> }
     private var workflows: [NoteID: Workflow] = [:]
+    private struct ManualDelivery: Sendable { let token: UUID; let task: Task<Void, Error> }
+    private var manualDeliveries: [NoteID: ManualDelivery] = [:]
     private var pendingDeliveryWakes: Set<NoteID> = []
     private var handledFinalizations: Set<NoteID> = []
     private var suppressedNoteIDs: Set<NoteID> = []
@@ -151,23 +153,58 @@ public actor WhimService: WhimClient {
     }
 
     public func retry(noteID: NoteID) async throws {
-        await beginCommand(); defer { endCommand() }; try await launch()
-        _ = try await delivery.retry(noteID: noteID)
-        try await publishCurrent(noteID)
+        try await runManualDelivery(noteID: noteID, recovered: false)
     }
 
     public func retryAllFailed() async throws -> Int {
-        await beginCommand(); defer { endCommand() }; try await launch()
-        let results = try await delivery.retryAllFailed()
-        for noteID in results.keys { try await publishCurrent(noteID) }
-        return results.count
+        let notes = try await listNotes(filter: .failed)
+        for note in notes { try await retry(noteID: note.id) }
+        return notes.count
     }
 
     public func sendRecovered(noteID: NoteID) async throws {
-        await beginCommand(); defer { endCommand() }; try await launch()
-        try await store.send(noteID: noteID)
-        _ = try await delivery.deliver(noteID: noteID)
-        try await publishCurrent(noteID)
+        try await runManualDelivery(noteID: noteID, recovered: true)
+    }
+
+    /// Register under the command lock, then await HTTP outside it. Capture commands
+    /// stay responsive and destructive commands can cancel and join this work.
+    private func runManualDelivery(noteID: NoteID, recovered: Bool) async throws {
+        await beginCommand()
+        let operation: ManualDelivery
+        do {
+            try await launch()
+            if let existing = manualDeliveries[noteID] {
+                operation = existing
+            } else {
+                if recovered { try await store.send(noteID: noteID) }
+                let token = UUID()
+                let delivery = delivery
+                let task = Task { [weak self] in
+                    if recovered { _ = try await delivery.deliver(noteID: noteID) }
+                    else { _ = try await delivery.retry(noteID: noteID) }
+                    try await self?.manualDeliveryUpdated(noteID: noteID, token: token)
+                }
+                operation = ManualDelivery(token: token, task: task)
+                manualDeliveries[noteID] = operation
+            }
+        } catch {
+            endCommand()
+            throw error
+        }
+        endCommand()
+        defer {
+            if manualDeliveries[noteID]?.token == operation.token { manualDeliveries[noteID] = nil }
+        }
+        try await withTaskCancellationHandler {
+            try await operation.task.value
+        } onCancel: { operation.task.cancel() }
+    }
+
+    private func manualDeliveryUpdated(noteID: NoteID, token: UUID) async throws {
+        let note = try await store.note(id: noteID)
+        guard manualDeliveries[noteID]?.token == token, !resetInProgress,
+              !suppressedNoteIDs.contains(noteID), let note else { return }
+        publish(.noteChanged, note: .init(note: note))
     }
 
     public func delete(noteID: NoteID) async throws {
@@ -380,11 +417,15 @@ public actor WhimService: WhimClient {
         suppressedNoteIDs.insert(noteID)
         pendingDeliveryWakes.remove(noteID)
         let workflow = workflows[noteID]
+        let manual = manualDeliveries[noteID]
         workflow?.task.cancel()
+        manual?.task.cancel()
         async let titleCancellation: Void = title.cancel(noteID: noteID)
         async let schedulerCancellation: Void = scheduler.cancel(noteID: noteID)
         _ = await (titleCancellation, schedulerCancellation)
         await workflow?.task.value
+        _ = try? await manual?.task.value
+        if manualDeliveries[noteID]?.token == manual?.token { manualDeliveries[noteID] = nil }
         if workflows[noteID]?.token == workflow?.token { workflows[noteID] = nil }
     }
 

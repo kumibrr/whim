@@ -38,6 +38,8 @@ public struct URLSessionHTTPTransport: HTTPTransport {
         do {
             return try await BoundedUploadDelegate().send(urlRequest, bodyFileURL: request.bodyFileURL,
                 configuration: configuration)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as HTTPTransportError {
             throw error
         } catch {
@@ -52,14 +54,32 @@ private final class BoundedUploadDelegate: NSObject, URLSessionDataDelegate, @un
     private var response: HTTPURLResponse?
     private var continuation: CheckedContinuation<HTTPResponse, Error>?
     private var retainedSession: URLSession?
+    private var uploadTask: URLSessionUploadTask?
+    private var cancelled = false
 
     func send(_ request: URLRequest, bodyFileURL: URL,
               configuration: URLSessionConfiguration) async throws -> HTTPResponse {
-        try await withCheckedThrowingContinuation { continuation in
-            lock.withLock { self.continuation = continuation }
-            let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-            lock.withLock { retainedSession = session }
-            session.uploadTask(with: request, fromFile: bodyFileURL).resume()
+        try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
+                let task: URLSessionUploadTask? = lock.withLock {
+                    guard !cancelled else { return nil }
+                    self.continuation = continuation
+                    let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+                    retainedSession = session
+                    let task = session.uploadTask(with: request, fromFile: bodyFileURL)
+                    uploadTask = task
+                    return task
+                }
+                if let task { task.resume() }
+                else { continuation.resume(throwing: CancellationError()) }
+            }
+        } onCancel: {
+            let task = self.lock.withLock {
+                self.cancelled = true
+                return self.uploadTask
+            }
+            task?.cancel()
         }
     }
 
@@ -85,6 +105,9 @@ private final class BoundedUploadDelegate: NSObject, URLSessionDataDelegate, @un
             guard let continuation else { return nil }
             self.continuation = nil
             retainedSession = nil
+            uploadTask = nil
+            // Join URLSession completion before the caller can remove its upload file.
+            if cancelled { return (continuation, .failure(CancellationError())) }
             if error != nil { return (continuation, .failure(HTTPTransportError.network)) }
             guard let response else { return (continuation, .failure(HTTPTransportError.invalidResponse)) }
             let headers = response.allHeaderFields.reduce(into: [String: String]()) { result, entry in

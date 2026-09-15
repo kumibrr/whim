@@ -17,9 +17,15 @@ final class WatchModel {
     private(set) var elapsed: TimeInterval = 0
     private(set) var warned = false
     private(set) var playback: PlaybackProjection?
-    var error: String?
+    private var commandError: String?
+    private var refreshError: String?
+    private var commandRevision = UUID()
+    private var refreshRevision = 0
+    private enum NoteAction { case retry, delete }
+    private var noteActions: [NoteID: (token: UUID, action: NoteAction)] = [:]
+    var error: String? { commandError ?? refreshError }
     var showsRecent = false
-    var busy = false
+    private(set) var captureBusy = false
 
     init(client: any WhimClient, haptic: @escaping (WKHapticType) -> Void = { WKInterfaceDevice.current().play($0) }) {
         self.client = client; self.haptic = haptic
@@ -43,16 +49,16 @@ final class WatchModel {
                 try await self.beginCapture()
             }
             self.activated = true
-            try await self.refreshNotes()
+            await self.refreshNotes()
         }
     }
     func requestPermission() async {
-        await perform {
+        await performCapture {
             self.permission = try await self.client.requestPermission(.microphone)
             if self.permission == .granted { try await self.beginCapture() }
         }
     }
-    func record() async { await perform { try await self.beginCapture() } }
+    func record() async { await performCapture { try await self.beginCapture() } }
     private func beginCapture() async throws {
         let existing = try await client.activeRecording()
         recording = try await client.startRecording(source: .appleWatch)
@@ -60,42 +66,85 @@ final class WatchModel {
         if existing == nil { elapsed = 0; warned = false; haptic(.start) }
     }
     func stop() async {
-        await perform {
+        await performCapture {
             _ = try await self.client.stopRecording()
             self.recording = nil
             self.haptic(.stop)
-            try await self.refreshNotes()
+            await self.refreshNotes()
         }
     }
     func discard() async {
-        await perform {
+        await performCapture {
             try await self.client.discardRecording()
             self.recording = nil
             self.haptic(.stop)
         }
     }
+    func isActing(on id: NoteID) -> Bool { noteActions[id] != nil }
+    func isDeleting(_ id: NoteID) -> Bool { noteActions[id]?.action == .delete }
     func retry(_ note: NoteProjection) async {
+        guard noteActions[note.id] == nil else { return }
+        let token = UUID()
+        noteActions[note.id] = (token, .retry)
+        defer { if noteActions[note.id]?.token == token { noteActions[note.id] = nil } }
         await perform {
             if note.requiresReview { try await self.client.sendRecovered(noteID: note.id) }
             else { try await self.client.retry(noteID: note.id) }
-            try await self.refreshNotes()
+            await self.refreshNotes()
         }
     }
-    func delete(_ note: NoteProjection) async {
-        await perform { try await self.client.delete(noteID: note.id); try await self.refreshNotes() }
+    @discardableResult
+    func delete(_ note: NoteProjection) async -> Bool {
+        guard !isDeleting(note.id) else { return false }
+        let token = UUID()
+        noteActions[note.id] = (token, .delete)
+        defer { if noteActions[note.id]?.token == token { noteActions[note.id] = nil } }
+        return await perform {
+            try await self.client.delete(noteID: note.id)
+            await self.refreshNotes()
+        }
     }
     func play(_ note: NoteProjection) async {
         await perform { self.playback = try await self.client.playNote(note.id) }
     }
     func stopPlayback() async { await client.stopPlayback(); playback = nil }
     func refreshPlayback() async { playback = await client.playbackSnapshot() }
-    private func refreshNotes() async throws { notes = try await client.listNotes(filter: .all) }
-    private func perform(_ operation: () async throws -> Void) async {
-        guard !busy else { return }
-        busy = true
-        defer { busy = false }
-        do { try await operation(); error = nil }
-        catch { self.error = String(describing: error) }
+    func refreshNotes() async {
+        refreshRevision += 1
+        let revision = refreshRevision
+        do {
+            let latest = try await client.listNotes(filter: .all)
+            guard revision == refreshRevision else { return }
+            notes = latest
+            refreshError = nil
+        } catch {
+            guard revision == refreshRevision else { return }
+            refreshError = "Recent Notes could not be refreshed. Try again."
+        }
+    }
+    private func performCapture(_ operation: () async throws -> Void) async {
+        guard !captureBusy else { return }
+        captureBusy = true
+        defer { captureBusy = false }
+        await perform(operation)
+    }
+    @discardableResult
+    private func perform(_ operation: () async throws -> Void) async -> Bool {
+        let revision = UUID()
+        commandRevision = revision
+        do {
+            try await operation()
+            if commandRevision == revision { commandError = nil }
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            if commandRevision == revision {
+                commandError = (error as? WhimServiceError)?.description
+                    ?? "Whim could not complete this action. Try again."
+            }
+            return false
+        }
     }
     private func observeIfNeeded() {
         guard eventTask == nil else { return }
@@ -108,7 +157,7 @@ final class WatchModel {
                 case .recordingStopped, .recordingDiscarded: self.recording = nil
                 case .recordingProgress: if let elapsed = event.elapsedSeconds { self.elapsed = elapsed }
                 case .recordingMaximumDurationWarning: self.warned = true; self.haptic(.notification)
-                case .noteChanged, .noteDeleted, .notesReset: try? await self.refreshNotes()
+                case .noteChanged, .noteDeleted, .notesReset: await self.refreshNotes()
                 default: break
                 }
             }

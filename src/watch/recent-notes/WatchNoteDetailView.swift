@@ -23,17 +23,17 @@ struct WatchNoteDetailView: View {
                     } else { Text("Audio unavailable") }
                     if note.status != .sent {
                         Button(note.requiresReview ? "Send" : "Retry") { Task { await model.retry(note) } }
-                            .accessibilityIdentifier("watch-retry").disabled(model.busy)
+                            .accessibilityIdentifier("watch-retry").disabled(model.isActing(on: note.id))
                     }
                     Button("Delete", role: .destructive) {
-                        if note.status == .sent { Task { await model.delete(note); if model.error == nil { dismiss() } } }
+                        if note.status == .sent { Task { if await model.delete(note) { dismiss() } } }
                         else { confirmsDelete = true }
-                    }.accessibilityIdentifier("watch-delete")
+                    }.accessibilityIdentifier("watch-delete").disabled(model.isDeleting(note.id))
                     if let error = model.error { Text(error) }
                 }
                 .confirmationDialog("Delete this unsent Note?", isPresented: $confirmsDelete, titleVisibility: .visible) {
                     Button("Delete Note", role: .destructive) {
-                        Task { await model.delete(note); if model.error == nil { dismiss() } }
+                        Task { if await model.delete(note) { dismiss() } }
                     }
                 }
             }
