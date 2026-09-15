@@ -32,9 +32,19 @@ if [[ -z "$whim_maestro" ]]; then
   exit 1
 fi
 
+whim_peer_fixture_directory="$(mktemp -d "${TMPDIR:-/tmp}/whim-peer-e2e.XXXXXX")"
+python3 - "$whim_peer_fixture_directory/audio.wav" <<'PYTHON'
+import math, struct, sys, wave
+with wave.open(sys.argv[1], 'wb') as fixture:
+    fixture.setparams((1, 2, 16000, 0, 'NONE', 'not compressed'))
+    fixture.writeframes(b''.join(struct.pack('<h', int(4000 * math.sin(2 * math.pi * 440 * i / 16000))) for i in range(160000)))
+PYTHON
+afconvert -f m4af -d aac "$whim_peer_fixture_directory/audio.wav" "$whim_peer_fixture_directory/audio.m4a"
+
 whim_metro_pid=''
 whim_webhook_pid=''
 whim_cleanup() {
+  rm -rf "$whim_peer_fixture_directory"
   xcrun simctl terminate "$WHIM_IPHONE_SIMULATOR_UDID" "$whim_bundle_id" >/dev/null 2>&1 || true
   xcrun simctl uninstall "$WHIM_IPHONE_SIMULATOR_UDID" "$whim_bundle_id" >/dev/null 2>&1 || true
   if [[ -n "$whim_metro_pid" ]]; then
@@ -120,6 +130,7 @@ whim_flows=(
   "$whim_root/e2e/iphone/failed-and-retry.e2e.test.yaml"
   "$whim_root/e2e/iphone/recovered-review.e2e.test.yaml"
   "$whim_root/e2e/iphone/settings-and-reset.e2e.test.yaml"
+  "$whim_root/e2e/iphone/watch-synchronization.e2e.test.yaml"
 )
 if [[ -n "${WHIM_IPHONE_E2E_FLOW:-}" ]]; then
   whim_flows=("$whim_root/e2e/iphone/$WHIM_IPHONE_E2E_FLOW")
@@ -131,5 +142,6 @@ MAESTRO_CLI_NO_ANALYTICS=1 MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED=true \
   -e "WHIM_WEBHOOK_TEST_URL=http://127.0.0.1:$whim_webhook_port/receive" \
   -e "WHIM_WEBHOOK_RESET_URL=http://127.0.0.1:$whim_webhook_port/reset" \
   -e "WHIM_WEBHOOK_RESPONSE_URL=http://127.0.0.1:$whim_webhook_port/response" \
+  -e "WHIM_PEER_FIXTURE_AUDIO=$whim_peer_fixture_directory/audio.m4a" \
   -e "WHIM_FIXTURE_AUDIO=$whim_root/packages/WhimCore/Sources/WhimCore/WebhookConfiguration/Fixtures/configuration-test-fixture.m4a" \
   "${whim_flows[@]}"

@@ -1,0 +1,37 @@
+appId: app.whim.ios
+---
+- runFlow: flows/clean-launch.yaml
+- stopApp
+- launchApp:
+    arguments:
+      -EXDevMenuDisableAutoLaunch: true
+      -WhimFixtureAudio: ${WHIM_PEER_FIXTURE_AUDIO}
+      -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
+      -WhimPeerScenario: state-first
+- openLink:
+    link: ${EXPO_DEV_CLIENT_URL}
+- extendedWaitUntil:
+    visible: 'Open From paired Watch,.*Sent'
+    timeout: 30000
+- tapOn:
+    id: note-row-09000000-0000-0000-0000-000000000001
+- assertVisible: Play Note
+- tapOn: Play Note
+- assertVisible: Playing
+- tapOn: Delete Note
+- assertVisible: No Notes here yet. Capture a thought.
+- stopApp
+- launchApp:
+    arguments:
+      -EXDevMenuDisableAutoLaunch: true
+      -WhimFixtureAudio: ${WHIM_PEER_FIXTURE_AUDIO}
+      -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
+      -WhimPeerScenario: file-first
+- openLink:
+    link: ${EXPO_DEV_CLIENT_URL}
+- extendedWaitUntil:
+    visible:
+      id: whim-home
+    timeout: 30000
+- assertNotVisible: 'Open From paired Watch,.*'
+- assertVisible: No Notes here yet. Capture a thought.

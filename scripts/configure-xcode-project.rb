@@ -47,7 +47,7 @@ test_source = ->(path) { path.include?('.test.') || path.include?('.test-support
 references = ->(paths) { paths.map { |path| file_reference(watch_group, "../" + path.delete_prefix(repository_root + '/')) } }
 watch_sources = references.call(watch_paths.reject(&test_source))
 watch_test_sources = references.call(watch_paths.select(&test_source))
-watch_ui_test_sources = references.call(Dir.glob(File.join(repository_root, 'e2e/watch/*.swift')))
+watch_ui_test_sources = references.call(Dir.glob(File.join(repository_root, 'e2e/{watch,cross-device}/*.swift')))
 # Remove references to the retired scaffold test, including its navigator entry.
 watch_group.files.select { |file| file.path == '../src/watch/app-composition/WhimWatchApp.test.swift' }.each(&:remove_from_project)
 

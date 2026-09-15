@@ -262,6 +262,7 @@ public struct WhimEvent: Codable, Equatable, Sendable {
         case noteChanged = "note.changed"
         case noteDeleted = "note.deleted"
         case notesReset = "notes.reset"
+        case settingsChanged = "settings.changed"
     }
     public let schemaVersion: Int
     public let sequence: UInt64

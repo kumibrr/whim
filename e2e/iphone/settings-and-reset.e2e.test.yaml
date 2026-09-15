@@ -27,7 +27,7 @@ appId: app.whim.ios
     element: Reset Whim
     direction: DOWN
     centerElement: true
-- assertVisible: Watch synchronization is unavailable in this build.
+- assertVisible: 'Watch synchronization (available|unavailable).'
 - tapOn: Reset Whim
 - tapOn: Cancel
 - tapOn: Reset Whim

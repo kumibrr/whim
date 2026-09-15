@@ -75,7 +75,7 @@ export function WhimProvider({ children, client = whimClient }: PropsWithChildre
       if (event.type === 'recording.stopped' || event.type === 'recording.discarded' || event.type === 'notes.reset') {
         setRecording(null);
       }
-      if (gap) void refresh().catch(() => {});
+      if (gap || event.type === 'settings.changed') void refresh().catch(() => {});
       if (event.type === 'notes.reset') { setPlayback(null); void refresh().catch(() => {}); }
     });
     void refresh().catch(() => {});

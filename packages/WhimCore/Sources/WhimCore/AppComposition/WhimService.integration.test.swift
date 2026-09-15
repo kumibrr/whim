@@ -552,7 +552,8 @@ private final class WhimFacadeHarness: @unchecked Sendable {
                      permissions: any PermissionAdapter = SystemPermissionAdapter(),
                      preferences: (any PreferenceStoring)? = nil,
                      store selectedStore: (any WhimStore)? = nil,
-                     requestBuilder: WebhookRequestBuilder = WebhookRequestBuilder()) -> WhimService {
+                     requestBuilder: WebhookRequestBuilder = WebhookRequestBuilder(),
+                     peer: ConnectivityMergeService? = nil) -> WhimService {
         let selectedStore = selectedStore ?? store
         let title = TitleService(transcriber: transcriber, store: selectedStore)
         let delivery = DeliveryService(store: selectedStore, credentials: credentials, transport: transport,
@@ -566,7 +567,7 @@ private final class WhimFacadeHarness: @unchecked Sendable {
         return WhimService(recording: recording, store: selectedStore, files: files, title: title,
             delivery: delivery, configuration: configuration, configurationTest: configurationTest,
             recovery: RecoveryScanner(store: selectedStore, files: files), preferences: preferences ?? self.preferences,
-            credentials: credentials, scheduler: scheduler, permissions: permissions, playback: playback)
+            credentials: credentials, scheduler: scheduler, permissions: permissions, playback: playback, peer: peer)
     }
 
     func remove() { try? FileManager.default.removeItem(at: root) }
@@ -811,4 +812,93 @@ private actor BlockingFacadePreferences: PreferenceStoring {
         await withCheckedContinuation { waiters.append($0) }
     }
     func finishSaving() { saveContinuation?.resume(); saveContinuation = nil }
+}
+
+final class CrossDeviceRaceTests: XCTestCase {
+    func testAlreadySentWatchImportStillGetsIPhoneTitleWithoutAnotherRequest() async throws {
+        let h = try WhimFacadeHarness(); defer { h.remove() }
+        let merge = try ConnectivityMergeService(store: h.store, files: h.files, databaseURL: h.databaseURL,
+            root: h.root.appendingPathComponent("Peer"), device: .iphone, credentials: h.credentials)
+        let client = h.makeService(transcriber: PeerTitleTranscriber(), playback: FacadePlayback(), peer: merge)
+        let id = NoteID()
+        let metadata = ConnectivityEnvelope(payload: .noteMetadata(.init(id: id, recordingSessionID: RecordingSessionID(),
+            title: "Watch timestamp", titleSource: .timestamp, createdAt: h.clock.now, duration: 1,
+            source: .appleWatch, captureOutcome: .completed, requiresReview: false)))
+        try await client.receivePeer(.message(.init(payload: .receipt(.init(attemptID: AttemptID(), noteID: id,
+            receivedAt: h.clock.now, statusCode: 204)))))
+        try await client.receivePeer(.message(metadata))
+        let fixture = Bundle.module.url(forResource: "configuration-test-fixture", withExtension: "m4a", subdirectory: "Fixtures")!
+        try await client.receivePeer(.file(fixture, metadata))
+        for _ in 0..<100 {
+            if try await client.note(id: id)?.title == "An imported idea." { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let note = try await client.note(id: id)
+        XCTAssertEqual(note?.title, "An imported idea.")
+        XCTAssertEqual(note?.status, .sent)
+        let requests = await h.transport.requestCount
+        XCTAssertEqual(requests, 0)
+        _ = try await client.playNote(id)
+        try await client.delete(noteID: id)
+        let playing = await client.playbackSnapshot()
+        let deleted = try await client.note(id: id)
+        XCTAssertNil(playing, "Deleting an imported Note stops active system playback")
+        XCTAssertNil(deleted)
+        let files = FileManager.default.enumerator(at: h.root, includingPropertiesForKeys: nil)!
+        XCTAssertFalse(files.allObjects.compactMap { $0 as? URL }.contains { $0.pathExtension == "m4a" },
+            "Delete removes both imported audio and durable handoff copies")
+    }
+
+    func testDuplicatePeerResetDoesNotAnnounceErasureOfANewActiveCapture() async throws {
+        let h = try WhimFacadeHarness(); defer { h.remove() }
+        let merge = try ConnectivityMergeService(store: h.store, files: h.files, databaseURL: h.databaseURL,
+            root: h.root.appendingPathComponent("Peer"), device: .iphone, credentials: h.credentials)
+        let client = h.makeService(peer: merge)
+        let reset = ConnectivityEnvelope(generation: .init(counter: 100, origin: UUID()), payload: .reset)
+        try await client.receivePeer(.message(reset))
+        _ = try await client.startRecording(source: .iphone)
+        let events = client.events()
+        try await client.receivePeer(.message(reset))
+        let received = await collectEvents(events, until: .settingsChanged)
+        XCTAssertFalse(received.contains { $0.type == .notesReset })
+        let active = try await client.activeRecording()
+        XCTAssertNotNil(active)
+        try await client.discardRecording()
+    }
+
+    func testIPhoneImportsAndDeliversWhileWatchAttemptIsActiveOrFailedAtOlderEndpoint() async throws {
+        for failed in [false, true] {
+            let h = try WhimFacadeHarness(); defer { h.remove() }
+            _ = try await h.configuration.save(.init(endpoint: "https://new.example.com/whim"))
+            let merge = try ConnectivityMergeService(store: h.store, files: h.files, databaseURL: h.databaseURL,
+                root: h.root.appendingPathComponent("Peer"), device: .iphone, credentials: h.credentials)
+            let client = h.makeService(peer: merge)
+            let id = NoteID()
+            let metadata = ConnectivityEnvelope(payload: .noteMetadata(.init(id: id,
+                recordingSessionID: RecordingSessionID(), title: "Watch recording", titleSource: .timestamp,
+                createdAt: h.clock.now, duration: 1, source: .appleWatch, captureOutcome: .completed, requiresReview: false)))
+            let watch = Attempt(noteID: id, configurationRevisionID: ConfigurationRevisionID(), device: .appleWatch,
+                endpoint: .init(scheme: "https", host: "old.example.com", path: "/"), startedAt: h.clock.now)
+            let state = ConnectivityEnvelope(payload: .attempt(failed
+                ? .failed(.init(attempt: watch, failedAt: h.clock.now, reason: .httpStatus(400))) : .started(watch)))
+            try await client.receivePeer(.message(state))
+            try await client.receivePeer(.message(metadata))
+            let fixture = Bundle.module.url(forResource: "configuration-test-fixture", withExtension: "m4a", subdirectory: "Fixtures")!
+            try await client.receivePeer(.file(fixture, metadata))
+            let delivered = try await waitForNote(client: client, status: .sent)
+            XCTAssertEqual(delivered?.id, id.rawValue.uuidString.lowercased())
+            let attempts = try await h.store.deliveryAttempts(noteID: id)
+            XCTAssertEqual(Set(attempts.map(\.device)), Set([.appleWatch, .iphone]))
+            XCTAssertEqual(Set(attempts.map(\.id)).count, 2)
+            try await client.receivePeer(.message(.init(payload: .title(.init(noteID: id, title: "A late title", source: .transcription)))))
+            let titled = try await client.note(id: id)
+            XCTAssertEqual(titled?.title, "A late title")
+            let requests = await h.transport.requestCount
+            XCTAssertEqual(requests, 1, "Title arrival never creates another webhook request")
+        }
+    }
+}
+
+private struct PeerTitleTranscriber: Transcriber {
+    func transcribe(audioAt url: URL, locale: Locale) async throws -> String { "An imported idea." }
 }

@@ -8,7 +8,7 @@ export type SettingsProjection = {
   onboardingCompleted: boolean;
   permissions: Record<PermissionKind, PermissionStatus>;
   webhook: null | { revisionID: string; destination: WebhookProjection['destination']; hasBearerToken: boolean; hasHMACSecret: boolean; customHeaders: { name: string; isSecret: boolean }[] };
-  watch: { availability: 'unavailable'; lastSynchronizedAt?: string | null; resetState: 'unavailable' };
+  watch: { availability: 'unavailable' | 'available'; lastSynchronizedAt?: string | null; resetState: 'unavailable' | 'idle' | 'pending' | 'synchronized' };
 };
 export type SecretPatch = { action: 'preserve' | 'clear' } | { action: 'replace'; value: string };
 export type WebhookPatch = { endpoint?: string; bearerToken?: SecretPatch; hmacSecret?: SecretPatch; customHeaders?: ({ name: string; isSecret: boolean } & SecretPatch)[] };

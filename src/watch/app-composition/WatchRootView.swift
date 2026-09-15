@@ -23,7 +23,7 @@ struct WatchRootView: View {
                     }
                     Button("Recent Notes") { model.showsRecent = true }
                         .accessibilityIdentifier("watch-recent-notes")
-                    WebhookStatusView(available: model.configurationAvailable)
+                    WebhookStatusView(available: model.configurationAvailable, synchronization: model.synchronization)
                     if let error = model.error { Text(error).foregroundStyle(.red) }
                 }
             }

@@ -37,9 +37,9 @@ public struct SettingsProjection: Codable, Equatable, Sendable {
     public let watch: WatchSettingsProjection
     public let onboardingCompleted: Bool
     public let permissions: PermissionProjection
-    public init(preferences: PreferenceInput, webhook: WebhookSettingsProjection?, onboardingCompleted: Bool, permissions: PermissionProjection) {
+    public init(preferences: PreferenceInput, webhook: WebhookSettingsProjection?, onboardingCompleted: Bool, permissions: PermissionProjection, watch: WatchSettingsProjection = .unavailable) {
         schemaVersion = WhimCoreVersion.schema; self.preferences = preferences; self.webhook = webhook
-        watch = .unavailable
+        self.watch = watch
         self.onboardingCompleted = onboardingCompleted
         self.permissions = permissions
     }

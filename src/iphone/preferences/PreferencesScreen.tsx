@@ -30,8 +30,11 @@ export function PreferencesScreen({ client, settings, onRefresh, onReset }: { cl
     <Text style={layout.secondary}>Choose whether notification previews show Note titles on the Lock Screen in system Settings → Notifications → Whim → Show Previews.</Text>
     <Pressable accessibilityRole="button" style={layout.button} onPress={() => void run(() => client.openSystemSettings())}><Text style={layout.text}>Notification preview settings</Text></Pressable>
     <Text accessibilityRole="header" style={layout.heading}>Apple Watch</Text>
-    {settings.watch.availability === 'unavailable' && <Text style={layout.secondary}>Watch synchronization is unavailable in this build.</Text>}
-    <Text style={layout.secondary}>A disconnected Watch cannot be erased immediately. Paired-device reset status is unavailable.</Text>
+    <Text style={layout.secondary}>Watch synchronization {settings.watch.availability}.</Text>
+    <Text style={layout.secondary}>Last synchronized: {settings.watch.lastSynchronizedAt ? new Date(settings.watch.lastSynchronizedAt).toLocaleString() : 'Not yet synchronized'}</Text>
+    {settings.watch.resetState === 'pending' && <Text style={layout.secondary}>Reset pending on Apple Watch. It will finish after reconnection.</Text>}
+    {settings.watch.resetState === 'synchronized' && <Text style={layout.secondary}>Reset completed on both devices.</Text>}
+    <Text style={layout.secondary}>A disconnected Watch cannot be erased immediately.</Text>
     {error && <Text accessibilityRole="alert" style={layout.error}>{error}</Text>}
     <Pressable accessibilityRole="button" style={layout.button} onPress={() => setConfirm(true)}><Text style={layout.error}>Reset Whim</Text></Pressable>
     {confirm && <ConfirmationSheet title="Reset Whim on this iPhone?" message="This removes all local audio, Notes, history, webhook configuration and credentials. It cannot revoke delivery accepted by your server or erase a disconnected Watch immediately." confirmLabel="Confirm reset" onCancel={() => setConfirm(false)} onConfirm={async () => { await client.reset(); await onReset(); }} />}

@@ -19,6 +19,7 @@
 		4B3409C958A5FAE62C7D2E80 /* WhimWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 3F96D612B2FFFCD253898A9D /* WhimWatch.app */; };
 		50BA8F2E594DF44030E28FD8 /* WatchRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22BC5C9E162FE46AE50584F2 /* WatchRootView.swift */; };
 		5FE79E1CF503206737E61500 /* WebhookStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEC421C66148951ED2AA1210 /* WebhookStatusView.swift */; };
+		7C2CB3AD0710341B81E8888A /* WatchSynchronization.e2e.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1FA5749C9ACB17F7018CAEA /* WatchSynchronization.e2e.test.swift */; };
 		8DCAF171AA58F288A1813403 /* WhimWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A9899D0BE753D357DD7EEF2 /* WhimWatchApp.swift */; };
 		9144FBCC0CC98B91C62F1196 /* WhimWatch.e2e.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2EB6FC55DB3C583A6CC5AC /* WhimWatch.e2e.test.swift */; };
 		95C4B3C9893B94F3E89A60E3 /* WatchModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B9DDE60C0FA48914C6712F4 /* WatchModel.swift */; };
@@ -108,6 +109,7 @@
 		7F011AC3443B58190BBE7148 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = whim/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		7FE31B5830E6C7CDB4E63F89 /* Pods-whim.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-whim.debug.xcconfig"; path = "Target Support Files/Pods-whim/Pods-whim.debug.xcconfig"; sourceTree = "<group>"; };
 		82B454A5FE3E0B5DEFB31BC7 /* WatchRecording.e2e.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchRecording.e2e.test.swift; path = ../e2e/watch/WatchRecording.e2e.test.swift; sourceTree = "<group>"; };
+		A1FA5749C9ACB17F7018CAEA /* WatchSynchronization.e2e.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchSynchronization.e2e.test.swift; path = "../e2e/cross-device/WatchSynchronization.e2e.test.swift"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = whim/SplashScreen.storyboard; sourceTree = "<group>"; };
 		AD2493D9C58BA3F4C76E95EA /* WatchRecentNotesView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchRecentNotesView.swift; path = "../src/watch/recent-notes/WatchRecentNotesView.swift"; sourceTree = "<group>"; };
 		B29F0A6D2FC9CA179CAE36B5 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
@@ -245,6 +247,7 @@
 				67F30D8BD15651BCD2AB7CC7 /* WatchNoteDetailView.swift */,
 				EEC421C66148951ED2AA1210 /* WebhookStatusView.swift */,
 				65987B0982A27F5BB971B6BB /* WatchNotes.e2e.test.swift */,
+				A1FA5749C9ACB17F7018CAEA /* WatchSynchronization.e2e.test.swift */,
 			);
 			name = WhimWatch;
 			sourceTree = "<group>";
@@ -754,6 +757,7 @@
 				9144FBCC0CC98B91C62F1196 /* WhimWatch.e2e.test.swift in Sources */,
 				C8D14ACEB565F5B1E9C281AD /* WatchRecording.e2e.test.swift in Sources */,
 				42409ABDD4FB88EB12E160FC /* WatchNotes.e2e.test.swift in Sources */,
+				7C2CB3AD0710341B81E8888A /* WatchSynchronization.e2e.test.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

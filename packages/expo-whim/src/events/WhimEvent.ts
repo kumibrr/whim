@@ -14,7 +14,7 @@ export type WhimEvent =
   | (EventBase & { type: 'recording.route_changed' | 'recording.maximum_duration_warning' })
   | (EventBase & { type: 'note.changed'; note: NoteProjection })
   | (EventBase & { type: 'note.deleted'; noteID: string })
-  | (EventBase & { type: 'notes.reset' });
+  | (EventBase & { type: 'notes.reset' | 'settings.changed' });
 
 const eventTypes = new Set<WhimEvent['type']>([
   'recording.started',
@@ -26,6 +26,7 @@ const eventTypes = new Set<WhimEvent['type']>([
   'note.changed',
   'note.deleted',
   'notes.reset',
+  'settings.changed',
 ]);
 
 export function isWhimEvent(value: unknown): value is WhimEvent {

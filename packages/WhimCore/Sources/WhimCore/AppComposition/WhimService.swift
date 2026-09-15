@@ -24,6 +24,7 @@ public enum WhimServiceError: Error, Sendable, Equatable, CustomStringConvertibl
 }
 
 public actor WhimService: WhimClient {
+    private let peer: ConnectivityMergeService?
     private let recording: RecordingService
     private let store: any WhimStore
     private let files: any AudioFileManaging
@@ -62,7 +63,8 @@ public actor WhimService: WhimClient {
                 scheduler: any DeliveryScheduler,
                 onboarding: any OnboardingStoring = UserDefaultsOnboardingStore(),
                 permissions: any PermissionAdapter = SystemPermissionAdapter(),
-                playback: any PlaybackAdapter = SystemPlaybackAdapter()) {
+                playback: any PlaybackAdapter = SystemPlaybackAdapter(),
+                peer: ConnectivityMergeService? = nil) {
         self.recording = recording; self.store = store; self.files = files; self.title = title
         self.delivery = delivery; self.configuration = configuration
         self.configurationTest = configurationTest; self.recovery = recovery
@@ -70,6 +72,7 @@ public actor WhimService: WhimClient {
         self.onboarding = onboarding
         self.permissions = permissions
         self.playback = playback
+        self.peer = peer
     }
 
     public nonisolated func events() -> AsyncStream<WhimEvent> { eventBroadcaster.stream() }
@@ -81,10 +84,70 @@ public actor WhimService: WhimClient {
         await beginRecordingEventsIfNeeded()
         await beginDeliveryEventsIfNeeded()
         let recovery = recovery
-        let task = Task { try await recovery.scan() }
+        let peer = peer
+        let task = Task {
+            try await peer?.recover()
+            try await recovery.scan()
+        }
         launchTask = task
         try await task.value
         try await resumeEligibleNotes()
+        for note in try await store.listNotes(filter: .all) { try await peer?.queueNote(note.id) }
+        try await peer?.flush()
+    }
+
+    public func receivePeer(_ event: PeerEvent) async throws {
+        await beginCommand(); defer { endCommand() }; try await launch()
+        guard let peer else { return }
+        let changed: NoteID?
+        switch event {
+        case .activated:
+            try await peer.activated(); publish(.settingsChanged); return
+        case .transferFailed(let id):
+            try await peer.retryTransfer(id); return
+        case .configuration(let envelope, let credentials):
+            try await peer.receiveConfiguration(envelope, credentials: credentials)
+            try await peer.flush()
+            publish(.settingsChanged)
+            try await resumeEligibleNotes(); return
+        case .file(let url, let metadata):
+            changed = try await peer.receiveFile(at: url, metadata: metadata)
+            try await peer.completeReceivedFile(url)
+        case .message(let envelope):
+            let previousGeneration = try await peer.generation()
+            switch envelope.payload {
+            case .deletion(let id) where envelope.generation == previousGeneration:
+                await quiesce(noteID: id)
+                if await playback.snapshot()?.noteID == id.rawValue.uuidString.lowercased() { await playback.stop() }
+            case .reset:
+                // Higher-generation data cannot reach this destructive path.
+                if envelope.generation > previousGeneration {
+                    await playback.stop()
+                    try await recording.discard()
+                    for note in try await store.listNotes(filter: .all) { await quiesce(noteID: note.id) }
+                    try await preferences.reset(); await onboarding.reset()
+                }
+            default: break
+            }
+            changed = try await peer.apply(envelope)
+            if case .reset = envelope.payload, envelope.generation > previousGeneration { publish(.notesReset) }
+        }
+        try await peer.flush()
+        publish(.settingsChanged)
+        guard let id = changed else { return }
+        guard let note = try await store.note(id: id) else {
+            publish(.noteDeleted, noteID: id.rawValue.uuidString.lowercased()); return
+        }
+        publish(.noteChanged, note: .init(note: note))
+        if case .message(let envelope) = event {
+            if case .title = envelope.payload { return }
+            if case .receipt = envelope.payload { return }
+        }
+        if (note.isDeliveryEligible || (!note.requiresReview && note.titleSource != .transcription)),
+           !suppressedNoteIDs.contains(id), workflows[id] == nil,
+           manualDeliveries[id] == nil {
+            startWorkflow(note)
+        }
     }
 
     public func resumeDelivery() async throws {
@@ -205,6 +268,7 @@ public actor WhimService: WhimClient {
         guard manualDeliveries[noteID]?.token == token, !resetInProgress,
               !suppressedNoteIDs.contains(noteID), let note else { return }
         publish(.noteChanged, note: .init(note: note))
+        try await peer?.queueNote(noteID)
     }
 
     public func delete(noteID: NoteID) async throws {
@@ -214,6 +278,7 @@ public actor WhimService: WhimClient {
         await quiesce(noteID: noteID)
         try await store.delete(noteID: noteID)
         if existing != nil { try files.delete(noteID: noteID) }
+        try await peer?.queueDeletion(noteID)
         publish(.noteDeleted, noteID: noteID.rawValue.uuidString.lowercased())
     }
 
@@ -231,6 +296,7 @@ public actor WhimService: WhimClient {
             throw WhimServiceError.setupRequired("The saved webhook revision is unavailable.")
         }
         for projection in try await store.listNotes(filter: .all) { publish(.noteChanged, note: projection) }
+        try await peer?.flush()
         return ConfigurationUpdateResult(revisionID: revision.id, failedCount: counts.failed,
             setupRequiredCount: counts.awaitingSetup)
     }
@@ -258,7 +324,7 @@ public actor WhimService: WhimClient {
         return try await .init(preferences: preferences.load(), webhook: webhook,
             onboardingCompleted: onboarding.isComplete(), permissions: .init(
                 microphone: permissions.status(.microphone), speech: permissions.status(.speech),
-                notifications: permissions.status(.notifications)))
+                notifications: permissions.status(.notifications)), watch: peer?.status() ?? .unavailable)
     }
 
     public func completeOnboarding() async throws {
@@ -298,6 +364,7 @@ public actor WhimService: WhimClient {
         }
         guard let revision = try await store.latestConfigurationRevision() else { throw WhimServiceError.setupRequired("Configuration unavailable.") }
         for projection in try await store.listNotes(filter: .all) { publish(.noteChanged, note: projection) }
+        try await peer?.flush()
         return .init(revisionID: revision.id, failedCount: counts.failed, setupRequiredCount: counts.awaitingSetup)
     }
 
@@ -309,8 +376,9 @@ public actor WhimService: WhimClient {
         try await recording.discard()
         let notes = try await store.listNotes(filter: .all)
         let sessions = try await store.recordingSessions()
+        for note in notes { await quiesce(noteID: note.id) }
+        let resetEnvelope = try await peer?.prepareReset()
         for note in notes {
-            await quiesce(noteID: note.id)
             try await store.delete(noteID: note.id)
             try files.delete(noteID: note.id)
         }
@@ -319,6 +387,8 @@ public actor WhimService: WhimClient {
         try await credentials.removeAll()
         try await preferences.reset()
         await onboarding.reset()
+        if let resetEnvelope { _ = try await peer?.apply(resetEnvelope) }
+        try await peer?.flush()
         publish(.notesReset)
     }
 
@@ -366,7 +436,10 @@ public actor WhimService: WhimClient {
         let token = UUID()
         let title = title
         let delivery = delivery
+        let peer = peer
         let task = Task { [weak self] in
+            // Persist the background handoff before starting either local step.
+            try? await peer?.queueNote(note.id)
             let titleStep = Task { [weak self] in
                 _ = await title.complete(note)
                 await self?.workerUpdated(noteID: note.id, token: token)
@@ -396,6 +469,7 @@ public actor WhimService: WhimClient {
         guard !resetInProgress, !suppressedNoteIDs.contains(noteID) else { return }
         if let token, workflows[noteID]?.token != token { return }
         try? await publishCurrent(noteID)
+        try? await peer?.queueNote(noteID)
     }
 
     private func workerFinished(noteID: NoteID, token: UUID) {
@@ -575,11 +649,24 @@ public enum WhimProductionComposition {
             fixtureAudioURL: try configurationTestFixtureURL(bundle: bundle),
             appVersion: info?["CFBundleShortVersionString"] as? String ?? "1.0.0",
             appBuild: info?["CFBundleVersion"] as? String ?? "1")
+        var peerTransport: (any PeerTransport)?
+        #if canImport(WatchConnectivity) && (os(iOS) || os(watchOS))
+        peerTransport = WatchConnectivityAdapter(session: try SystemWatchConnectivitySession(receivedRoot: root.appendingPathComponent("PeerReceived"), databaseURL: root.appendingPathComponent("whim.sqlite")))
+        #else
+        peerTransport = nil
+        #endif
+        #if DEBUG
+        if let debugPeer = try DebugPeerTransport.from(arguments: ProcessInfo.processInfo.arguments,
+            fixture: configurationTestFixtureURL(bundle: bundle)) { peerTransport = debugPeer }
+        #endif
+        let peer = try ConnectivityMergeService(store: store, files: files,
+            databaseURL: root.appendingPathComponent("whim.sqlite"), root: root.appendingPathComponent("Peer"),
+            device: deliveryDevice, credentials: credentials, transport: peerTransport)
         let service = WhimService(recording: recording, store: store, files: files, title: title,
             delivery: delivery, configuration: configuration, configurationTest: configurationTest,
             recovery: RecoveryScanner(store: store, files: files), preferences: preferences,
             credentials: credentials, scheduler: scheduler,
-            onboarding: UserDefaultsOnboardingStore(suiteName: suiteName), permissions: permissions)
+            onboarding: UserDefaultsOnboardingStore(suiteName: suiteName), permissions: permissions, peer: peer)
         #if DEBUG && os(watchOS)
         if watchTestID != nil, ProcessInfo.processInfo.arguments.contains("-WhimWatchConfigured"),
            try await store.latestConfigurationRevision() == nil {
@@ -587,6 +674,14 @@ public enum WhimProductionComposition {
         }
         #endif
         try await service.launch()
+        peerTransport?.activate { [weak service] event in
+            let background = WatchBackgroundTaskCoordinator.shared
+            background.beginProcessing()
+            Task {
+                defer { background.endProcessing() }
+                try? await service?.receivePeer(event)
+            }
+        }
         connectivity.onReconnect { [weak service] in
             Task { try? await service?.resumeDelivery() }
         }

@@ -97,7 +97,7 @@ public struct DeliveryService: Sendable {
         if note.delivery.receipt != nil { return .alreadySent }
 
         for attempt in note.delivery.activeAttempts where
-            clock.now.timeIntervalSince(attempt.startedAt) >= DeliveryTimeouts.lease {
+            attempt.device == device && clock.now.timeIntervalSince(attempt.startedAt) >= DeliveryTimeouts.lease {
             _ = try await store.apply(.attemptFailed(.init(attempt: attempt, failedAt: clock.now, reason: .network)), to: noteID)
             publish(noteID)
         }
@@ -108,7 +108,10 @@ public struct DeliveryService: Sendable {
               try await credentialStore.credentials(for: revision.id) != nil else { return .setupRequired }
         guard await isConnected() else { return .queued }
 
-        let currentFailures = note.delivery.failedAttempts.filter { $0.attempt.retryCycle == note.delivery.currentRetryCycle }
+        let currentFailures = note.delivery.failedAttempts.filter {
+            $0.attempt.device == device && $0.attempt.configurationRevisionID == revision.id
+                && $0.attempt.retryCycle == note.delivery.currentRetryCycle
+        }.sorted { ($0.failedAt, $0.attempt.id.rawValue.uuidString) < ($1.failedAt, $1.attempt.id.rawValue.uuidString) }
         if let permanent = currentFailures.first(where: { RetryPolicy.classification(for: $0.reason) == .permanent }) {
             await notifyOnce(note: note, reason: concise(permanent.reason))
             return .failed
@@ -136,6 +139,7 @@ public struct DeliveryService: Sendable {
                 return .alreadySent
             }
             if let horizon = freshNote.delivery.activeAttempts
+                .filter({ $0.device == device })
                 .map({ $0.startedAt.addingTimeInterval(DeliveryTimeouts.lease) }).max() {
                 try await store.releaseLease(.delivery, noteID: noteID, owner: leaseOwner)
                 return await scheduled(noteID: noteID, earliest: max(clock.now, horizon))

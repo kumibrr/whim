@@ -79,7 +79,7 @@ function intendedXcodeTarget(file) {
   if (file.startsWith('src/watch/') && file.endsWith('.swift')) {
     return file.endsWith('.test.swift') ? 'WhimWatchTests' : 'WhimWatch';
   }
-  if (file.startsWith('e2e/watch/') && file.endsWith('.e2e.test.swift')) {
+  if ((file.startsWith('e2e/watch/') || file.startsWith('e2e/cross-device/')) && file.endsWith('.e2e.test.swift')) {
     return 'WhimWatchUITests';
   }
   if (

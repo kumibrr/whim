@@ -14,6 +14,7 @@ final class WatchModel {
     private(set) var notes: [NoteProjection] = []
     private(set) var permission: PermissionStatus = .notDetermined
     private(set) var configurationAvailable = false
+    private(set) var synchronization = WatchSettingsProjection.unavailable
     private(set) var elapsed: TimeInterval = 0
     private(set) var warned = false
     private(set) var playback: PlaybackProjection?
@@ -43,6 +44,7 @@ final class WatchModel {
             let settings = try await self.client.settings()
             self.permission = settings.permissions.microphone
             self.configurationAvailable = settings.webhook != nil
+            self.synchronization = settings.watch
             self.recording = try await self.client.activeRecording()
             if self.recording != nil { self.showsRecent = false }
             if !self.activated, self.recording == nil, self.permission == .granted {
@@ -158,6 +160,11 @@ final class WatchModel {
                 case .recordingProgress: if let elapsed = event.elapsedSeconds { self.elapsed = elapsed }
                 case .recordingMaximumDurationWarning: self.warned = true; self.haptic(.notification)
                 case .noteChanged, .noteDeleted, .notesReset: await self.refreshNotes()
+                case .settingsChanged:
+                    if let settings = try? await self.client.settings() {
+                        self.configurationAvailable = settings.webhook != nil
+                        self.synchronization = settings.watch
+                    }
                 default: break
                 }
             }

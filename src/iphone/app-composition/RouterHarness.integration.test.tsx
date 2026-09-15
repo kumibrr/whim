@@ -27,7 +27,7 @@ describe('iPhone router', () => {
     client.settings.permissions.notifications = 'denied';
     await renderRouter({ ...iphoneRoutes, _layout: () => <Layout client={client} /> });
     await fireEvent.press(await screen.findByRole('button', { name: 'Settings' }));
-    expect(await screen.findByText('Watch synchronization is unavailable in this build.')).toBeOnTheScreen();
+    expect(await screen.findByText('Watch synchronization unavailable.')).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: 'Keep audio: Never' }));
     expect(client.settings.preferences.retentionPolicy).toBe('never');
     expect(screen.getByText(/notification previews/)).toBeOnTheScreen();
@@ -35,6 +35,19 @@ describe('iPhone router', () => {
     expect(client.calls).not.toContain('reset');
     await fireEvent.press(screen.getByRole('button', { name: 'Confirm reset' }));
     expect(await screen.findByRole('button', { name: 'Get started' })).toBeOnTheScreen();
+  });
+  it('shows synchronized Watch availability and a pending remote reset', async () => {
+    const client = new TestWhimClient();
+    client.settings.onboardingCompleted = true;
+    client.settings.watch = { availability: 'available', lastSynchronizedAt: '2026-09-15T09:00:00.000Z', resetState: 'pending' };
+    await renderRouter({ ...iphoneRoutes, _layout: () => <Layout client={client} /> });
+    await fireEvent.press(await screen.findByRole('button', { name: 'Settings' }));
+    expect(await screen.findByText('Watch synchronization available.')).toBeOnTheScreen();
+    expect(screen.getByText(/Last synchronized:/)).toBeOnTheScreen();
+    expect(screen.getByText('Reset pending on Apple Watch. It will finish after reconnection.')).toBeOnTheScreen();
+    client.settings = { ...client.settings, watch: { ...client.settings.watch, resetState: 'synchronized' } };
+    await act(() => client.emit({ schemaVersion: 1, sequence: 1, type: 'settings.changed' }));
+    expect(await screen.findByText('Reset completed on both devices.')).toBeOnTheScreen();
   });
   it('orders onboarding, skips webhook, requests microphone and returns a saved Note to timeline', async () => {
     const client = new TestWhimClient();

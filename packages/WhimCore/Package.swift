@@ -3,6 +3,15 @@
 import PackageDescription
 
 let productionSources = [
+    "DeviceSync/ConnectivityEnvelope.swift",
+    "DeviceSync/ConnectivityInbox.swift",
+    "DeviceSync/PeerTransport.swift",
+    "DeviceSync/ReceivedPeerFileStore.swift",
+    "DeviceSync/DebugPeerTransport.swift",
+    "DeviceSync/WatchConnectivityAdapter.swift",
+    "DeviceSync/WatchBackgroundTaskCoordinator.swift",
+    "DeviceSync/ConnectivityJournal.swift",
+    "DeviceSync/ConnectivityMergeService.swift",
     "AppComposition/WhimCoreVersion.swift",
     "AppComposition/WhimClient.swift",
     "AppComposition/WhimService.swift",
@@ -50,6 +59,8 @@ let productionSources = [
     "WebhookConfiguration/WebhookRequestBuilder.swift",
 ]
 let unitTestSources = [
+    "DeviceSync/ConnectivityMergeService.test.swift",
+    "DeviceSync/WatchBackgroundTaskCoordinator.test.swift",
     "Playback/PlaybackAdapter.test.swift",
     "AppComposition/WhimCoreVersion.test.swift",
     "Delivery/Delivery.test.swift",
@@ -70,6 +81,8 @@ let unitTestSources = [
     "WebhookConfiguration/WebhookRequestBuilder.test.swift",
 ]
 let integrationTestSources = [
+    "DeviceSync/ReceivedPeerFileStore.integration.test.swift",
+    "DeviceSync/ConnectivityMergeService.integration.test.swift",
     "Delivery/DebugFixtureTransport.integration.test.swift",
     "Recording/DebugFixtureRecorder.integration.test.swift",
     "AppComposition/WhimCoreVersion.integration.test.swift",

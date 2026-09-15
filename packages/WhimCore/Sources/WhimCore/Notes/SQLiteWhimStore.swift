@@ -38,7 +38,7 @@ public actor SQLiteWhimStore: WhimStore {
             currentRetryCycle: retryCycle, workflowError: workflowError)
         delivery.isConnected = connected
         delivery.hasExecutionLease = try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM leases WHERE note_id = ? AND kind = 'delivery' AND expires_at > ?)", arguments: [id.rawValue.uuidString, time.timeIntervalSince1970]) == true
-        for row in try Row.fetchAll(db, sql: "SELECT metadata, failure FROM attempts WHERE note_id = ? ORDER BY rowid", arguments: [id.rawValue.uuidString]) {
+        for row in try Row.fetchAll(db, sql: "SELECT metadata, failure FROM attempts WHERE note_id = ? ORDER BY id", arguments: [id.rawValue.uuidString]) {
             guard let metadata: Data = row["metadata"] else { continue }
             if let failure: Data = row["failure"] {
                 delivery = DeliveryReducer.reduce(delivery, event: .attemptFailed(try JSONDecoder().decode(AttemptFailure.self, from: failure)))
@@ -46,9 +46,10 @@ public actor SQLiteWhimStore: WhimStore {
                 delivery = DeliveryReducer.reduce(delivery, event: .attemptStarted(try JSONDecoder().decode(Attempt.self, from: metadata)))
             }
         }
-        for receipt in try Data.fetchAll(db, sql: "SELECT metadata FROM receipts WHERE note_id = ? ORDER BY rowid", arguments: [id.rawValue.uuidString]) {
-            delivery = DeliveryReducer.reduce(delivery, event: .receipt(try JSONDecoder().decode(Receipt.self, from: receipt)))
-        }
+        let receipts = try Data.fetchAll(db, sql: "SELECT metadata FROM receipts WHERE note_id = ?", arguments: [id.rawValue.uuidString])
+            .map { try JSONDecoder().decode(Receipt.self, from: $0) }
+            .sorted { ($0.receivedAt, $0.attemptID.rawValue.uuidString) < ($1.receivedAt, $1.attemptID.rawValue.uuidString) }
+        for receipt in receipts { delivery = DeliveryReducer.reduce(delivery, event: .receipt(receipt)) }
         return Note(id: recording.id, recordingSessionID: recording.recordingSessionID,
             title: recording.title, titleSource: recording.titleSource, createdAt: recording.createdAt,
             duration: recording.duration, source: recording.source, captureOutcome: recording.captureOutcome,
@@ -259,10 +260,14 @@ public actor SQLiteWhimStore: WhimStore {
                 try Self.persist(attempt, noteID: noteID, db: db)
             case .attemptFailed(let failure):
                 try Self.persist(failure.attempt, noteID: noteID, db: db)
+                try db.execute(sql: "UPDATE attempts SET failure = ? WHERE id = ? AND note_id = ?",
+                    arguments: [try JSONEncoder().encode(failure), failure.attempt.id.rawValue.uuidString, noteID.rawValue.uuidString])
             case .workflowFailed(let error):
                 try db.execute(sql: "UPDATE deliveries SET workflow_error = ? WHERE note_id = ?",
                     arguments: [error.rawValue, noteID.rawValue.uuidString])
-            case .receipt:
+            case .receipt(let receipt):
+                try db.execute(sql: "INSERT OR IGNORE INTO receipts (attempt_id, note_id, metadata) VALUES (?, ?, ?)",
+                    arguments: [receipt.attemptID.rawValue.uuidString, noteID.rawValue.uuidString, try JSONEncoder().encode(receipt)])
                 try db.execute(sql: "UPDATE deliveries SET workflow_error = NULL WHERE note_id = ?",
                     arguments: [noteID.rawValue.uuidString])
             default:
