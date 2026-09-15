@@ -63,7 +63,9 @@ public final class AVAudioRecorderAdapter: NSObject, AudioRecorder, @unchecked S
 
     public func start(at url: URL) async throws {
         try operationLock.withLock {
-            #if os(iOS) || os(watchOS)
+            #if os(watchOS)
+            try WatchAudioSessionAdapter().activate()
+            #elseif os(iOS)
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.record, mode: .spokenAudio)
             try session.setActive(true)
@@ -219,7 +221,9 @@ public final class AVAudioRecorderAdapter: NSObject, AudioRecorder, @unchecked S
     }
 
     private func deactivateAudioSession() {
-        #if os(iOS) || os(watchOS)
+        #if os(watchOS)
+        WatchAudioSessionAdapter().deactivate()
+        #elseif os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif
     }

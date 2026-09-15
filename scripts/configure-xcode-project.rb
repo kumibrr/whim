@@ -41,28 +41,30 @@ def configure_target(target, bundle_identifier, deployment_target)
 end
 
 watch_group = virtual_group(project, 'WhimWatch')
-watch_source = file_reference(
-  watch_group,
-  '../src/watch/app-composition/WhimWatchApp.swift'
-)
-watch_test_source = file_reference(
-  watch_group,
-  '../src/watch/app-composition/WhimWatchApp.test.swift'
-)
-watch_ui_test_source = file_reference(
-  watch_group,
-  '../e2e/watch/WhimWatch.e2e.test.swift'
-)
+repository_root = File.expand_path('..', __dir__)
+watch_paths = Dir.glob(File.join(repository_root, 'src/watch/**/*.swift'))
+test_source = ->(path) { path.include?('.test.') || path.include?('.test-support.') }
+references = ->(paths) { paths.map { |path| file_reference(watch_group, "../" + path.delete_prefix(repository_root + '/')) } }
+watch_sources = references.call(watch_paths.reject(&test_source))
+watch_test_sources = references.call(watch_paths.select(&test_source))
+watch_ui_test_sources = references.call(Dir.glob(File.join(repository_root, 'e2e/watch/*.swift')))
+# Remove references to the retired scaffold test, including its navigator entry.
+watch_group.files.select { |file| file.path == '../src/watch/app-composition/WhimWatchApp.test.swift' }.each(&:remove_from_project)
 
 watch_target = project.targets.find { |target| target.name == 'WhimWatch' }
 watch_target ||= project.new_target(:application, 'WhimWatch', :watchos, '11.0')
 watch_target.product_type = Xcodeproj::Constants::PRODUCT_TYPE_UTI[:application]
-watch_target.add_file_references([watch_source]) unless watch_target.source_build_phase.files_references.include?(watch_source)
+watch_target.source_build_phase.files.each { |entry| entry.remove_from_project if entry.file_ref && test_source.call(entry.file_ref.path) }
+watch_sources.each { |source| watch_target.add_file_references([source]) unless watch_target.source_build_phase.files_references.include?(source) }
 configure_target(watch_target, 'app.whim.ios.watchkitapp', '11.0')
 watch_target.build_configurations.each do |configuration|
   settings = configuration.build_settings
   settings['INFOPLIST_KEY_CFBundleDisplayName'] = 'Whim'
   settings['INFOPLIST_KEY_WKCompanionAppBundleIdentifier'] = 'app.whim.ios'
+  settings['INFOPLIST_KEY_NSMicrophoneUsageDescription'] = 'Whim records voice Notes on your Apple Watch.'
+  settings.delete('INFOPLIST_KEY_UIBackgroundModes')
+  settings['INFOPLIST_FILE'] = 'WhimWatch-Info.plist'
+  settings['CODE_SIGN_ENTITLEMENTS'] = 'WhimWatch.entitlements'
   settings['SDKROOT'] = 'watchos'
   settings['SKIP_INSTALL'] = 'YES'
   settings['TARGETED_DEVICE_FAMILY'] = '4'
@@ -102,7 +104,8 @@ end
 
 watch_tests = project.targets.find { |target| target.name == 'WhimWatchTests' }
 watch_tests ||= project.new_target(:unit_test_bundle, 'WhimWatchTests', :watchos, '11.0')
-watch_tests.add_file_references([watch_test_source]) unless watch_tests.source_build_phase.files_references.include?(watch_test_source)
+watch_tests.source_build_phase.files.each { |entry| entry.remove_from_project unless watch_test_sources.include?(entry.file_ref) }
+watch_test_sources.each { |source| watch_tests.add_file_references([source]) unless watch_tests.source_build_phase.files_references.include?(source) }
 watch_tests.add_dependency(watch_target) unless watch_tests.dependencies.any? { |dependency| dependency.target == watch_target }
 configure_target(watch_tests, 'app.whim.ios.watchkitapp.tests', '11.0')
 watch_tests.build_configurations.each do |configuration|
@@ -116,9 +119,7 @@ end
 
 watch_ui_tests = project.targets.find { |target| target.name == 'WhimWatchUITests' }
 watch_ui_tests ||= project.new_target(:ui_test_bundle, 'WhimWatchUITests', :watchos, '11.0')
-unless watch_ui_tests.source_build_phase.files_references.include?(watch_ui_test_source)
-  watch_ui_tests.add_file_references([watch_ui_test_source])
-end
+watch_ui_test_sources.each { |source| watch_ui_tests.add_file_references([source]) unless watch_ui_tests.source_build_phase.files_references.include?(source) }
 unless watch_ui_tests.dependencies.any? { |dependency| dependency.target == watch_target }
   watch_ui_tests.add_dependency(watch_target)
 end
@@ -150,6 +151,7 @@ end
 project.save
 
 def save_scheme(project_path, name, launch_target, test_targets)
+  return if Dir.glob(File.join(project_path, 'xcshareddata/xcschemes/*.xcscheme')).any? { |path| File.basename(path).casecmp?("#{name}.xcscheme") }
   scheme = Xcodeproj::XCScheme.new
   scheme.add_build_target(launch_target)
   scheme.set_launch_target(launch_target)

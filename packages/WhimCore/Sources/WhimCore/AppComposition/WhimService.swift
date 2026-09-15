@@ -457,14 +457,39 @@ public final class UserDefaultsPreferenceStore: PreferenceStoring, @unchecked Se
 }
 
 public enum WhimProductionComposition {
+    #if os(watchOS)
+    public static let appGroupIdentifier = "group.app.whim.watch.shared"
+    private static let credentialService = "app.whim.watch.webhook"
+    private static let deliveryDevice: AttemptDevice = .appleWatch
+    #else
     public static let appGroupIdentifier = "group.app.whim.shared"
+    private static let credentialService = "app.whim.webhook"
+    private static let deliveryDevice: AttemptDevice = .iphone
+    #endif
 
     public static func make(bundle: Bundle = .main) async throws -> WhimService {
         let root = try sharedRoot()
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let store = try SQLiteWhimStore.open(at: root.appendingPathComponent("whim.sqlite"))
+        var suiteName = appGroupIdentifier
+        var keychainService = credentialService
+        var permissions: any PermissionAdapter = SystemPermissionAdapter()
+        #if DEBUG && os(watchOS)
+        if let testID = watchTestID {
+            suiteName += ".test." + testID
+            keychainService += ".test." + testID
+            permissions = DebugWatchPermissions()
+        }
+        #endif
         let recorder: any AudioRecorder
-        #if DEBUG
+        #if DEBUG && os(watchOS)
+        if watchTestID != nil {
+            recorder = try DebugFixtureRecorder.from(arguments: ProcessInfo.processInfo.arguments)
+                ?? DebugFixtureRecorder(fixture: configurationTestFixtureURL(bundle: bundle))
+        } else {
+            recorder = try DebugFixtureRecorder.from(arguments: ProcessInfo.processInfo.arguments) ?? AVAudioRecorderAdapter()
+        }
+        #elseif DEBUG
         recorder = try DebugFixtureRecorder.from(arguments: ProcessInfo.processInfo.arguments) ?? AVAudioRecorderAdapter()
         #else
         recorder = AVAudioRecorderAdapter()
@@ -476,7 +501,7 @@ public enum WhimProductionComposition {
         #else
         let transcriber: any Transcriber = UnavailableTranscriber()
         #endif
-        let preferences = try UserDefaultsPreferenceStore(suiteName: appGroupIdentifier)
+        let preferences = try UserDefaultsPreferenceStore(suiteName: suiteName)
         let preferenceAwareTranscriber = PreferenceAwareTranscriber(base: transcriber, preferences: preferences)
         let title = TitleService(transcriber: preferenceAwareTranscriber, store: store, locale: {
             let input = (try? preferences.load()) ?? .default
@@ -484,7 +509,7 @@ public enum WhimProductionComposition {
                 ? input.transcriptionLocaleIdentifier.map(Locale.init(identifier:)) ?? .current
                 : Locale(identifier: "und")
         })
-        let credentials = KeychainCredentialStore(service: "app.whim.webhook")
+        let credentials = KeychainCredentialStore(service: keychainService)
         let transport: any HTTPTransport
         #if DEBUG
         transport = try DebugFixtureTransport.from(arguments: ProcessInfo.processInfo.arguments, base: URLSessionHTTPTransport()) ?? URLSessionHTTPTransport()
@@ -502,7 +527,7 @@ public enum WhimProductionComposition {
                 guard !(error is CancellationError) else { return }
                 await notifications.notifyFailure(title: "Whim delivery",
                     reason: "Delivery could not continue until it is retried.", noteID: noteID)
-            }, appVersion: info?["CFBundleShortVersionString"] as? String ?? "1.0.0",
+            }, device: deliveryDevice, appVersion: info?["CFBundleShortVersionString"] as? String ?? "1.0.0",
             appBuild: info?["CFBundleVersion"] as? String ?? "1")
         let configuration = WebhookConfigurationService(store: store, credentials: credentials)
         let configurationTest = ConfigurationTestService(credentials: credentials, transport: transport,
@@ -512,7 +537,14 @@ public enum WhimProductionComposition {
         let service = WhimService(recording: recording, store: store, files: files, title: title,
             delivery: delivery, configuration: configuration, configurationTest: configurationTest,
             recovery: RecoveryScanner(store: store, files: files), preferences: preferences,
-            credentials: credentials, scheduler: scheduler)
+            credentials: credentials, scheduler: scheduler,
+            onboarding: UserDefaultsOnboardingStore(suiteName: suiteName), permissions: permissions)
+        #if DEBUG && os(watchOS)
+        if watchTestID != nil, ProcessInfo.processInfo.arguments.contains("-WhimWatchConfigured"),
+           try await store.latestConfigurationRevision() == nil {
+            _ = try await configuration.save(.init(endpoint: "https://whim-fixture.invalid/receive"))
+        }
+        #endif
         try await service.launch()
         connectivity.onReconnect { [weak service] in
             Task { try? await service?.resumeDelivery() }
@@ -520,7 +552,21 @@ public enum WhimProductionComposition {
         return service
     }
 
+    #if DEBUG && os(watchOS)
+    private static var watchTestID: String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let index = args.firstIndex(of: "-WhimWatchTestID"), args.indices.contains(index + 1),
+              let id = UUID(uuidString: args[index + 1]) else { return nil }
+        return id.uuidString
+    }
+    #endif
+
     private static func sharedRoot() throws -> URL {
+        #if DEBUG && os(watchOS)
+        if let testID = watchTestID {
+            return FileManager.default.temporaryDirectory.appendingPathComponent("WhimWatchTests/" + testID)
+        }
+        #endif
         if let root = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) {
             return root.appendingPathComponent("Whim", isDirectory: true)
         }
@@ -592,3 +638,14 @@ private final class SystemConnectivity: @unchecked Sendable {
         if connected { callback() }
     }
 }
+
+#if DEBUG && os(watchOS)
+private struct DebugWatchPermissions: PermissionAdapter {
+    func status(_ kind: PermissionKind) async -> PermissionStatus {
+        guard kind == .microphone else { return .unavailable }
+        return ProcessInfo.processInfo.arguments.contains("-WhimWatchMicrophoneDenied") ? .denied : .granted
+    }
+    func request(_ kind: PermissionKind) async throws -> PermissionStatus { await status(kind) }
+    func openSettings() async throws {}
+}
+#endif

@@ -12,23 +12,31 @@
 		102435994F6E0B45FA0BACB4 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D0C8B5D89E20835047FFBE77 /* Foundation.framework */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		1E88AE0AB710B7916355ACA0 /* WhimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7D6ECB88619BE4362A0E9A7D /* WhimCore */; };
+		28DBD2344AC58DE887A9941A /* WatchNoteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67F30D8BD15651BCD2AB7CC7 /* WatchNoteDetailView.swift */; };
 		392128B60BAC7DB5DF56E75C /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 7F011AC3443B58190BBE7148 /* PrivacyInfo.xcprivacy */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
+		42409ABDD4FB88EB12E160FC /* WatchNotes.e2e.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65987B0982A27F5BB971B6BB /* WatchNotes.e2e.test.swift */; };
 		4B3409C958A5FAE62C7D2E80 /* WhimWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 3F96D612B2FFFCD253898A9D /* WhimWatch.app */; };
-		7D0469B666F697397FDBA8B1 /* WhimWatchApp.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02B7889DA0922A5F8D90C159 /* WhimWatchApp.test.swift */; };
+		50BA8F2E594DF44030E28FD8 /* WatchRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22BC5C9E162FE46AE50584F2 /* WatchRootView.swift */; };
+		5FE79E1CF503206737E61500 /* WebhookStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEC421C66148951ED2AA1210 /* WebhookStatusView.swift */; };
 		8DCAF171AA58F288A1813403 /* WhimWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A9899D0BE753D357DD7EEF2 /* WhimWatchApp.swift */; };
 		9144FBCC0CC98B91C62F1196 /* WhimWatch.e2e.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2EB6FC55DB3C583A6CC5AC /* WhimWatch.e2e.test.swift */; };
+		95C4B3C9893B94F3E89A60E3 /* WatchModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B9DDE60C0FA48914C6712F4 /* WatchModel.swift */; };
 		A569D5A62BC09317E4750D46 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6649A6F4F02580A424941D9C /* SceneDelegate.swift */; };
 		A623DF4AFCE23A167DC3CBE9 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 7F011AC3443B58190BBE7148 /* PrivacyInfo.xcprivacy */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		BD2C55741E6E7233E8612FF8 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D0C8B5D89E20835047FFBE77 /* Foundation.framework */; };
 		C2A3858E4B423C484DA4BA43 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D0C8B5D89E20835047FFBE77 /* Foundation.framework */; };
+		C8D14ACEB565F5B1E9C281AD /* WatchRecording.e2e.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82B454A5FE3E0B5DEFB31BC7 /* WatchRecording.e2e.test.swift */; };
 		CA4FAF6C31FDCB7A8D83614C /* libPods-WhimBridgeIntegrationTests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 56A517DF5BB9492BEEB86EED /* libPods-WhimBridgeIntegrationTests.a */; };
 		CCEE28E8135832416030B0C0 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C9C6DBB925ECBE61481D582 /* ExpoModulesProvider.swift */; };
 		D0A4A8E7736DAEF6C0E29DA3 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B29F0A6D2FC9CA179CAE36B5 /* Foundation.framework */; };
 		D268E7146A61DB755515B0C8 /* ExpoWhimModule.integration.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13324E1C69229C598ECC9642 /* ExpoWhimModule.integration.test.swift */; };
+		E58D1D7CB60AB524C4CB6184 /* WatchRecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A0B619E3D9E321A72011895 /* WatchRecorderView.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 		F521800B0163AA349499E8AF /* libPods-whim.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 575D02B68F7C084848C62DDD /* libPods-whim.a */; };
+		F60B53E4DEDAF6369B054FA0 /* WatchModel.integration.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09DBA4E14CC7C8D84866439 /* WatchModel.integration.test.swift */; };
+		FD9CB3518EB97FFF3449648B /* WatchRecentNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD2493D9C58BA3F4C76E95EA /* WatchRecentNotesView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -77,33 +85,41 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		02B7889DA0922A5F8D90C159 /* WhimWatchApp.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WhimWatchApp.test.swift; path = "../src/watch/app-composition/WhimWatchApp.test.swift"; sourceTree = "<group>"; };
 		13324E1C69229C598ECC9642 /* ExpoWhimModule.integration.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoWhimModule.integration.test.swift; path = "../packages/expo-whim/ios/app-composition/ExpoWhimModule.integration.test.swift"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* whim.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = whim.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = whim/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = whim/Info.plist; sourceTree = "<group>"; };
 		17983C4B5F79BD5119C77D5F /* Pods-whim.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-whim.release.xcconfig"; path = "Target Support Files/Pods-whim/Pods-whim.release.xcconfig"; sourceTree = "<group>"; };
+		1B9DDE60C0FA48914C6712F4 /* WatchModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchModel.swift; path = ../src/watch/recording/WatchModel.swift; sourceTree = "<group>"; };
+		22BC5C9E162FE46AE50584F2 /* WatchRootView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchRootView.swift; path = "../src/watch/app-composition/WatchRootView.swift"; sourceTree = "<group>"; };
 		2D27DACA317E711E2F456A55 /* WhimWatchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WhimWatchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2E5568B2F576975095BF9E4D /* Pods-WhimBridgeIntegrationTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-WhimBridgeIntegrationTests.release.xcconfig"; path = "Target Support Files/Pods-WhimBridgeIntegrationTests/Pods-WhimBridgeIntegrationTests.release.xcconfig"; sourceTree = "<group>"; };
 		3438C25B567CFE258BDD9A0A /* WhimWatchUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WhimWatchUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3A0B619E3D9E321A72011895 /* WatchRecorderView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchRecorderView.swift; path = ../src/watch/recording/WatchRecorderView.swift; sourceTree = "<group>"; };
 		3C9C6DBB925ECBE61481D582 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-whim/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		3F96D612B2FFFCD253898A9D /* WhimWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WhimWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		56A517DF5BB9492BEEB86EED /* libPods-WhimBridgeIntegrationTests.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-WhimBridgeIntegrationTests.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		575D02B68F7C084848C62DDD /* libPods-whim.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-whim.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A9899D0BE753D357DD7EEF2 /* WhimWatchApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WhimWatchApp.swift; path = "../src/watch/app-composition/WhimWatchApp.swift"; sourceTree = "<group>"; };
+		65987B0982A27F5BB971B6BB /* WatchNotes.e2e.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchNotes.e2e.test.swift; path = ../e2e/watch/WatchNotes.e2e.test.swift; sourceTree = "<group>"; };
 		6649A6F4F02580A424941D9C /* SceneDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SceneDelegate.swift; path = whim/SceneDelegate.swift; sourceTree = "<group>"; };
+		67F30D8BD15651BCD2AB7CC7 /* WatchNoteDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchNoteDetailView.swift; path = "../src/watch/recent-notes/WatchNoteDetailView.swift"; sourceTree = "<group>"; };
 		6C2EB6FC55DB3C583A6CC5AC /* WhimWatch.e2e.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WhimWatch.e2e.test.swift; path = ../e2e/watch/WhimWatch.e2e.test.swift; sourceTree = "<group>"; };
 		7F011AC3443B58190BBE7148 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = whim/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		7FE31B5830E6C7CDB4E63F89 /* Pods-whim.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-whim.debug.xcconfig"; path = "Target Support Files/Pods-whim/Pods-whim.debug.xcconfig"; sourceTree = "<group>"; };
+		82B454A5FE3E0B5DEFB31BC7 /* WatchRecording.e2e.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchRecording.e2e.test.swift; path = ../e2e/watch/WatchRecording.e2e.test.swift; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = whim/SplashScreen.storyboard; sourceTree = "<group>"; };
+		AD2493D9C58BA3F4C76E95EA /* WatchRecentNotesView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchRecentNotesView.swift; path = "../src/watch/recent-notes/WatchRecentNotesView.swift"; sourceTree = "<group>"; };
 		B29F0A6D2FC9CA179CAE36B5 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		BBEACEBE95C11AB14E43109D /* Pods-WhimBridgeIntegrationTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-WhimBridgeIntegrationTests.debug.xcconfig"; path = "Target Support Files/Pods-WhimBridgeIntegrationTests/Pods-WhimBridgeIntegrationTests.debug.xcconfig"; sourceTree = "<group>"; };
 		C1A2DD7B774782FA3869CAA1 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-WhimBridgeIntegrationTests/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		CFCECEE5603641C88B455648 /* expo.icon */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = expo.icon; path = whim/expo.icon; sourceTree = "<group>"; };
+		D09DBA4E14CC7C8D84866439 /* WatchModel.integration.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchModel.integration.test.swift; path = ../src/watch/recording/WatchModel.integration.test.swift; sourceTree = "<group>"; };
 		D0C8B5D89E20835047FFBE77 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS11.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		D6B90A12D30B7BE2D6B31945 /* WhimBridgeIntegrationTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WhimBridgeIntegrationTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		EEC421C66148951ED2AA1210 /* WebhookStatusView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WebhookStatusView.swift; path = "../src/watch/webhook-status/WebhookStatusView.swift"; sourceTree = "<group>"; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = whim/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* whim-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "whim-Bridging-Header.h"; path = "whim/whim-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -219,8 +235,16 @@
 			isa = PBXGroup;
 			children = (
 				5A9899D0BE753D357DD7EEF2 /* WhimWatchApp.swift */,
-				02B7889DA0922A5F8D90C159 /* WhimWatchApp.test.swift */,
 				6C2EB6FC55DB3C583A6CC5AC /* WhimWatch.e2e.test.swift */,
+				82B454A5FE3E0B5DEFB31BC7 /* WatchRecording.e2e.test.swift */,
+				D09DBA4E14CC7C8D84866439 /* WatchModel.integration.test.swift */,
+				1B9DDE60C0FA48914C6712F4 /* WatchModel.swift */,
+				22BC5C9E162FE46AE50584F2 /* WatchRootView.swift */,
+				3A0B619E3D9E321A72011895 /* WatchRecorderView.swift */,
+				AD2493D9C58BA3F4C76E95EA /* WatchRecentNotesView.swift */,
+				67F30D8BD15651BCD2AB7CC7 /* WatchNoteDetailView.swift */,
+				EEC421C66148951ED2AA1210 /* WebhookStatusView.swift */,
+				65987B0982A27F5BB971B6BB /* WatchNotes.e2e.test.swift */,
 			);
 			name = WhimWatch;
 			sourceTree = "<group>";
@@ -728,6 +752,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				9144FBCC0CC98B91C62F1196 /* WhimWatch.e2e.test.swift in Sources */,
+				C8D14ACEB565F5B1E9C281AD /* WatchRecording.e2e.test.swift in Sources */,
+				42409ABDD4FB88EB12E160FC /* WatchNotes.e2e.test.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -736,6 +762,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				8DCAF171AA58F288A1813403 /* WhimWatchApp.swift in Sources */,
+				95C4B3C9893B94F3E89A60E3 /* WatchModel.swift in Sources */,
+				50BA8F2E594DF44030E28FD8 /* WatchRootView.swift in Sources */,
+				E58D1D7CB60AB524C4CB6184 /* WatchRecorderView.swift in Sources */,
+				FD9CB3518EB97FFF3449648B /* WatchRecentNotesView.swift in Sources */,
+				28DBD2344AC58DE887A9941A /* WatchNoteDetailView.swift in Sources */,
+				5FE79E1CF503206737E61500 /* WebhookStatusView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -743,7 +775,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7D0469B666F697397FDBA8B1 /* WhimWatchApp.test.swift in Sources */,
+				F60B53E4DEDAF6369B054FA0 /* WatchModel.integration.test.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -857,9 +889,12 @@
 		5AB108D3D59259189418D887 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = WhimWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "WhimWatch-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Whim;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Whim records voice Notes on your Apple Watch.";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = app.whim.ios;
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = app.whim.ios.watchkitapp;
@@ -1083,9 +1118,12 @@
 		A03A87A20E9BE950DA1A6E44 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = WhimWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "WhimWatch-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Whim;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Whim records voice Notes on your Apple Watch.";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = app.whim.ios;
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = app.whim.ios.watchkitapp;
