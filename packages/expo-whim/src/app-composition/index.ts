@@ -8,6 +8,7 @@ export * from './NativeWhimClient';
 export * from '../events/WhimEvent';
 export * from '../notes/NoteProjection';
 export * from '../preferences/PreferenceInput';
+export * from '../preferences/SettingsProjection';
 export * from '../recording/RecordingProjection';
 export * from '../webhook-configuration/WebhookProjection';
 

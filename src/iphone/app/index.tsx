@@ -1,1 +1,1 @@
-export { default } from '../app-composition/AppRoot';
+export { default } from '../timeline/HomeScreen';

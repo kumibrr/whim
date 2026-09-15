@@ -1,6 +1,6 @@
 import XCTest
 import WhimCorePod
-@testable import ExpoWhim
+@testable internal import ExpoWhim
 
 final class ExpoWhimModuleIntegrationTests: XCTestCase {
     func testNativeModuleUsesWhimCoreSchemaVersion() {

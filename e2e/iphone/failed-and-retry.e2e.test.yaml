@@ -1,0 +1,68 @@
+appId: app.whim.ios
+---
+- runFlow: flows/clean-launch.yaml
+- evalScript: '${http.post(WHIM_WEBHOOK_RESPONSE_URL, {headers: {"Content-Type": "application/json"}, body: JSON.stringify({status: 400})})}'
+- tapOn: Settings
+- tapOn:
+    id: webhook-url
+- inputText: https://whim-fixture.invalid/receive
+- tapOn: Webhook
+- scrollUntilVisible:
+    element: Save webhook
+    direction: DOWN
+    centerElement: true
+- tapOn: Save webhook
+- extendedWaitUntil:
+    visible: Webhook saved. Test it to check delivery.
+    timeout: 10000
+- tapOn:
+    id: BackButton
+- tapOn:
+    id: record-button
+- tapOn:
+    id: stop-recording
+- extendedWaitUntil:
+    visible: 'Open .*Failed.*'
+    timeout: 60000
+- tapOn:
+    id: note-row-.*
+- assertVisible:
+    id: note-detail
+- assertVisible: '⚠ Failed · HTTP 400'
+- assertVisible: The destination rejected this Attempt.
+- tapOn:
+    id: BackButton
+- tapOn: Settings
+- tapOn:
+    id: webhook-url
+- inputText: https://whim-fixture.invalid/receive
+- tapOn:
+    id: webhook-bearer-token
+- inputText: repaired-fixture-token
+- tapOn: Webhook
+- scrollUntilVisible:
+    element: Save webhook
+    direction: DOWN
+    centerElement: true
+- tapOn: Save webhook
+- extendedWaitUntil:
+    visible: Webhook saved. Test it to check delivery.
+    timeout: 10000
+- evalScript: '${http.post(WHIM_WEBHOOK_RESPONSE_URL, {headers: {"Content-Type": "application/json"}, body: JSON.stringify({status: 200})})}'
+- scrollUntilVisible:
+    element: Retry unsent Notes
+    direction: DOWN
+    centerElement: true
+- tapOn: Retry unsent Notes
+- tapOn:
+    id: BackButton
+- extendedWaitUntil:
+    visible: 'Open .*Sent.*'
+    timeout: 60000
+- tapOn:
+    id: note-row-.*
+- scrollUntilVisible:
+    element: '✓ Sent · HTTP 200'
+    direction: DOWN
+    centerElement: true
+- assertVisible: https://whim-fixture.invalid/receive

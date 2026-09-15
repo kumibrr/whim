@@ -6,4 +6,6 @@ export type RecordingProjection = {
   noteID: string;
   source: CaptureSource;
   createdAt: string;
+  maximumDurationSeconds: number;
+  warningLeadSeconds: number;
 };

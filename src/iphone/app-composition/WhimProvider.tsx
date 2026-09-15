@@ -1,4 +1,4 @@
-import { WhimClientError, whimClient, type NoteProjection, type RecordingProjection, type WhimClient, type WhimEvent } from '@whim/expo-whim';
+import { WhimClientError, whimClient, type NoteProjection, type RecordingProjection, type WhimClient, type WhimEvent, type SettingsProjection, type PlaybackProjection } from '@whim/expo-whim';
 import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
@@ -6,6 +6,8 @@ export type WhimContextValue = {
   client: WhimClient;
   notes: NoteProjection[];
   recording: RecordingProjection | null;
+  settings: SettingsProjection | null;
+  playback: PlaybackProjection | null;
   isRefreshing: boolean;
   error: WhimClientError | null;
   refresh(): Promise<void>;
@@ -16,6 +18,8 @@ const WhimContext = createContext<WhimContextValue | null>(null);
 export function WhimProvider({ children, client = whimClient }: PropsWithChildren<{ client?: WhimClient }>) {
   const [notes, setNotes] = useState<NoteProjection[]>([]);
   const [recording, setRecording] = useState<RecordingProjection | null>(null);
+  const [settings, setSettings] = useState<SettingsProjection | null>(null);
+  const [playback, setPlayback] = useState<PlaybackProjection | null>(null);
   const [isRefreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<WhimClientError | null>(null);
   const lastSequence = useRef(0);
@@ -31,13 +35,14 @@ export function WhimProvider({ children, client = whimClient }: PropsWithChildre
     setRefreshing(true);
     setError(null);
     try {
-      const [snapshot, activeRecording] = await Promise.all([
-        client.listNotes('all'), client.getActiveRecording(),
+      const [snapshot, activeRecording, currentSettings, currentPlayback] = await Promise.all([
+        client.listNotes('all'), client.getActiveRecording(), client.getSettings(), client.getPlayback(),
       ]);
       if (!mounted.current || generation !== refreshGeneration.current) return;
       const events = eventLog.current.filter((event) => event.sequence > startingSequence);
       setNotes(events.reduce(foldNotes, snapshot));
       setRecording(events.reduce(foldRecording, activeRecording));
+      setSettings(currentSettings); setPlayback(currentPlayback);
     } catch (failure) {
       const clientError = failure instanceof WhimClientError
         ? failure
@@ -59,7 +64,7 @@ export function WhimProvider({ children, client = whimClient }: PropsWithChildre
     eventLog.current = [];
     refreshPending.current = false;
     refreshGeneration.current += 1;
-    setNotes([]); setRecording(null); setError(null);
+    setNotes([]); setRecording(null); setSettings(null); setPlayback(null); setError(null);
     const subscription = client.subscribe((event) => {
       if (event.sequence <= lastSequence.current) return;
       const gap = event.sequence !== lastSequence.current + 1;
@@ -71,6 +76,7 @@ export function WhimProvider({ children, client = whimClient }: PropsWithChildre
         setRecording(null);
       }
       if (gap) void refresh().catch(() => {});
+      if (event.type === 'notes.reset') { setPlayback(null); void refresh().catch(() => {}); }
     });
     void refresh().catch(() => {});
     let previousState = AppState.currentState;
@@ -88,8 +94,8 @@ export function WhimProvider({ children, client = whimClient }: PropsWithChildre
     };
   }, [client, refresh]);
 
-  const value = useMemo(() => ({ client, notes, recording, isRefreshing, error, refresh }),
-    [client, notes, recording, isRefreshing, error, refresh]);
+  const value = useMemo(() => ({ client, notes, recording, settings, playback, isRefreshing, error, refresh }),
+    [client, notes, recording, settings, playback, isRefreshing, error, refresh]);
   return <WhimContext.Provider value={value}>{children}</WhimContext.Provider>;
 }
 

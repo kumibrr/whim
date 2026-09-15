@@ -4,6 +4,130 @@ import XCTest
 @testable import WhimCore
 
 final class WhimServiceIntegrationTests: XCTestCase {
+    func testReconnectDuringTranscriptionResumesQueuedDeliveryAfterWorkflowCompletes() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let connected = FacadeConnectivity()
+        let transcriber = BlockingFacadeTranscriber()
+        _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"))
+        let client = harness.makeService(transcriber: transcriber, isConnected: { await connected.read() })
+        let events = FacadeEventProbe(stream: client.events())
+        _ = try await client.startRecording(source: .iphone)
+        let stopped = try await client.stopRecording()
+        let note = try XCTUnwrap(stopped)
+        await transcriber.waitUntilStarted()
+        await connected.waitUntilRead()
+        await connected.connect()
+        try await client.resumeDelivery()
+        try await client.resumeDelivery()
+        transcriber.finish(with: "Recovered connectivity")
+
+        let delivered = expectation(description: "pending reconnect reaches destination")
+        Task { await events.waitForStatus(.sent, count: 1); delivered.fulfill() }
+        await fulfillment(of: [delivered], timeout: 2)
+        let requests = await harness.transport.requestCount
+        XCTAssertEqual(requests, 1)
+        let detail = try await client.note(id: note.id)
+        XCTAssertEqual(detail?.status, .sent)
+    }
+    func testDetailDoesNotOfferPlaybackAfterLocalAudioDisappears() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let client = harness.makeService()
+        _ = try await client.startRecording(source: .iphone)
+        let finalized = try await client.stopRecording()
+        let note = try XCTUnwrap(finalized)
+        try harness.files.delete(noteID: note.id)
+        let detail = try await client.note(id: note.id)
+        XCTAssertFalse(try XCTUnwrap(detail).hasLocalAudio)
+    }
+    func testOfflineQueuedNoteResumesOnceOnConnectivityWake() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let connected = FacadeConnectivity()
+        _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"))
+        let client = harness.makeService(isConnected: { await connected.value })
+        _ = try await client.startRecording(source: .iphone)
+        let stopped = try await client.stopRecording()
+        let note = try XCTUnwrap(stopped)
+        try await Task.sleep(for: .milliseconds(30))
+        let offline = try await client.note(id: note.id)
+        XCTAssertEqual(offline?.status, .queued)
+        XCTAssertEqual(offline?.attempts.count, 0)
+        await connected.connect()
+        try await client.resumeDelivery()
+        try await client.resumeDelivery()
+        await harness.transport.waitForRequestCount(1)
+        try await Task.sleep(for: .milliseconds(30))
+        let delivered = try await client.note(id: note.id)
+        XCTAssertEqual(delivered?.status, .sent)
+        let requests = await harness.transport.requestCount
+        XCTAssertEqual(requests, 1)
+    }
+    func testPlaybackStopsBeforeCaptureAndCannotRestartDuringCapture() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let client = harness.makeService(playback: FacadePlayback())
+        _ = try await client.startRecording(source: .iphone)
+        let note = try await client.stopRecording()
+        let id = try XCTUnwrap(note).id
+        _ = try await client.playNote(id)
+        let playing = await client.playbackSnapshot()
+        XCTAssertEqual(playing?.noteID, id.rawValue.uuidString.lowercased())
+        _ = try await client.startRecording(source: .iphone)
+        let stopped = await client.playbackSnapshot()
+        XCTAssertNil(stopped)
+        do { _ = try await client.playNote(id); XCTFail("Cannot play while capturing") }
+        catch { XCTAssertEqual(error as? WhimServiceError, .recordingActive) }
+        try await client.discardRecording()
+        _ = try await client.playNote(id)
+        try await client.delete(noteID: id)
+        let deleted = await client.playbackSnapshot()
+        XCTAssertNil(deleted)
+    }
+    func testDeniedMicrophoneIsNotRequestedAgainOrAllowedToCapture() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let permissions = DeniedFacadePermissions()
+        let client = harness.makeService(permissions: permissions)
+        let status = try await client.requestPermission(.microphone)
+        XCTAssertEqual(status, .denied)
+        do { _ = try await client.startRecording(source: .iphone); XCTFail("Denied capture must fail") }
+        catch { XCTAssertEqual(error as? WhimServiceError, .permissionDenied) }
+        let requests = await permissions.requests
+        XCTAssertEqual(requests, 0)
+    }
+    func testOnboardingCompletionPersistsAndResetClearsLocalLifecycle() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let client = harness.makeService()
+        try await client.completeOnboarding()
+        let completed = try await client.settings()
+        XCTAssertTrue(completed.onboardingCompleted)
+        try await client.reset()
+        let reset = try await client.settings()
+        XCTAssertFalse(reset.onboardingCompleted)
+    }
+    func testSettingsReadAndPatchPreserveMaskedSecretsAndEndpointQuery() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let client = harness.makeService()
+        _ = try await client.updateWebhook(.init(endpoint: "https://example.com/whim?key=private",
+            bearerToken: "bearer-private", hmacSecret: "hmac-private",
+            customHeaders: [.init(name: "X-Secret", value: "header-private", isSecret: true)]))
+        _ = try await client.patchWebhook(.init(bearerToken: .init(action: .preserve)))
+        let settings = try await client.settings()
+        let encoded = String(decoding: try JSONEncoder().encode(settings), as: UTF8.self)
+        XCTAssertTrue(settings.webhook?.hasBearerToken == true)
+        XCTAssertTrue(settings.webhook?.hasHMACSecret == true)
+        XCTAssertEqual(settings.webhook?.destination.path, "/whim")
+        XCTAssertFalse(encoded.contains("private"))
+        let revision = try await harness.store.latestConfigurationRevision()
+        let credentials = try await harness.credentials.credentials(for: XCTUnwrap(revision).id)
+        XCTAssertEqual(credentials?.endpoint.absoluteString, "https://example.com/whim?key=private")
+        XCTAssertEqual(credentials?.bearerToken, "bearer-private")
+        XCTAssertEqual(settings.watch.availability, "unavailable")
+    }
     func testEventSubscriptionCancellationDoesNotTerminateFutureSubscriptions() async throws {
         let harness = try WhimFacadeHarness()
         defer { harness.remove() }
@@ -368,13 +492,16 @@ private final class WhimFacadeHarness: @unchecked Sendable {
     }
 
     func makeService(transcriber: any Transcriber = EmptyFacadeTranscriber(),
+                     isConnected: @escaping @Sendable () async -> Bool = { true },
+                     playback: any PlaybackAdapter = SystemPlaybackAdapter(),
+                     permissions: any PermissionAdapter = SystemPermissionAdapter(),
                      preferences: (any PreferenceStoring)? = nil,
                      store selectedStore: (any WhimStore)? = nil,
                      requestBuilder: WebhookRequestBuilder = WebhookRequestBuilder()) -> WhimService {
         let selectedStore = selectedStore ?? store
         let title = TitleService(transcriber: transcriber, store: selectedStore)
         let delivery = DeliveryService(store: selectedStore, credentials: credentials, transport: transport,
-            notifications: FacadeNotifications(), clock: clock, scheduler: scheduler, isConnected: { true },
+            notifications: FacadeNotifications(), clock: clock, scheduler: scheduler, isConnected: isConnected,
             requestBuilder: requestBuilder,
             titleSnapshot: { await title.enrich($0) }, scheduledFailure: { _, _ in },
             appVersion: "1.0.0", appBuild: "1")
@@ -384,10 +511,43 @@ private final class WhimFacadeHarness: @unchecked Sendable {
         return WhimService(recording: recording, store: selectedStore, files: files, title: title,
             delivery: delivery, configuration: configuration, configurationTest: configurationTest,
             recovery: RecoveryScanner(store: selectedStore, files: files), preferences: preferences ?? self.preferences,
-            credentials: credentials, scheduler: scheduler)
+            credentials: credentials, scheduler: scheduler, permissions: permissions, playback: playback)
     }
 
     func remove() { try? FileManager.default.removeItem(at: root) }
+}
+
+private actor DeniedFacadePermissions: PermissionAdapter {
+    private(set) var requests = 0
+    func status(_ kind: PermissionKind) -> PermissionStatus { .denied }
+    func request(_ kind: PermissionKind) -> PermissionStatus { requests += 1; return .denied }
+    func openSettings() {}
+}
+
+private actor FacadeConnectivity {
+    private(set) var value = false
+    private var readOccurred = false
+    private var readers: [CheckedContinuation<Void, Never>] = []
+    func read() -> Bool {
+        readOccurred = true
+        readers.forEach { $0.resume() }; readers.removeAll()
+        return value
+    }
+    func waitUntilRead() async {
+        if readOccurred { return }
+        await withCheckedContinuation { readers.append($0) }
+    }
+    func connect() { value = true }
+}
+
+private actor FacadePlayback: PlaybackAdapter {
+    private var value: PlaybackProjection?
+    func play(noteID: NoteID, url: URL) -> PlaybackProjection {
+        let next = PlaybackProjection(noteID: noteID, isPlaying: true, elapsedSeconds: 0, durationSeconds: 2)
+        value = next; return next
+    }
+    func stop() { value = nil }
+    func snapshot() -> PlaybackProjection? { value }
 }
 
 private actor FacadeRecorder: AudioRecorder {

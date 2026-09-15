@@ -1,6 +1,7 @@
 {
   "platforms": ["apple"],
   "apple": {
+    "podspecPath": "ExpoWhim.podspec",
     "modules": ["ExpoWhimModule"]
   }
 }

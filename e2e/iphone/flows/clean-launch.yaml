@@ -1,0 +1,32 @@
+appId: app.whim.ios
+---
+- evalScript: '${http.post(WHIM_WEBHOOK_RESET_URL, {body: ""})}'
+- launchApp:
+    clearState: true
+    arguments:
+      -EXDevMenuDisableAutoLaunch: true
+      -WhimFixtureAudio: ${WHIM_FIXTURE_AUDIO}
+      -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
+    permissions:
+      all: allow
+- openLink:
+    link: ${EXPO_DEV_CLIENT_URL}
+- runFlow:
+    when:
+      visible: Open
+    commands:
+      - tapOn: Open
+- extendedWaitUntil:
+    visible: Get started
+    timeout: 60000
+- tapOn: Get started
+- scrollUntilVisible:
+    element: Skip webhook setup
+    direction: DOWN
+    centerElement: true
+- tapOn: Skip webhook setup
+- tapOn: Start using Whim
+- extendedWaitUntil:
+    visible:
+      id: whim-home
+    timeout: 10000

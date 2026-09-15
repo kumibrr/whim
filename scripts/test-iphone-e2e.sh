@@ -99,20 +99,37 @@ whim_expo_url="$(curl --fail --silent "http://localhost:$whim_metro_port/_expo/o
 ')"
 whim_expo_url="${whim_expo_url}&disableOnboarding=1"
 
+if [[ "${WHIM_IPHONE_E2E_SKIP_BUILD:-0}" != "1" ]]; then
+# Xcode embeds simulated entitlements required by the real Keychain boundary.
 xcodebuild build -quiet \
   -workspace "$whim_root/ios/Whim.xcworkspace" \
   -scheme Whim \
   -configuration Debug \
   -derivedDataPath "$whim_derived_data" \
   -destination "id=${WHIM_IPHONE_SIMULATOR_UDID}" \
-  CODE_SIGNING_ALLOWED=NO
+  CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
+fi
 
 whim_app="$whim_derived_data/Build/Products/Debug-iphonesimulator/whim.app"
 xcrun simctl uninstall "$WHIM_IPHONE_SIMULATOR_UDID" "$whim_bundle_id" >/dev/null 2>&1 || true
 xcrun simctl install "$WHIM_IPHONE_SIMULATOR_UDID" "$whim_app"
+whim_flows=(
+  "$whim_root/e2e/iphone/onboarding.e2e.test.yaml"
+  "$whim_root/e2e/iphone/record-and-review.e2e.test.yaml"
+  "$whim_root/e2e/iphone/offline-and-retry.e2e.test.yaml"
+  "$whim_root/e2e/iphone/failed-and-retry.e2e.test.yaml"
+  "$whim_root/e2e/iphone/recovered-review.e2e.test.yaml"
+  "$whim_root/e2e/iphone/settings-and-reset.e2e.test.yaml"
+)
+if [[ -n "${WHIM_IPHONE_E2E_FLOW:-}" ]]; then
+  whim_flows=("$whim_root/e2e/iphone/$WHIM_IPHONE_E2E_FLOW")
+fi
 MAESTRO_CLI_NO_ANALYTICS=1 MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED=true \
   "$whim_maestro" test \
   --device "$WHIM_IPHONE_SIMULATOR_UDID" \
   -e "EXPO_DEV_CLIENT_URL=$whim_expo_url" \
   -e "WHIM_WEBHOOK_TEST_URL=http://127.0.0.1:$whim_webhook_port/receive" \
-  "$whim_root/e2e/iphone/smoke.e2e.test.yaml"
+  -e "WHIM_WEBHOOK_RESET_URL=http://127.0.0.1:$whim_webhook_port/reset" \
+  -e "WHIM_WEBHOOK_RESPONSE_URL=http://127.0.0.1:$whim_webhook_port/response" \
+  -e "WHIM_FIXTURE_AUDIO=$whim_root/packages/WhimCore/Sources/WhimCore/WebhookConfiguration/Fixtures/configuration-test-fixture.m4a" \
+  "${whim_flows[@]}"

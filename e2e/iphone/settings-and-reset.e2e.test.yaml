@@ -1,0 +1,35 @@
+appId: app.whim.ios
+---
+- runFlow: flows/clean-launch.yaml
+- tapOn: Settings
+- tapOn:
+    id: webhook-url
+- inputText: https://whim-fixture.invalid/receive
+- tapOn: Webhook
+- scrollUntilVisible:
+    element: Save webhook
+    direction: DOWN
+    centerElement: true
+- tapOn: Save webhook
+- extendedWaitUntil:
+    visible: Webhook saved. Test it to check delivery.
+    timeout: 10000
+- tapOn: Test webhook
+- extendedWaitUntil:
+    visible: Test passed. Idempotency confirmed.
+    timeout: 15000
+- scrollUntilVisible:
+    element: 'Keep audio: Never'
+    direction: DOWN
+    centerElement: true
+- tapOn: 'Keep audio: Never'
+- scrollUntilVisible:
+    element: Reset Whim
+    direction: DOWN
+    centerElement: true
+- assertVisible: Watch synchronization is unavailable in this build.
+- tapOn: Reset Whim
+- tapOn: Cancel
+- tapOn: Reset Whim
+- tapOn: Confirm reset
+- assertVisible: Get started

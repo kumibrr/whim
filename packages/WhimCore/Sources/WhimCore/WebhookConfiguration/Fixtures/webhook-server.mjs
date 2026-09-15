@@ -8,6 +8,7 @@ const port = Number(process.env.WHIM_WEBHOOK_PORT ?? "0");
 const hmacSecret = process.env.WHIM_HMAC_SECRET ?? "";
 const received = [];
 const noteIDs = new Set();
+let responseStatus = 200;
 
 function sha256(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
@@ -67,6 +68,7 @@ const handleRequest = (req, res) => {
   if (req.method === "POST" && url.pathname === "/reset") {
     received.length = 0;
     noteIDs.clear();
+    responseStatus = 200;
     res.writeHead(204).end();
     return;
   }
@@ -78,6 +80,17 @@ const handleRequest = (req, res) => {
   const chunks = [];
   req.on("data", (chunk) => chunks.push(chunk));
   req.on("end", () => {
+    if (req.method === "POST" && url.pathname === "/response") {
+      try {
+        const { status } = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        if (!Number.isInteger(status) || status < 200 || status > 599) throw new Error("invalid status");
+        responseStatus = status;
+        res.writeHead(204).end();
+      } catch {
+        res.writeHead(400).end("invalid response status");
+      }
+      return;
+    }
     if (url.pathname === "/drop") { req.socket.destroy(); return; }
     let record;
     try {
@@ -94,7 +107,7 @@ const handleRequest = (req, res) => {
       } else if (url.pathname === "/oversized") {
         res.writeHead(500, { "content-type": "text/plain" }).end("x".repeat(8192));
       } else {
-        const status = Number(url.searchParams.get("status") ?? "200");
+        const status = Number(url.searchParams.get("status") ?? responseStatus);
         const headers = { "content-type": "application/json", "x-whim-note-id": record.noteID };
         if (url.searchParams.has("retry_after")) headers["retry-after"] = url.searchParams.get("retry_after");
         if (url.pathname === "/invalid-ack") delete headers["x-whim-note-id"];

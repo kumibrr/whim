@@ -7,6 +7,7 @@ jest.mock('expo-modules-core', () => ({
 
 import { WhimClientError, type WhimEvent, type WhimClient, type NoteProjection, type RecordingProjection } from '@whim/expo-whim';
 import { WhimProvider, useWhim } from './WhimProvider';
+import { TestWhimClient } from './WhimClient.test-support';
 
 const note: NoteProjection = {
   schemaVersion: 1,
@@ -22,6 +23,7 @@ const note: NoteProjection = {
   workflowError: null,
 };
 const recording: RecordingProjection = {
+  maximumDurationSeconds: 300, warningLeadSeconds: 15,
   schemaVersion: 1,
   sessionID: '11111111-1111-1111-1111-111111111111',
   noteID: note.id,
@@ -126,6 +128,15 @@ function Probe() {
 }
 
 class ClientFake implements WhimClient {
+  private capabilities = new TestWhimClient();
+  getSettings = this.capabilities.getSettings;
+  patchWebhook = this.capabilities.patchWebhook;
+  completeOnboarding = this.capabilities.completeOnboarding;
+  requestPermission = this.capabilities.requestPermission;
+  openSystemSettings = this.capabilities.openSystemSettings;
+  playNote = this.capabilities.playNote;
+  stopPlayback = this.capabilities.stopPlayback;
+  getPlayback = this.capabilities.getPlayback;
   static latestRefresh?: () => Promise<void>;
   calls: string[] = [];
   listCount = 0;

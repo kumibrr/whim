@@ -7,12 +7,18 @@ public enum WhimServiceError: Error, Sendable, Equatable, CustomStringConvertibl
     case setupRequired(String)
     case invalidIdentifier(field: String)
     case invalidConfiguration(field: String)
+    case permissionDenied
+    case recordingActive
+    case audioUnavailable
 
     public var description: String {
         switch self {
         case .setupRequired(let message): message
         case .invalidIdentifier: "The identifier is invalid."
         case .invalidConfiguration: "The webhook configuration is invalid."
+        case .permissionDenied: "Microphone access is required. Open Settings to allow access."
+        case .recordingActive: "Stop recording before playing a Note."
+        case .audioUnavailable: "This Note's audio is unavailable."
         }
     }
 }
@@ -27,6 +33,9 @@ public actor WhimService: WhimClient {
     private let configurationTest: ConfigurationTestService
     private let recovery: RecoveryScanner
     private let preferences: any PreferenceStoring
+    private let onboarding: any OnboardingStoring
+    private let permissions: any PermissionAdapter
+    private let playback: any PlaybackAdapter
     private let credentials: any CredentialStore
     private let scheduler: any DeliveryScheduler
     private nonisolated let eventBroadcaster = WhimEventBroadcaster()
@@ -35,6 +44,7 @@ public actor WhimService: WhimClient {
     private var deliveryEventTask: Task<Void, Never>?
     private struct Workflow: Sendable { let token: UUID; let task: Task<Void, Never> }
     private var workflows: [NoteID: Workflow] = [:]
+    private var pendingDeliveryWakes: Set<NoteID> = []
     private var handledFinalizations: Set<NoteID> = []
     private var suppressedNoteIDs: Set<NoteID> = []
     private var resetInProgress = false
@@ -47,11 +57,17 @@ public actor WhimService: WhimClient {
                 configuration: WebhookConfigurationService,
                 configurationTest: ConfigurationTestService, recovery: RecoveryScanner,
                 preferences: any PreferenceStoring, credentials: any CredentialStore,
-                scheduler: any DeliveryScheduler) {
+                scheduler: any DeliveryScheduler,
+                onboarding: any OnboardingStoring = UserDefaultsOnboardingStore(),
+                permissions: any PermissionAdapter = SystemPermissionAdapter(),
+                playback: any PlaybackAdapter = SystemPlaybackAdapter()) {
         self.recording = recording; self.store = store; self.files = files; self.title = title
         self.delivery = delivery; self.configuration = configuration
         self.configurationTest = configurationTest; self.recovery = recovery
         self.preferences = preferences; self.credentials = credentials; self.scheduler = scheduler
+        self.onboarding = onboarding
+        self.permissions = permissions
+        self.playback = playback
     }
 
     public nonisolated func events() -> AsyncStream<WhimEvent> { eventBroadcaster.stream() }
@@ -66,10 +82,40 @@ public actor WhimService: WhimClient {
         let task = Task { try await recovery.scan() }
         launchTask = task
         try await task.value
+        try await resumeEligibleNotes()
+    }
+
+    public func resumeDelivery() async throws {
+        await beginCommand(); defer { endCommand() }; try await launch()
+        try await resumeEligibleNotes()
+    }
+
+    private func resumeEligibleNotes(only noteID: NoteID? = nil) async throws {
+        guard !resetInProgress else { return }
+        for projection in try await store.listNotes(filter: .all)
+            where (noteID == nil || projection.id == noteID)
+                && !projection.requiresReview && projection.workflowError == nil
+                && (projection.status == .queued || projection.status == .sending) {
+            guard !suppressedNoteIDs.contains(projection.id) else { continue }
+            if workflows[projection.id] != nil {
+                pendingDeliveryWakes.insert(projection.id)
+                continue
+            }
+            guard let note = try await store.note(id: projection.id) else { continue }
+            startWorkflow(note)
+        }
+    }
+
+    private func replayDeliveryWake(noteID: NoteID) async throws {
+        await beginCommand(); defer { endCommand() }
+        try await resumeEligibleNotes(only: noteID)
     }
 
     public func startRecording(source: CaptureSource) async throws -> RecordingProjection {
         await beginCommand(); defer { endCommand() }; try await launch()
+        let permission = await permissions.status(.microphone)
+        guard permission == .granted || permission == .unavailable else { throw WhimServiceError.permissionDenied }
+        await playback.stop()
         let projection = RecordingProjection(try await recording.start(source: source))
         publish(.recordingStarted, recording: projection)
         return projection
@@ -101,7 +147,7 @@ public actor WhimService: WhimClient {
         await beginCommand(); defer { endCommand() }; try await launch()
         guard let note = try await store.note(id: id) else { return nil }
         let attempts = try await store.deliveryAttempts(noteID: id)
-        return NoteDetailProjection(note: note, deliveryAttempts: attempts)
+        return NoteDetailProjection(note: note, hasLocalAudio: files.audioError(at: note.audioURL) == nil, deliveryAttempts: attempts)
     }
 
     public func retry(noteID: NoteID) async throws {
@@ -126,6 +172,7 @@ public actor WhimService: WhimClient {
 
     public func delete(noteID: NoteID) async throws {
         await beginCommand(); defer { endCommand() }; try await launch()
+        if await playback.snapshot()?.noteID == noteID.rawValue.uuidString.lowercased() { await playback.stop() }
         let existing = try await store.note(id: noteID)
         await quiesce(noteID: noteID)
         try await store.delete(noteID: noteID)
@@ -164,9 +211,63 @@ public actor WhimService: WhimClient {
         try await preferences.save(input)
     }
 
+    public func settings() async throws -> SettingsProjection {
+        await beginCommand(); defer { endCommand() }; try await launch()
+        var webhook: WebhookSettingsProjection?
+        if let revision = try await store.latestConfigurationRevision(),
+           let secrets = try await credentials.credentials(for: revision.id) {
+            webhook = .init(revision: revision, credentials: secrets)
+        }
+        return try await .init(preferences: preferences.load(), webhook: webhook,
+            onboardingCompleted: onboarding.isComplete(), permissions: .init(
+                microphone: permissions.status(.microphone), speech: permissions.status(.speech),
+                notifications: permissions.status(.notifications)))
+    }
+
+    public func completeOnboarding() async throws {
+        await beginCommand(); defer { endCommand() }; try await launch()
+        await onboarding.complete()
+    }
+
+    public func requestPermission(_ kind: PermissionKind) async throws -> PermissionStatus {
+        let current = await permissions.status(kind)
+        guard current == .notDetermined else { return current }
+        return try await permissions.request(kind)
+    }
+
+    public func openSystemSettings() async throws { try await permissions.openSettings() }
+
+    public func playNote(_ id: NoteID) async throws -> PlaybackProjection {
+        await beginCommand(); defer { endCommand() }; try await launch()
+        guard await recording.snapshot() == nil else { throw WhimServiceError.recordingActive }
+        guard let note = try await store.note(id: id), note.localError == nil,
+              files.audioError(at: note.audioURL) == nil else { throw WhimServiceError.audioUnavailable }
+        return try await playback.play(noteID: id, url: note.audioURL)
+    }
+    public func stopPlayback() async { await playback.stop() }
+    public func playbackSnapshot() async -> PlaybackProjection? { await playback.snapshot() }
+
+    public func patchWebhook(_ patch: WebhookPatch) async throws -> ConfigurationUpdateResult {
+        await beginCommand(); defer { endCommand() }; try await launch()
+        var existing: StoredWebhookCredentials?
+        if let revision = try await store.latestConfigurationRevision() {
+            existing = try await credentials.credentials(for: revision.id)
+        }
+        let counts: ConfigurationSaveCounts
+        do { counts = try await configuration.save(patch.applying(to: existing)) }
+        catch let error as WebhookConfigurationSaveError {
+            if case .invalid(let errors) = error { throw WhimServiceError.invalidConfiguration(field: Self.field(errors.first?.field)) }
+            throw error
+        }
+        guard let revision = try await store.latestConfigurationRevision() else { throw WhimServiceError.setupRequired("Configuration unavailable.") }
+        for projection in try await store.listNotes(filter: .all) { publish(.noteChanged, note: projection) }
+        return .init(revisionID: revision.id, failedCount: counts.failed, setupRequiredCount: counts.awaitingSetup)
+    }
+
     public func reset() async throws {
         await beginCommand(); defer { endCommand() }; try await launch()
         resetInProgress = true
+        await playback.stop()
         defer { resetInProgress = false }
         try await recording.discard()
         let notes = try await store.listNotes(filter: .all)
@@ -180,6 +281,7 @@ public actor WhimService: WhimClient {
         try await store.reset()
         try await credentials.removeAll()
         try await preferences.reset()
+        await onboarding.reset()
         publish(.notesReset)
     }
 
@@ -220,6 +322,10 @@ public actor WhimService: WhimClient {
               handledFinalizations.insert(note.id).inserted else { return }
         publish(.recordingStopped)
         publish(.noteChanged, note: .init(note: note))
+        startWorkflow(note)
+    }
+
+    private func startWorkflow(_ note: Note) {
         let token = UUID()
         let title = title
         let delivery = delivery
@@ -256,7 +362,13 @@ public actor WhimService: WhimClient {
     }
 
     private func workerFinished(noteID: NoteID, token: UUID) {
-        if workflows[noteID]?.token == token { workflows[noteID] = nil }
+        guard workflows[noteID]?.token == token else { return }
+        workflows[noteID] = nil
+        if pendingDeliveryWakes.remove(noteID) != nil {
+            // Join the command queue after this workflow returns, so Reset/Delete can
+            // await its completion without waiting on their own command lock.
+            Task { [weak self] in try? await self?.replayDeliveryWake(noteID: noteID) }
+        }
     }
 
     private func workerFailed(noteID: NoteID, token: UUID) async {
@@ -266,6 +378,7 @@ public actor WhimService: WhimClient {
 
     private func quiesce(noteID: NoteID) async {
         suppressedNoteIDs.insert(noteID)
+        pendingDeliveryWakes.remove(noteID)
         let workflow = workflows[noteID]
         workflow?.task.cancel()
         async let titleCancellation: Void = title.cancel(noteID: noteID)
@@ -350,7 +463,12 @@ public enum WhimProductionComposition {
         let root = try sharedRoot()
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let store = try SQLiteWhimStore.open(at: root.appendingPathComponent("whim.sqlite"))
-        let recorder = AVAudioRecorderAdapter()
+        let recorder: any AudioRecorder
+        #if DEBUG
+        recorder = try DebugFixtureRecorder.from(arguments: ProcessInfo.processInfo.arguments) ?? AVAudioRecorderAdapter()
+        #else
+        recorder = AVAudioRecorderAdapter()
+        #endif
         let files = try AudioFileStore(root: root.appendingPathComponent("Audio"), closeWriter: { _ in })
         let recording = RecordingService(recorder: recorder, store: store, files: files)
         #if canImport(Speech) && !os(watchOS)
@@ -367,7 +485,12 @@ public enum WhimProductionComposition {
                 : Locale(identifier: "und")
         })
         let credentials = KeychainCredentialStore(service: "app.whim.webhook")
-        let transport = URLSessionHTTPTransport()
+        let transport: any HTTPTransport
+        #if DEBUG
+        transport = try DebugFixtureTransport.from(arguments: ProcessInfo.processInfo.arguments, base: URLSessionHTTPTransport()) ?? URLSessionHTTPTransport()
+        #else
+        transport = URLSessionHTTPTransport()
+        #endif
         let scheduler = InProcessDeliveryScheduler()
         let connectivity = SystemConnectivity()
         let notifications = LocalNotificationAdapter()
@@ -391,6 +514,9 @@ public enum WhimProductionComposition {
             recovery: RecoveryScanner(store: store, files: files), preferences: preferences,
             credentials: credentials, scheduler: scheduler)
         try await service.launch()
+        connectivity.onReconnect { [weak service] in
+            Task { try? await service?.resumeDelivery() }
+        }
         return service
     }
 
@@ -437,16 +563,32 @@ private struct PreferenceAwareTranscriber: Transcriber {
 private final class SystemConnectivity: @unchecked Sendable {
     private let lock = NSLock()
     private var connected = true
+    private var reconnect: (@Sendable () -> Void)?
     #if canImport(Network)
     private let monitor = NWPathMonitor()
     #endif
     init() {
         #if canImport(Network)
         monitor.pathUpdateHandler = { [weak self] path in
-            self?.lock.withLock { self?.connected = path.status == .satisfied }
+            guard let self else { return }
+            let callback = self.lock.withLock { () -> (@Sendable () -> Void)? in
+                let wasConnected = self.connected
+                self.connected = path.status == .satisfied
+                return self.connected && !wasConnected ? self.reconnect : nil
+            }
+            callback?()
         }
         monitor.start(queue: DispatchQueue(label: "app.whim.connectivity"))
         #endif
     }
-    var isConnected: Bool { lock.withLock { connected } }
+    var isConnected: Bool {
+        #if DEBUG
+        if DebugFixtureTransport.offline { return false }
+        #endif
+        return lock.withLock { connected }
+    }
+    func onReconnect(_ callback: @escaping @Sendable () -> Void) {
+        let connected = lock.withLock { reconnect = callback; return self.connected }
+        if connected { callback() }
+    }
 }

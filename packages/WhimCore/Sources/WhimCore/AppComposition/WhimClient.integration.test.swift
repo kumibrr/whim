@@ -3,6 +3,17 @@ import XCTest
 @testable import WhimCore
 
 final class WhimEventContractIntegrationTests: XCTestCase {
+    func testSettingsEncodingMatchesSharedVersionedFixtureIncludingExplicitNulls() throws {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "settings-v1.fixture", withExtension: "json"))
+        let fixture = try Data(contentsOf: url)
+        let settings = SettingsProjection(preferences: .default, webhook: nil,
+            onboardingCompleted: false, permissions: .init(microphone: .notDetermined,
+                speech: .denied, notifications: .granted))
+        XCTAssertEqual(try JSONDecoder().decode(SettingsProjection.self, from: fixture), settings)
+        let encoded = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(settings)) as? NSDictionary)
+        XCTAssertEqual(encoded, try JSONSerialization.jsonObject(with: fixture) as? NSDictionary)
+    }
+
     func testDecodesSharedNotesV1FixtureWithStableDatesOptionalsAndEnums() throws {
         let url = try XCTUnwrap(Bundle.module.url(forResource: "notes-v1.fixture", withExtension: "json"))
         let decoder = JSONDecoder()

@@ -1,0 +1,41 @@
+appId: app.whim.ios
+---
+- runFlow: flows/clean-launch.yaml
+- tapOn: Settings
+- tapOn:
+    id: webhook-url
+- inputText: https://whim-fixture.invalid/receive
+- tapOn: Webhook
+- scrollUntilVisible:
+    element: Save webhook
+    direction: DOWN
+    centerElement: true
+- tapOn: Save webhook
+- extendedWaitUntil:
+    visible: Webhook saved. Test it to check delivery.
+    timeout: 10000
+- tapOn:
+    id: BackButton
+- launchApp:
+    arguments:
+      -EXDevMenuDisableAutoLaunch: true
+      -WhimFixtureAudio: ${WHIM_FIXTURE_AUDIO}
+      -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
+      -WhimFixtureOffline: 'yes'
+- extendedWaitUntil:
+    visible:
+      id: record-button
+    timeout: 60000
+- tapOn:
+    id: record-button
+- tapOn:
+    id: stop-recording
+- assertVisible: 'Open .*Queued.*'
+- launchApp:
+    arguments:
+      -EXDevMenuDisableAutoLaunch: true
+      -WhimFixtureAudio: ${WHIM_FIXTURE_AUDIO}
+      -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
+- extendedWaitUntil:
+    visible: 'Open .*Sent.*'
+    timeout: 60000

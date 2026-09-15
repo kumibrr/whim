@@ -1,0 +1,27 @@
+appId: app.whim.ios
+---
+- runFlow: flows/clean-launch.yaml
+- tapOn:
+    id: record-button
+- assertVisible:
+    id: recorder-panel
+- tapOn: Discard recording
+- tapOn: Keep recording
+- tapOn:
+    id: stop-recording
+- assertVisible: Note saved
+- assertVisible: 'Open .*Setup required.*'
+- tapOn:
+    id: note-row-.*
+- tapOn: Play Note
+- assertVisible: Playing
+- tapOn: Stop playback
+- tapOn: Delete Note
+- assertVisible: .*only local copy.*
+- tapOn: Confirm delete
+- assertVisible: No Notes here yet. Capture a thought.
+- tapOn:
+    id: record-button
+- tapOn: Discard recording
+- tapOn: Confirm discard
+- assertVisible: Recording discarded

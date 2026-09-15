@@ -36,6 +36,35 @@ final class WebhookIntegrationTests: XCTestCase {
         XCTAssertLessThan(Double(audio.length) / audio.fileFormat.sampleRate, 1)
     }
 #if os(macOS)
+    // Break: compiled app fixtures cannot induce a permanent failure at the validated /receive endpoint.
+    func testLoopbackResponseControlChangesDeliveryAndResetRestoresSuccess() async throws {
+        let server = try LoopbackServer()
+        defer { server.stop() }
+        var control = URLRequest(url: server.url(path: "/response"))
+        control.httpMethod = "POST"
+        control.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        control.httpBody = Data(#"{"status":400}"#.utf8)
+        let (_, configured) = try await URLSession.shared.data(for: control)
+        XCTAssertEqual((configured as? HTTPURLResponse)?.statusCode, 204)
+        let failed = try await runDelivery(server: server, path: "/receive", responseTimeout: 2)
+        XCTAssertEqual(failed.result, .failed)
+        XCTAssertEqual(failed.note.delivery.failedAttempts.map(\.reason), [.httpStatus(400)])
+
+        control.httpBody = Data(#"{"status":200}"#.utf8)
+        let (_, restored) = try await URLSession.shared.data(for: control)
+        XCTAssertEqual((restored as? HTTPURLResponse)?.statusCode, 204)
+        let successful = try await runDelivery(server: server, path: "/receive", responseTimeout: 2)
+        XCTAssertNotNil(successful.note.delivery.receipt)
+
+        control.httpBody = Data(#"{"status":400}"#.utf8)
+        _ = try await URLSession.shared.data(for: control)
+        var reset = URLRequest(url: server.url(path: "/reset"))
+        reset.httpMethod = "POST"
+        let (_, resetResponse) = try await URLSession.shared.data(for: reset)
+        XCTAssertEqual((resetResponse as? HTTPURLResponse)?.statusCode, 204)
+        let afterReset = try await runDelivery(server: server, path: "/receive", responseTimeout: 2)
+        XCTAssertNotNil(afterReset.note.delivery.receipt)
+    }
     // Break: real HTTP responses are tested only at the transport seam, not through DeliveryService and SQLite.
     func testDeliveryServicePersistsRealLoopbackFailureMatrix() async throws {
         let server = try LoopbackServer()

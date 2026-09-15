@@ -6,11 +6,17 @@ let productionSources = [
     "AppComposition/WhimCoreVersion.swift",
     "AppComposition/WhimClient.swift",
     "AppComposition/WhimService.swift",
+    "Preferences/SettingsProjection.swift",
+    "Preferences/OnboardingStore.swift",
+    "Permissions/PermissionAdapter.swift",
+    "Playback/PlaybackAdapter.swift",
+    "WebhookConfiguration/WebhookPatch.swift",
     "Delivery/Delivery.swift",
     "Delivery/DeliveryReducer.swift",
     "Delivery/RetryPolicy.swift",
     "Delivery/DeliveryTimeouts.swift",
     "Delivery/HTTPTransport.swift",
+    "Delivery/DebugFixtureTransport.swift",
     "Delivery/URLSessionHTTPTransport.swift",
     "Delivery/DeliveryService.swift",
     "Delivery/InProcessDeliveryScheduler.swift",
@@ -24,6 +30,7 @@ let productionSources = [
     "Notes/FileProtection.swift",
     "Notes/SQLiteWhimStore.swift",
     "Recording/AudioRecorder.swift",
+    "Recording/DebugFixtureRecorder.swift",
     "Recording/AVAudioRecorderAdapter.swift",
     "Recording/RecordingLimits.swift",
     "Recording/RecordingService.swift",
@@ -42,6 +49,7 @@ let productionSources = [
     "WebhookConfiguration/WebhookRequestBuilder.swift",
 ]
 let unitTestSources = [
+    "Playback/PlaybackAdapter.test.swift",
     "AppComposition/WhimCoreVersion.test.swift",
     "Delivery/Delivery.test.swift",
     "Delivery/DeliveryReducer.test.swift",
@@ -60,6 +68,8 @@ let unitTestSources = [
     "WebhookConfiguration/WebhookRequestBuilder.test.swift",
 ]
 let integrationTestSources = [
+    "Delivery/DebugFixtureTransport.integration.test.swift",
+    "Recording/DebugFixtureRecorder.integration.test.swift",
     "AppComposition/WhimCoreVersion.integration.test.swift",
     "AppComposition/WhimClient.integration.test.swift",
     "AppComposition/WhimService.integration.test.swift",
@@ -70,7 +80,7 @@ let integrationTestSources = [
     "WebhookConfiguration/WebhookRequestBuilder.integration.test.swift",
 ]
 let fixtureResources = ["WebhookConfiguration/Fixtures"]
-let contractFixtureResources = ["AppComposition/Fixtures/notes-v1.fixture.json"]
+let contractFixtureResources = ["AppComposition/Fixtures/notes-v1.fixture.json", "AppComposition/Fixtures/settings-v1.fixture.json"]
 
 let package = Package(
     name: "WhimCore",
@@ -102,6 +112,7 @@ let package = Package(
             resources: [
                 .copy("WebhookConfiguration/Fixtures"),
                 .copy("AppComposition/Fixtures/notes-v1.fixture.json"),
+                .copy("AppComposition/Fixtures/settings-v1.fixture.json"),
             ]
         ),
     ]

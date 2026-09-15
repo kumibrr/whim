@@ -18,6 +18,26 @@ public struct ExpoWhimBridge: Sendable {
     private let client: any WhimClient
     public init(client: any WhimClient) { self.client = client }
 
+    public func getSettings() async throws -> String {
+        try await perform { try ExpoWhimJSON.encode(await client.settings()) }
+    }
+    public func patchWebhook(json: String) async throws -> String {
+        try await perform { try ExpoWhimJSON.encode(await client.patchWebhook(ExpoWhimJSON.decode(WebhookPatch.self, json))) }
+    }
+    public func completeOnboarding() async throws { try await perform { try await client.completeOnboarding() } }
+    public func requestPermission(kind: String) async throws -> String {
+        try await perform {
+            guard let kind = PermissionKind(rawValue: kind) else { throw WhimServiceError.invalidIdentifier(field: "permission") }
+            return try ExpoWhimJSON.encode(await client.requestPermission(kind))
+        }
+    }
+    public func openSystemSettings() async throws { try await perform { try await client.openSystemSettings() } }
+    public func playNote(id: String) async throws -> String {
+        try await perform { try ExpoWhimJSON.encode(await client.playNote(noteID(id))) }
+    }
+    public func stopPlayback() async { await client.stopPlayback() }
+    public func getPlayback() async throws -> String { try ExpoWhimJSON.encode(await client.playbackSnapshot()) }
+
     public func startRecording(source: String) async throws -> String {
         try await perform {
             guard let source = CaptureSource(rawValue: source) else {
@@ -82,6 +102,12 @@ public struct ExpoWhimBridge: Sendable {
     }
     private static func payload(_ error: any Error) -> ExpoWhimErrorPayload {
         switch error {
+        case WhimServiceError.recordingActive:
+            .init(code: "recording_active", message: "Stop recording before playing a Note.", field: nil)
+        case WhimServiceError.audioUnavailable:
+            .init(code: "audio_unavailable", message: "This Note's audio is unavailable.", field: nil)
+        case WhimServiceError.permissionDenied:
+            .init(code: "microphone_permission_required", message: "Microphone access is required. Open Settings to allow access.", field: nil)
         case WhimServiceError.invalidConfiguration(let field):
             .init(code: "invalid_configuration", message: "Enter a valid webhook configuration.", field: field)
         case WhimServiceError.invalidIdentifier(let field):
@@ -180,6 +206,14 @@ public final class ExpoWhimModule: Module {
         Name("ExpoWhim")
         Events("onWhimEvent")
         Function("schemaVersion") { Self.schemaVersion }
+        AsyncFunction("getSettings") { () async throws -> String in try await self.bridge().getSettings() }
+        AsyncFunction("patchWebhook") { (json: String) async throws -> String in try await self.bridge().patchWebhook(json: json) }
+        AsyncFunction("completeOnboarding") { () async throws in try await self.bridge().completeOnboarding() }
+        AsyncFunction("requestPermission") { (kind: String) async throws -> String in try await self.bridge().requestPermission(kind: kind) }
+        AsyncFunction("openSystemSettings") { () async throws in try await self.bridge().openSystemSettings() }
+        AsyncFunction("playNote") { (id: String) async throws -> String in try await self.bridge().playNote(id: id) }
+        AsyncFunction("stopPlayback") { () async throws in try await self.bridge().stopPlayback() }
+        AsyncFunction("getPlayback") { () async throws -> String in try await self.bridge().getPlayback() }
         AsyncFunction("startRecording") { (source: String) async throws -> String in
             try await self.bridge().startRecording(source: source)
         }

@@ -1,7 +1,34 @@
 import type { WhimClient } from './NativeWhimClient';
 import { NativeWhimClient, WhimClientError, type RawExpoWhimModule } from './NativeWhimClient';
+import settingsFixture from '../preferences/settings-v1.fixture.json';
+import swiftSettingsFixture from '../../../WhimCore/Sources/WhimCore/AppComposition/Fixtures/settings-v1.fixture.json';
 
 describe('NativeWhimClient', () => {
+  it('decodes the shared versioned settings fixture with explicit null values', async () => {
+    expect(swiftSettingsFixture).toEqual(settingsFixture);
+    const raw = new RawModuleFake();
+    raw.getSettings = async () => JSON.stringify(settingsFixture);
+
+    const settings = await new NativeWhimClient(raw).getSettings();
+
+    expect(settings).toEqual({
+      schemaVersion: 1,
+      preferences: { retentionPolicy: 'thirty_days', transcriptionEnabled: true, transcriptionLocaleIdentifier: null },
+      webhook: null,
+      watch: { availability: 'unavailable', lastSynchronizedAt: null, resetState: 'unavailable' },
+      onboardingCompleted: false,
+      permissions: { microphone: 'not_determined', speech: 'denied', notifications: 'granted' },
+    });
+  });
+  it('decodes settings without exposing credentials and forwards explicit clear patches', async () => {
+    const raw = new RawModuleFake();
+    const client = new NativeWhimClient(raw);
+    const settings = await client.getSettings();
+    expect(settings.preferences.retentionPolicy).toBe('thirty_days');
+    expect(settings.permissions.microphone).toBe('denied');
+    await client.patchWebhook({ bearerToken: { action: 'clear' } });
+    expect(raw.patch).toEqual('{"bearerToken":{"action":"clear"}}');
+  });
   it('implements the exact async client contract and decodes native projections and events', async () => {
     const raw = new RawModuleFake();
     const client: WhimClient = new NativeWhimClient(raw);
@@ -45,6 +72,15 @@ describe('NativeWhimClient', () => {
 });
 
 class RawModuleFake implements RawExpoWhimModule {
+  completeOnboarding = async () => {};
+  requestPermission = async () => '"denied"';
+  openSystemSettings = async () => {};
+  playNote = async () => '{}';
+  stopPlayback = async () => {};
+  getPlayback = async () => 'null';
+  patch = '';
+  getSettings = async () => JSON.stringify({ schemaVersion: 1, preferences: { retentionPolicy: 'thirty_days' }, permissions: { microphone: 'denied' } });
+  patchWebhook = async (value: string) => { this.patch = value; return '{"revisionID":"revision","failedCount":0,"setupRequiredCount":0}'; };
   private listener?: (event: unknown) => void;
   constructor(private readonly updateError?: string) {}
   schemaVersion = () => 1;
@@ -70,7 +106,15 @@ class RawModuleFake implements RawExpoWhimModule {
 }
 
 const compileTimeExactFake = {
-  startRecording: async () => ({ schemaVersion: 1, sessionID: '', noteID: '', source: 'iphone', createdAt: '' }),
+  getSettings: async () => { throw new Error('unused'); },
+  patchWebhook: async () => ({ revisionID: '', failedCount: 0, setupRequiredCount: 0 }),
+  completeOnboarding: async () => {},
+  requestPermission: async () => 'denied' as const,
+  openSystemSettings: async () => {},
+  playNote: async () => { throw new Error('unused'); },
+  stopPlayback: async () => {},
+  getPlayback: async () => null,
+  startRecording: async () => ({ schemaVersion: 1, sessionID: '', noteID: '', source: 'iphone', createdAt: '', maximumDurationSeconds: 300, warningLeadSeconds: 15 }),
   getActiveRecording: async () => null,
   stopRecording: async () => null,
   discardRecording: async () => {},

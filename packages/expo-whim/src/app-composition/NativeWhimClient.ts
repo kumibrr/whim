@@ -4,6 +4,7 @@ import type { WhimEvent } from '../events/WhimEvent';
 import { isWhimEvent } from '../events/WhimEvent';
 import type { NoteDetailProjection, NoteProjection } from '../notes/NoteProjection';
 import type { PreferenceInput } from '../preferences/PreferenceInput';
+import type { SettingsProjection, WebhookPatch, PermissionKind, PermissionStatus, PlaybackProjection } from '../preferences/SettingsProjection';
 import type { CaptureSource, RecordingProjection } from '../recording/RecordingProjection';
 import type {
   ConfigurationTestResult,
@@ -14,6 +15,14 @@ import type {
 export type NoteFilter = 'all' | 'queued' | 'failed' | 'sent';
 
 export interface WhimClient {
+  getSettings(): Promise<SettingsProjection>;
+  patchWebhook(input: WebhookPatch): Promise<ConfigurationUpdateResult>;
+  completeOnboarding(): Promise<void>;
+  requestPermission(kind: PermissionKind): Promise<PermissionStatus>;
+  openSystemSettings(): Promise<void>;
+  playNote(id: string): Promise<PlaybackProjection>;
+  stopPlayback(): Promise<void>;
+  getPlayback(): Promise<PlaybackProjection | null>;
   startRecording(source: CaptureSource): Promise<RecordingProjection>;
   getActiveRecording(): Promise<RecordingProjection | null>;
   stopRecording(): Promise<NoteProjection | null>;
@@ -32,6 +41,14 @@ export interface WhimClient {
 }
 
 export interface RawExpoWhimModule {
+  getSettings(): Promise<string>;
+  patchWebhook(input: string): Promise<string>;
+  completeOnboarding(): Promise<void>;
+  requestPermission(kind: PermissionKind): Promise<string>;
+  openSystemSettings(): Promise<void>;
+  playNote(id: string): Promise<string>;
+  stopPlayback(): Promise<void>;
+  getPlayback(): Promise<string>;
   schemaVersion(): number;
   startRecording(source: CaptureSource): Promise<string>;
   getActiveRecording(): Promise<string>;
@@ -63,6 +80,15 @@ export class WhimClientError extends Error {
 
 export class NativeWhimClient implements WhimClient {
   constructor(private readonly native: RawExpoWhimModule) {}
+
+  getSettings() { return this.invoke(() => this.native.getSettings(), decodeJSON<SettingsProjection>); }
+  patchWebhook(input: WebhookPatch) { return this.invoke(() => this.native.patchWebhook(JSON.stringify(input)), decodeJSON<ConfigurationUpdateResult>); }
+  completeOnboarding() { return this.invoke(() => this.native.completeOnboarding()); }
+  requestPermission(kind: PermissionKind) { return this.invoke(() => this.native.requestPermission(kind), decodeJSON<PermissionStatus>); }
+  openSystemSettings() { return this.invoke(() => this.native.openSystemSettings()); }
+  playNote(id: string) { return this.invoke(() => this.native.playNote(id), decodeJSON<PlaybackProjection>); }
+  stopPlayback() { return this.invoke(() => this.native.stopPlayback()); }
+  getPlayback() { return this.invoke(() => this.native.getPlayback(), decodeJSON<PlaybackProjection | null>); }
 
   startRecording(source: CaptureSource) {
     return this.invoke(() => this.native.startRecording(source), decodeJSON<RecordingProjection>);

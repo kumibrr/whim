@@ -14,12 +14,33 @@ public protocol WhimClient: Sendable {
     func updateWebhook(_ input: WebhookConfigurationInput) async throws -> ConfigurationUpdateResult
     func testWebhook() async throws -> ConfigurationTestResult
     func updatePreferences(_ input: PreferenceInput) async throws
+    func settings() async throws -> SettingsProjection
+    func completeOnboarding() async throws
+    func requestPermission(_ kind: PermissionKind) async throws -> PermissionStatus
+    func openSystemSettings() async throws
+    func playNote(_ id: NoteID) async throws -> PlaybackProjection
+    func stopPlayback() async
+    func playbackSnapshot() async -> PlaybackProjection?
+    func patchWebhook(_ patch: WebhookPatch) async throws -> ConfigurationUpdateResult
     func reset() async throws
     func events() -> AsyncStream<WhimEvent>
 }
 
+public extension WhimClient {
+    func playNote(_ id: NoteID) async throws -> PlaybackProjection { throw WhimServiceError.audioUnavailable }
+    func stopPlayback() async {}
+    func playbackSnapshot() async -> PlaybackProjection? { nil }
+    func requestPermission(_ kind: PermissionKind) async throws -> PermissionStatus { throw WhimServiceError.setupRequired("Permissions unavailable.") }
+    func openSystemSettings() async throws { throw WhimServiceError.setupRequired("System settings unavailable.") }
+    func completeOnboarding() async throws { throw WhimServiceError.setupRequired("Onboarding unavailable.") }
+    func settings() async throws -> SettingsProjection { throw WhimServiceError.setupRequired("Settings unavailable.") }
+    func patchWebhook(_ patch: WebhookPatch) async throws -> ConfigurationUpdateResult { throw WhimServiceError.setupRequired("Settings unavailable.") }
+}
+
 public struct RecordingProjection: Codable, Equatable, Sendable {
     public let schemaVersion = WhimCoreVersion.schema
+    public let maximumDurationSeconds = Double(RecordingLimits.maximumDuration.components.seconds)
+    public let warningLeadSeconds = Double(RecordingLimits.warningLeadTime.components.seconds)
     public let sessionID: String
     public let noteID: String
     public let source: CaptureSource
@@ -37,7 +58,7 @@ public struct RecordingProjection: Codable, Equatable, Sendable {
         self.sessionID = sessionID; self.noteID = noteID; self.source = source; self.createdAt = createdAt
     }
 
-    private enum CodingKeys: String, CodingKey { case schemaVersion, sessionID, noteID, source, createdAt }
+    private enum CodingKeys: String, CodingKey { case schemaVersion, sessionID, noteID, source, createdAt, maximumDurationSeconds, warningLeadSeconds }
 }
 
 public struct AttemptProjection: Codable, Equatable, Sendable {
@@ -203,7 +224,7 @@ extension PreferenceInput: Codable {
         var values = encoder.container(keyedBy: CodingKeys.self)
         try values.encode(retentionPolicy.externalRawValue, forKey: .retentionPolicy)
         try values.encode(transcriptionEnabled, forKey: .transcriptionEnabled)
-        try values.encodeIfPresent(transcriptionLocaleIdentifier, forKey: .transcriptionLocaleIdentifier)
+        try values.encode(transcriptionLocaleIdentifier, forKey: .transcriptionLocaleIdentifier)
     }
 }
 
