@@ -36,10 +36,19 @@ final class WebhookIntegrationTests: XCTestCase {
         XCTAssertLessThan(Double(audio.length) / audio.fileFormat.sampleRate, 1)
     }
 #if os(macOS)
+    func testLoopbackStopsWithinDeadlineAfterExecutorHandoff() async throws {
+        let server = try await Task.detached { try await LoopbackServer() }.value
+        try await server.stop(timeout: 2)
+        do {
+            _ = try await URLSession.shared.data(from: server.url(path: "/state"))
+            XCTFail("A stopped fixture must no longer accept HTTP requests")
+        } catch {}
+    }
+
     // Break: compiled app fixtures cannot induce a permanent failure at the validated /receive endpoint.
     func testLoopbackResponseControlChangesDeliveryAndResetRestoresSuccess() async throws {
-        let server = try LoopbackServer()
-        defer { server.stop() }
+        let server = try await LoopbackServer()
+        addTeardownBlock { try await server.stop() }
         var control = URLRequest(url: server.url(path: "/response"))
         control.httpMethod = "POST"
         control.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -67,8 +76,8 @@ final class WebhookIntegrationTests: XCTestCase {
     }
     // Break: real HTTP responses are tested only at the transport seam, not through DeliveryService and SQLite.
     func testDeliveryServicePersistsRealLoopbackFailureMatrix() async throws {
-        let server = try LoopbackServer()
-        defer { server.stop() }
+        let server = try await LoopbackServer()
+        addTeardownBlock { try await server.stop() }
         let retryAt = Date(timeIntervalSince1970: 1_120)
         let cases: [(path: String, result: DeliveryResult, reason: AttemptFailureReason,
                      retryAfter: Date?, scheduled: Int, notifications: Int)] = [
@@ -109,8 +118,8 @@ final class WebhookIntegrationTests: XCTestCase {
 
     // Break: URLSession accepts a self-signed local certificate through a custom trust bypass.
     func testURLSessionRejectsSelfSignedTLSCertificate() async throws {
-        let server = try LoopbackServer(useTLS: true)
-        defer { server.stop() }
+        let server = try await LoopbackServer(useTLS: true)
+        addTeardownBlock { try await server.stop() }
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -136,8 +145,8 @@ final class WebhookIntegrationTests: XCTestCase {
 
     // Break: URLSession follows redirects, skips receiver verification, or retains an oversized response.
     func testLoopbackReceiverVerifiesContractRejectsRedirectsAndCapsBodies() async throws {
-        let server = try LoopbackServer()
-        defer { server.stop() }
+        let server = try await LoopbackServer()
+        addTeardownBlock { try await server.stop() }
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -293,13 +302,14 @@ final class WebhookIntegrationTests: XCTestCase {
 }
 
 #if os(macOS)
-private final class LoopbackServer {
+private final class LoopbackServer: @unchecked Sendable {
     private let process = Process()
+    private let termination = FixtureProcessTermination()
     private let port: Int
     private let scheme: String
     private let tlsDirectory: URL?
 
-    init(useTLS: Bool = false) throws {
+    init(useTLS: Bool = false) async throws {
         let script = try XCTUnwrap(Bundle.module.url(forResource: "webhook-server", withExtension: "mjs",
             subdirectory: "Fixtures"))
         var additions = ["WHIM_WEBHOOK_PORT": "0", "WHIM_HMAC_SECRET": "receiver-secret"]
@@ -314,9 +324,10 @@ private final class LoopbackServer {
                 "-keyout", key.path, "-out", certificate.path, "-subj", "/CN=127.0.0.1", "-days", "1"]
             openssl.standardOutput = FileHandle.nullDevice
             openssl.standardError = FileHandle.nullDevice
+            let opensslTermination = FixtureProcessTermination()
+            openssl.terminationHandler = { opensslTermination.finish($0.terminationStatus) }
             try openssl.run()
-            openssl.waitUntilExit()
-            guard openssl.terminationStatus == 0 else { throw HTTPTransportError.invalidResponse }
+            guard try await opensslTermination.wait(timeout: 5) == 0 else { throw HTTPTransportError.invalidResponse }
             additions["WHIM_TLS_KEY_PATH"] = key.path
             additions["WHIM_TLS_CERT_PATH"] = certificate.path
             tlsDirectory = directory
@@ -331,6 +342,8 @@ private final class LoopbackServer {
         process.environment = ProcessInfo.processInfo.environment.merging(additions) { _, new in new }
         process.standardOutput = pipe
         process.standardError = pipe
+        let termination = termination
+        process.terminationHandler = { termination.finish($0.terminationStatus) }
         try process.run()
         let data = pipe.fileHandleForReading.availableData
         guard let line = String(data: data, encoding: .utf8)?.split(separator: "\n").first,
@@ -344,9 +357,49 @@ private final class LoopbackServer {
     }
 
     func url(path: String) -> URL { URL(string: "\(scheme)://127.0.0.1:\(port)\(path)")! }
-    func stop() {
-        if process.isRunning { process.terminate(); process.waitUntilExit() }
-        if let tlsDirectory { try? FileManager.default.removeItem(at: tlsDirectory) }
+    func stop(timeout: TimeInterval = 5) async throws {
+        defer { if let tlsDirectory { try? FileManager.default.removeItem(at: tlsDirectory) } }
+        if process.isRunning { process.terminate() }
+        do { _ = try await termination.wait(timeout: timeout) }
+        catch {
+            if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+            throw error
+        }
+    }
+}
+
+/// Process termination is observed before launch, independently of whichever Swift
+/// executor later tears down the fixture. Foundation waitUntilExit can miss its
+/// run-loop notification after an executor hop, even when the child already exited.
+private final class FixtureProcessTermination: @unchecked Sendable {
+    private enum Failure: Error { case timeout }
+    private let lock = NSLock()
+    private var status: Int32?
+    private var waiters: [UUID: CheckedContinuation<Int32, Error>] = [:]
+
+    func finish(_ value: Int32) {
+        let ready = lock.withLock {
+            status = value
+            let ready = Array(waiters.values)
+            waiters.removeAll()
+            return ready
+        }
+        ready.forEach { $0.resume(returning: value) }
+    }
+    func wait(timeout: TimeInterval) async throws -> Int32 {
+        let id = UUID()
+        return try await withCheckedThrowingContinuation { continuation in
+            let completed = lock.withLock { () -> Int32? in
+                if let status { return status }
+                waiters[id] = continuation
+                return nil
+            }
+            if let completed { continuation.resume(returning: completed); return }
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { [self] in
+                let waiter = lock.withLock { waiters.removeValue(forKey: id) }
+                waiter?.resume(throwing: Failure.timeout)
+            }
+        }
     }
 }
 
