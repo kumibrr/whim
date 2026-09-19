@@ -26,6 +26,19 @@ public protocol AudioRecorderHardware: AnyObject, Sendable {
 
 public typealias AudioRecorderHardwareFactory = @Sendable (URL) throws -> any AudioRecorderHardware
 
+enum RecordingEncoding {
+    static var settings: [String: Any] {
+        [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: 16_000,
+            AVNumberOfChannelsKey: 1,
+            // AAC at 16 kHz mono must use a bitrate supported by that format.
+            AVEncoderBitRateKey: 32_000,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
+        ]
+    }
+}
+
 /// The platform microphone boundary. AVFoundation owns encoding and closes the AAC writer
 /// before `encoderCompleted` is emitted.
 public final class AVAudioRecorderAdapter: NSObject, AudioRecorder, @unchecked Sendable {
@@ -67,7 +80,8 @@ public final class AVAudioRecorderAdapter: NSObject, AudioRecorder, @unchecked S
             try WatchAudioSessionAdapter().activate()
             #elseif os(iOS)
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .spokenAudio)
+            // spokenAudio is a playback mode; physical iPhones can reject it for capture.
+            try session.setCategory(.record, mode: .default)
             try session.setActive(true)
             #endif
 
@@ -236,13 +250,7 @@ private final class AVFoundationRecorderHardware: NSObject, AVAudioRecorderDeleg
     private var eventHandler: (@Sendable (AudioRecorderHardwareEvent) -> Void)?
 
     init(url: URL) throws {
-        recorder = try AVAudioRecorder(url: url, settings: [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: 16_000,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderBitRateKey: 64_000,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
-        ])
+        recorder = try AVAudioRecorder(url: url, settings: RecordingEncoding.settings)
         super.init()
         recorder.delegate = self
         recorder.isMeteringEnabled = true
