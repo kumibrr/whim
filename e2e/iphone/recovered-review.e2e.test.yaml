@@ -26,6 +26,8 @@ appId: app.whim.ios
     arguments:
       -WhimFixtureAudio: ${WHIM_FIXTURE_AUDIO}
       -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
+- tapOn:
+    id: history-hint
 - extendedWaitUntil:
     visible: 'Open .*Review required.*'
     timeout: 60000

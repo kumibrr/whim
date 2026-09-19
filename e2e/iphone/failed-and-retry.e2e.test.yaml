@@ -21,6 +21,8 @@ appId: app.whim.ios
     id: record-button
 - tapOn:
     id: stop-recording
+- tapOn:
+    id: history-hint
 - extendedWaitUntil:
     visible: 'Open .*Failed.*'
     timeout: 60000
@@ -32,6 +34,7 @@ appId: app.whim.ios
 - assertVisible: The destination rejected this Attempt.
 - tapOn:
     text: Back
+- tapOn: Close history
 - tapOn: Settings
 - tapOn:
     id: webhook-url
@@ -56,6 +59,8 @@ appId: app.whim.ios
 - tapOn: Retry unsent Notes
 - tapOn:
     text: Back
+- tapOn:
+    id: history-hint
 - extendedWaitUntil:
     visible: 'Open .*Sent.*'
     timeout: 60000

@@ -29,11 +29,15 @@ appId: app.whim.ios
     id: record-button
 - tapOn:
     id: stop-recording
+- tapOn:
+    id: history-hint
 - assertVisible: 'Open .*Queued.*'
 - launchApp:
     arguments:
       -WhimFixtureAudio: ${WHIM_FIXTURE_AUDIO}
       -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
+- tapOn:
+    id: history-hint
 - extendedWaitUntil:
     visible: 'Open .*Sent.*'
     timeout: 60000

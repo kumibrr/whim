@@ -8,6 +8,7 @@ public enum AVAudioRecorderAdapterError: Error, Sendable {
 public enum AudioRecorderHardwareEvent: Sendable {
     case finished(successfully: Bool)
     case failed
+    case interrupted
 }
 
 /// Injectable system boundary around `AVAudioRecorder`. Tests supply deterministic hardware;
@@ -16,12 +17,17 @@ public protocol AudioRecorderHardware: AnyObject, Sendable {
     var isRecording: Bool { get }
     var elapsedTime: TimeInterval { get }
     var peakPowerDBFS: Float { get }
+    var signal: RecordingSignal? { get }
     func setEventHandler(_ handler: @escaping @Sendable (AudioRecorderHardwareEvent) -> Void)
     func prepareToRecord() -> Bool
     func record() -> Bool
     func updateMeters()
     func stop()
     func deleteRecording() -> Bool
+}
+
+public extension AudioRecorderHardware {
+    var signal: RecordingSignal? { nil }
 }
 
 public typealias AudioRecorderHardwareFactory = @Sendable (URL) throws -> any AudioRecorderHardware
@@ -54,7 +60,11 @@ public final class AVAudioRecorderAdapter: NSObject, AudioRecorder, @unchecked S
     private var notificationTokens: [NSObjectProtocol] = []
 
     public override convenience init() {
+        #if os(iOS)
+        self.init(makeHardware: { PCMRecorderHardware(url: $0, input: SystemPCMInput()) })
+        #else
         self.init(makeHardware: { try AVFoundationRecorderHardware(url: $0) })
+        #endif
     }
 
     public init(makeHardware: @escaping AudioRecorderHardwareFactory) {
@@ -162,6 +172,9 @@ public final class AVAudioRecorderAdapter: NSObject, AudioRecorder, @unchecked S
             } else {
                 continuation.yield(.failure)
             }
+        case .interrupted:
+            guard lock.withLock({ self.generation == generation }) else { return }
+            continuation.yield(.interruption)
         case .failed:
             let isCurrent = lock.withLock { self.generation == generation }
             guard isCurrent else { return }
@@ -195,16 +208,17 @@ public final class AVAudioRecorderAdapter: NSObject, AudioRecorder, @unchecked S
     }
 
     private func sampleMeters(generation: UUID) {
-        let sample = lock.withLock { () -> (TimeInterval, Float)? in
+        let sample = lock.withLock { () -> (TimeInterval, Float, RecordingSignal?)? in
             guard self.generation == generation, let hardware, hardware.isRecording else { return nil }
             hardware.updateMeters()
             let power = hardware.peakPowerDBFS
             maximumPeakPowerDBFS = max(maximumPeakPowerDBFS, power)
-            return (hardware.elapsedTime, power)
+            return (hardware.elapsedTime, power, hardware.signal)
         }
         guard let sample else { return }
         continuation.yield(.elapsed(sample.0))
-        continuation.yield(.peakPower(sample.1))
+        if let signal = sample.2 { continuation.yield(.signal(signal)) }
+        else { continuation.yield(.peakPower(sample.1)) }
     }
 
     private func clear(generation: UUID) {

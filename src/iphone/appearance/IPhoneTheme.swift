@@ -1,5 +1,5 @@
 import SwiftUI
-extension Color { static let whimAccent = Color(red: 204/255, green: 73/255, blue: 57/255) }
+extension Color { static let whimAccent = Color.white }
 struct WhimButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.font(.body).padding(.vertical, 14).padding(.horizontal, 16).frame(minHeight: 48)
@@ -29,4 +29,23 @@ struct WhimErrorText: View {
                 UIAccessibility.post(notification: .announcement, argument: value)
             }
     }
+}
+
+struct WhimGlass<S: Shape>: ViewModifier {
+    let shape: S
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    func body(content: Content) -> some View {
+        if reduceTransparency {
+            content.background(Color(white: 0.12), in: shape)
+                .overlay(shape.stroke(.white.opacity(0.25), lineWidth: 0.5))
+        } else if #available(iOS 26, *) {
+            content.glassEffect(.regular, in: shape)
+        } else {
+            content.background(.ultraThinMaterial, in: shape)
+                .overlay(shape.stroke(.white.opacity(0.22), lineWidth: 0.5))
+        }
+    }
+}
+extension View {
+    func whimGlass<S: Shape>(in shape: S) -> some View { modifier(WhimGlass(shape: shape)) }
 }

@@ -18,6 +18,7 @@ public protocol WhimClient: Sendable {
     func completeOnboarding() async throws
     func requestPermission(_ kind: PermissionKind) async throws -> PermissionStatus
     func openSystemSettings() async throws
+    func waveform(noteID: NoteID) async throws -> AudioWaveform
     func playNote(_ id: NoteID) async throws -> PlaybackProjection
     func stopPlayback() async
     func playbackSnapshot() async -> PlaybackProjection?
@@ -27,6 +28,7 @@ public protocol WhimClient: Sendable {
 }
 
 public extension WhimClient {
+    func waveform(noteID: NoteID) async throws -> AudioWaveform { .unavailable }
     func playNote(_ id: NoteID) async throws -> PlaybackProjection { throw WhimServiceError.audioUnavailable }
     func stopPlayback() async {}
     func playbackSnapshot() async -> PlaybackProjection? { nil }
@@ -272,12 +274,14 @@ public struct WhimEvent: Codable, Equatable, Sendable {
     public let noteID: String?
     public let elapsedSeconds: TimeInterval?
     public let peakPowerDBFS: Float?
+    public let recordingTone: Float?
 
     public init(sequence: UInt64, type: Kind, recording: RecordingProjection? = nil,
                 note: NoteProjection? = nil, noteID: String? = nil,
-                elapsedSeconds: TimeInterval? = nil, peakPowerDBFS: Float? = nil) {
+                elapsedSeconds: TimeInterval? = nil, peakPowerDBFS: Float? = nil, recordingTone: Float? = nil) {
         schemaVersion = WhimCoreVersion.schema; self.sequence = sequence; self.type = type
         self.recording = recording; self.note = note; self.noteID = noteID
         self.elapsedSeconds = elapsedSeconds; self.peakPowerDBFS = peakPowerDBFS
+        self.recordingTone = recordingTone
     }
 }

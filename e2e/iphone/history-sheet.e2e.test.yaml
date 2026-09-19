@@ -1,0 +1,50 @@
+appId: app.whim.ios
+---
+- runFlow: flows/clean-launch.yaml
+- tapOn:
+    id: record-button
+- tapOn:
+    id: stop-recording
+- tapOn:
+    id: record-button
+- tapOn:
+    id: stop-recording
+- tapOn:
+    id: record-button
+- tapOn:
+    id: stop-recording
+- tapOn:
+    id: record-button
+- tapOn:
+    id: stop-recording
+- swipe:
+    start: 50%, 70%
+    end: 50%, 67%
+    duration: 800
+- assertNotVisible:
+    id: history-sheet
+- swipe:
+    start: 50%, 85%
+    end: 50%, 30%
+    duration: 600
+- assertVisible:
+    id: history-sheet
+- swipe:
+    start: 50%, 80%
+    end: 50%, 45%
+    duration: 600
+- assertVisible:
+    id: history-sheet
+- swipe:
+    start: 50%, 18%
+    end: 50%, 80%
+    duration: 600
+- assertVisible:
+    id: history-hint
+- tapOn:
+    id: history-hint
+- assertVisible:
+    id: history-sheet
+- tapOn: Close history
+- assertVisible:
+    id: history-hint

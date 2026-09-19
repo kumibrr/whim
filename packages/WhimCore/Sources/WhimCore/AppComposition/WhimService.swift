@@ -36,6 +36,7 @@ public actor WhimService: WhimClient {
     private let preferences: any PreferenceStoring
     private let onboarding: any OnboardingStoring
     private let permissions: any PermissionAdapter
+    private let waveformAdapter: any AudioWaveformAdapter
     private let playback: any PlaybackAdapter
     private let credentials: any CredentialStore
     private let scheduler: any DeliveryScheduler
@@ -64,7 +65,8 @@ public actor WhimService: WhimClient {
                 onboarding: any OnboardingStoring = UserDefaultsOnboardingStore(),
                 permissions: any PermissionAdapter = SystemPermissionAdapter(),
                 playback: any PlaybackAdapter = SystemPlaybackAdapter(),
-                peer: ConnectivityMergeService? = nil) {
+                peer: ConnectivityMergeService? = nil,
+                waveform: any AudioWaveformAdapter = AVAudioWaveformAdapter()) {
         self.recording = recording; self.store = store; self.files = files; self.title = title
         self.delivery = delivery; self.configuration = configuration
         self.configurationTest = configurationTest; self.recovery = recovery
@@ -72,6 +74,7 @@ public actor WhimService: WhimClient {
         self.onboarding = onboarding
         self.permissions = permissions
         self.playback = playback
+        self.waveformAdapter = waveform
         self.peer = peer
     }
 
@@ -340,6 +343,22 @@ public actor WhimService: WhimClient {
 
     public func openSystemSettings() async throws { try await permissions.openSettings() }
 
+    public func waveform(noteID: NoteID) async throws -> AudioWaveform {
+        try await launch()
+        guard let note = try await store.note(id: noteID), note.localError == nil,
+              files.audioError(at: note.audioURL) == nil else { return .unavailable }
+        do {
+            let samples = try await waveformAdapter.waveform(at: note.audioURL)
+            try Task.checkCancellation()
+            guard let current = try await store.note(id: noteID), current.localError == nil,
+                  current.audioURL == note.audioURL, files.audioError(at: current.audioURL) == nil else {
+                return .unavailable
+            }
+            return .samples(samples)
+        } catch is CancellationError { throw CancellationError() }
+        catch { return .unavailable }
+    }
+
     public func playNote(_ id: NoteID) async throws -> PlaybackProjection {
         await beginCommand(); defer { endCommand() }; try await launch()
         guard await recording.snapshot() == nil else { throw WhimServiceError.recordingActive }
@@ -415,6 +434,7 @@ public actor WhimService: WhimClient {
     private func publish(_ event: RecordingServiceEvent) {
         switch event {
         case .elapsed(let value): publish(.recordingProgress, elapsedSeconds: value)
+        case .signal(let signal): publish(.recordingProgress, peakPowerDBFS: signal.peakPowerDBFS, recordingTone: signal.tone)
         case .peakPower(let value): publish(.recordingProgress, peakPowerDBFS: value)
         case .routeChanged: publish(.recordingRouteChanged)
         case .maximumDurationWarning: publish(.recordingMaximumDurationWarning)
@@ -505,10 +525,10 @@ public actor WhimService: WhimClient {
 
     private func publish(_ type: WhimEvent.Kind, recording: RecordingProjection? = nil,
                          note: NoteProjection? = nil, noteID: String? = nil,
-                         elapsedSeconds: TimeInterval? = nil, peakPowerDBFS: Float? = nil) {
+                         elapsedSeconds: TimeInterval? = nil, peakPowerDBFS: Float? = nil, recordingTone: Float? = nil) {
         sequence += 1
         eventBroadcaster.yield(.init(sequence: sequence, type: type, recording: recording,
-            note: note, noteID: noteID, elapsedSeconds: elapsedSeconds, peakPowerDBFS: peakPowerDBFS))
+            note: note, noteID: noteID, elapsedSeconds: elapsedSeconds, peakPowerDBFS: peakPowerDBFS, recordingTone: recordingTone))
     }
 
     private func beginCommand() async {

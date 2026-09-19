@@ -3,6 +3,8 @@
 import PackageDescription
 
 let productionSources = [
+    "Recording/PCMRecorderHardware.swift",
+    "Recording/RecordingSignal.swift",
     "DeviceSync/ConnectivityEnvelope.swift",
     "DeviceSync/ConnectivityInbox.swift",
     "DeviceSync/PeerTransport.swift",
@@ -19,6 +21,8 @@ let productionSources = [
     "Preferences/OnboardingStore.swift",
     "Permissions/PermissionAdapter.swift",
     "Playback/PlaybackAdapter.swift",
+    "Playback/AudioWaveform.swift",
+    "Playback/AVAudioWaveformAdapter.swift",
     "WebhookConfiguration/WebhookPatch.swift",
     "Delivery/Delivery.swift",
     "Delivery/DeliveryReducer.swift",
@@ -59,6 +63,7 @@ let productionSources = [
     "WebhookConfiguration/WebhookRequestBuilder.swift",
 ]
 let unitTestSources = [
+    "Recording/RecordingSignal.test.swift",
     "DeviceSync/ConnectivityMergeService.test.swift",
     "DeviceSync/WatchBackgroundTaskCoordinator.test.swift",
     "Playback/PlaybackAdapter.test.swift",
@@ -81,6 +86,8 @@ let unitTestSources = [
     "WebhookConfiguration/WebhookRequestBuilder.test.swift",
 ]
 let integrationTestSources = [
+    "Recording/PCMRecorderHardware.integration.test.swift",
+    "Playback/AVAudioWaveformAdapter.integration.test.swift",
     "Recording/AVAudioRecorderAdapter.integration.test.swift",
     "DeviceSync/ReceivedPeerFileStore.integration.test.swift",
     "DeviceSync/ConnectivityMergeService.integration.test.swift",

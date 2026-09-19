@@ -3,6 +3,210 @@ import WhimCore
 @testable import WhimIPhone
 
 @MainActor final class IPhoneModelIntegrationTests: XCTestCase {
+    func testMeasuredToneReachesRecordingPresentationAndResetsForNextSession() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let model = IPhoneModel(client: harness.makeService(permissions: GrantedPermissions()))
+        await model.start()
+        defer { model.stop() }
+        await model.startRecording()
+        let samples = (0..<1600).map { Float(0.5 * sin(2 * .pi * 800 * Double($0) / 16000)) }
+        let signal = RecordingSignal.measure(samples, sampleRate: 16000)
+        await harness.recorder.emit(.signal(signal))
+        await harness.recorder.emit(.elapsed(1))
+        for _ in 0..<200 where model.elapsedSeconds != 1 { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(model.peakPowerDBFS, Double(signal.peakPowerDBFS), accuracy: 0.01)
+        XCTAssertEqual(model.recordingTone, Double(signal.tone), accuracy: 0.015)
+        let heldTone = model.recordingTone
+        let heldPower = model.peakPowerDBFS
+        await harness.recorder.emit(.elapsed(20))
+        for _ in 0..<200 where model.elapsedSeconds != 20 { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(model.recordingTone, heldTone, "Elapsed time must not drive tone")
+        XCTAssertEqual(model.peakPowerDBFS, heldPower, "Elapsed time must not drive volume")
+        await model.discardRecording()
+        await model.startRecording()
+        XCTAssertEqual(model.recordingTone, 0)
+        XCTAssertEqual(model.peakPowerDBFS, -160)
+        await model.discardRecording()
+    }
+
+    func testRecordingClosesHistoryAndStopStaysIdle() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let model = IPhoneModel(client: harness.makeService(permissions: GrantedPermissions()))
+        await model.start()
+        defer { model.stop() }
+        model.openHistory()
+        XCTAssertTrue(model.isHistoryPresented)
+        await model.startRecording()
+        XCTAssertFalse(model.isHistoryPresented)
+        XCTAssertFalse(model.canBrowse)
+        model.openHistory()
+        XCTAssertFalse(model.isHistoryPresented)
+        await model.stopRecording()
+        XCTAssertTrue(model.canBrowse)
+        XCTAssertFalse(model.isHistoryPresented)
+    }
+
+    func testWaveformDoesNotSurviveAudioRemoval() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let client = harness.makeService(permissions: GrantedPermissions())
+        _ = try await client.startRecording(source: .iphone)
+        let saved = try await client.stopRecording()
+        let id = try XCTUnwrap(saved).id
+        let first = try await client.waveform(noteID: id)
+        guard case .samples(let samples) = first else { return XCTFail("Expected audio samples") }
+        XCTAssertEqual(samples.count, 64)
+        XCTAssertTrue(samples.allSatisfy { $0.isFinite && (0...1).contains($0) })
+        try harness.files.delete(noteID: id)
+        let removed = try await client.waveform(noteID: id)
+        XCTAssertEqual(removed, .unavailable)
+    }
+
+    func testClosingHistoryStopsInlinePlayback() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let client = harness.makeService(playback: FacadePlayback(), permissions: GrantedPermissions())
+        let model = IPhoneModel(client: client)
+        await model.start()
+        defer { model.stop() }
+        await model.startRecording()
+        await model.stopRecording()
+        let id = try XCTUnwrap(model.notes.first).id
+        model.openHistory()
+        await model.playInline(id)
+        XCTAssertEqual(model.playback?.noteID, id.rawValue.uuidString.lowercased())
+        await model.closeHistory()
+        XCTAssertNil(model.playback)
+        let hardwareState = await client.playbackSnapshot()
+        XCTAssertNil(hardwareState)
+    }
+
+    func testExternalRecordingClosesHistory() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let client = harness.makeService(permissions: GrantedPermissions())
+        let model = IPhoneModel(client: client)
+        await model.start()
+        defer { model.stop() }
+        model.openHistory()
+        _ = try await client.startRecording(source: .iphone)
+        for _ in 0..<100 where model.recording == nil { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertNotNil(model.recording)
+        XCTAssertFalse(model.isHistoryPresented)
+        XCTAssertFalse(model.canBrowse)
+        await model.discardRecording()
+    }
+
+    func testDeletingNoteDuringDecodeCannotRestoreWaveformAndDoesNotBlockCapture() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let decoder = GatedWaveform()
+        let client = harness.makeService(permissions: GrantedPermissions(), waveform: decoder)
+        _ = try await client.startRecording(source: .iphone)
+        let saved = try await client.stopRecording()
+        let id = try XCTUnwrap(saved).id
+        let query = Task { try await client.waveform(noteID: id) }
+        await decoder.waitUntilStarted()
+        _ = try await client.startRecording(source: .iphone)
+        try await client.delete(noteID: id)
+        await decoder.release()
+        let result = try await query.value
+        XCTAssertEqual(result, .unavailable)
+        let active = try await client.activeRecording()
+        XCTAssertNotNil(active)
+        try await client.discardRecording()
+    }
+
+    func testStaleInlineSnapshotCannotReplaceNewPlayerOrReopenDismissedHistory() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let hardware = InlinePlaybackHardware()
+        let model = IPhoneModel(client: harness.makeService(playback: hardware, permissions: GrantedPermissions()))
+        await model.start()
+        defer { model.stop() }
+        await model.startRecording(); await model.stopRecording()
+        let first = try XCTUnwrap(model.notes.first).id
+        await model.startRecording(); await model.stopRecording()
+        let second = try XCTUnwrap(model.notes.first(where: { $0.id != first })).id
+        model.openHistory()
+        await model.playInline(first)
+        await hardware.arm()
+        let old = Task { await model.refreshInlinePlayback() }
+        await hardware.waitUntilHeld()
+        await model.playInline(second)
+        await hardware.release()
+        await old.value
+        XCTAssertEqual(model.playback?.noteID, second.rawValue.uuidString.lowercased())
+        await hardware.arm()
+        let dismissed = Task { await model.refreshInlinePlayback() }
+        await hardware.waitUntilHeld()
+        await model.closeHistory()
+        await hardware.release()
+        await dismissed.value
+        XCTAssertNil(model.playback)
+        XCTAssertFalse(model.isHistoryPresented)
+    }
+
+    func testNavigationCannotReappearAfterRecordingStartsDuringPlayerCleanup() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let playback = NavigationPlayback()
+        let client = harness.makeService(playback: playback, permissions: GrantedPermissions())
+        let model = IPhoneModel(client: client)
+        await model.start()
+        defer { model.stop() }
+        await playback.arm()
+        let navigation = Task { await model.prepareForNavigation() }
+        await playback.waitUntilHeld()
+        _ = try await client.startRecording(source: .iphone)
+        await playback.release()
+        let mayNavigate = await navigation.value
+        XCTAssertFalse(mayNavigate)
+        XCTAssertNotNil(model.recording)
+        await model.discardRecording()
+    }
+
+    func testFinishedExternalRecordingStillCancelsPendingNavigation() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let playback = NavigationPlayback()
+        let client = harness.makeService(playback: playback, permissions: GrantedPermissions())
+        let model = IPhoneModel(client: client)
+        await model.start()
+        defer { model.stop() }
+        await playback.arm()
+        let navigation = Task { await model.prepareForNavigation() }
+        await playback.waitUntilHeld()
+        _ = try await client.startRecording(source: .iphone)
+        try await client.discardRecording()
+        await model.refresh()
+        await playback.release()
+        let mayNavigate = await navigation.value
+        XCTAssertFalse(mayNavigate, "Finishing capture must not revive navigation canceled at its start")
+    }
+
+    func testInactiveInlinePlayerDefersSnapshotsUntilForeground() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let hardware = InlinePlaybackHardware()
+        let model = IPhoneModel(client: harness.makeService(playback: hardware, permissions: GrantedPermissions()))
+        await model.start()
+        defer { model.stop() }
+        await model.startRecording(); await model.stopRecording()
+        let id = try XCTUnwrap(model.notes.first).id
+        model.openHistory()
+        await model.playInline(id)
+        await model.setSceneActive(false)
+        await hardware.stop()
+        await model.refreshInlinePlayback()
+        XCTAssertTrue(model.playback?.isPlaying == true, "An inactive presentation does not poll hardware")
+        await model.setSceneActive(true)
+        XCTAssertNil(model.playback, "Foreground reconciles playback completion")
+        await model.closeHistory()
+    }
+
     func testLaunchCaptureAndDiscardReflectCanonicalState() async throws {
         let harness = try WhimFacadeHarness()
         defer { harness.remove() }
