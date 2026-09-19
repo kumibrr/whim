@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import https from "node:https";
+import os from "node:os";
 
 const host = "127.0.0.1";
 const port = Number(process.env.WHIM_WEBHOOK_PORT ?? "0");
@@ -39,6 +40,14 @@ function formatDuration(durationMS) {
 function formatDate(value) {
   const date = new Date(value);
   return Number.isNaN(date.valueOf()) ? String(value ?? "Unknown time") : date.toLocaleString();
+}
+
+function localIPAddress() {
+  for (const addresses of Object.values(os.networkInterfaces())) {
+    const address = addresses?.find((candidate) => candidate.family === "IPv4" && !candidate.internal);
+    if (address) return address.address;
+  }
+  return "127.0.0.1";
 }
 
 function renderInbox(records) {
@@ -92,7 +101,7 @@ function renderInbox(records) {
     @media (max-width: 560px) { main { padding: 32px 0; } article { padding: 20px; } dl { grid-template-columns: 1fr; } dl div:nth-last-child(-n + 2) { grid-column: auto; } }
   </style>
 </head>
-<body><main><header><h1>Whim inbox</h1><p>Received audio notes appear here automatically.</p></header><section class="list">${items}</section></main>
+<body><main><header><h1>Whim inbox</h1><p>Received audio notes appear here automatically.</p><p>IP address: ${escapeHTML(localIPAddress())}</p></header><section class="list">${items}</section></main>
 <script>
   const refresh = () => {
     const isPlaying = [...document.querySelectorAll("audio")]
