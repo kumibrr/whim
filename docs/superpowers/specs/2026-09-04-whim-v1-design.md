@@ -8,7 +8,7 @@
 
 Whim is a public power-user voice-note application for iPhone and Apple Watch. It minimizes the delay between intent and capture, keeps recordings recoverable offline, and delivers them directly to one user-configured webhook. Whim has no account, cloud storage, application backend, diagnostics, analytics, or telemetry in v1.
 
-The iPhone interface uses React Native with Expo. Native Swift owns recording and every behavior that must work from Apple Watch, App Intents, complications, Live Activities, or background execution without a running JavaScript runtime.
+The iPhone interface uses SwiftUI (updated by the approved 2026-09-19 migration design). Native Swift owns recording and every behavior that must work from Apple Watch, App Intents, complications, Live Activities, or background execution without a running JavaScript runtime.
 
 ## Goals
 
@@ -27,7 +27,7 @@ The iPhone interface uses React Native with Expo. Native Swift owns recording an
 - All iPhone, Watch, complication, Live Activity, and Shortcut surfaces are required before v1 is complete, although implementation proceeds incrementally.
 - Whim v1 is free and Apple-only.
 - Android, web, macOS, and an optimized iPad interface are excluded.
-- Stock Expo Go is unsupported because Whim requires custom native targets and code.
+- Both applications build natively in Xcode.
 
 ## Explicit non-goals
 
@@ -41,12 +41,12 @@ The iPhone interface uses React Native with Expo. Native Swift owns recording an
 
 ## Architecture
 
-Whim uses an Expo development-build project with its native `ios/` project committed to Git. React Native owns the iPhone presentation layer. A shared Swift package named `WhimCore` owns canonical state and native behavior.
+Whim uses a native Xcode project committed under `ios/`. SwiftUI owns the iPhone presentation layer. A shared Swift package named `WhimCore` owns canonical state and native behavior.
 
 ```text
-Expo / React Native timeline and settings
+SwiftUI iPhone timeline and settings
                     │
-             Whim Expo adapter
+             Native iPhone presentation model
                     │
 App Intents ──── WhimCore ──── iPhone extensions
                     ⇅
@@ -57,7 +57,7 @@ App Intents ──── WhimCore ──── iPhone extensions
 
 `WhimCore` is used by the iPhone application, Watch application, App Intents, Live Activity, and WidgetKit extensions. Platform adapters provide microphone capture, filesystem access, Keychain access, notifications, HTTP transport, and Watch Connectivity.
 
-The React Native layer invokes a small native interface and consumes projections and events. It never owns canonical Note, Delivery, or recording state. App Intents and extensions call `WhimCore` directly and never depend on starting JavaScript.
+The SwiftUI presentation model invokes the typed WhimClient interface and consumes projections and events. It never owns canonical Note, Delivery, or recording state. App Intents and extensions call `WhimCore` directly and never depend on starting JavaScript.
 
 The initial native interface provides operations equivalent to:
 
@@ -341,7 +341,7 @@ Tests exercise these public seams:
 1. **WhimCore interface:** recording transitions, Note queries, Send, Retry, Delete, configuration, and test delivery.
 2. **Platform adapter interfaces:** microphone, clock, filesystem, Keychain, notification, HTTP, and Watch Connectivity behavior supplied to WhimCore.
 3. **Cross-device protocol:** versioned Watch/iPhone messages and their idempotent merge results.
-4. **Expo adapter interface:** TypeScript commands, projections, and native events.
+4. **Native iPhone presentation interface:** typed commands, observable projections, and native events.
 5. **Webhook boundary:** the complete HTTP request observed by a real loopback receiver and the resulting Delivery state observed through WhimCore.
 6. **User interface:** accessibility-visible iPhone and Watch behavior.
 7. **Installed application:** complete journeys through compiled development builds.
@@ -350,7 +350,7 @@ New test seams require an explicit design decision. Tests may use internal helpe
 
 ### Unit suite
 
-The unit suite is deterministic, has no network or simulator dependency, and is suitable for continuous watch mode. Swift tests exercise domain rules through focused module interfaces. Jest with `jest-expo` covers TypeScript formatting, projection, and presentation rules. React Native Testing Library covers isolated accessible UI behavior where no navigation or native interaction is required.
+The unit suite is deterministic, has no network or simulator dependency, and is suitable for continuous watch mode. Swift tests exercise domain rules through focused module interfaces. The root Swift package covers iPhone formatting and presentation rules. Accessibility-visible UI behavior is exercised through the installed native app.
 
 Unit cases include:
 
@@ -378,10 +378,10 @@ Integration coverage includes:
 - Concurrent Watch/iPhone messages delivered in every meaningful order
 - Configuration synchronization and last-known Watch configuration
 - Deletion tombstones and retention across simulated restarts
-- Expo adapter commands, projections, event ordering, and schema compatibility
-- Expo Router screen flows rendered with the native seam replaced by its contract fake
+- Native iPhone presentation commands, projections, event ordering, and lifecycle
+- Presentation models composed with real WhimService and isolated persistence
 
-The suite verifies results through WhimCore, the Expo adapter, or the loopback receiver. It does not query internal tables merely to prove behavior.
+The suite verifies results through WhimCore, the native presentation interface, or the loopback receiver. It does not query internal tables merely to prove behavior.
 
 ### End-to-end suite
 
@@ -409,11 +409,11 @@ Required Watch E2E journeys include:
 
 The E2E runner starts and resets its own webhook fixture, installs clean builds, uses isolated data per test, and captures screenshots and logs only on failure. Each test is independently rerunnable.
 
-Expo documents Jest and React Native Testing Library for application tests and Maestro for compiled iOS E2E workflows. Apple provides watchOS unit and UI testing targets through XCTest. The chosen stack follows those supported paths. [Expo unit testing](https://docs.expo.dev/develop/unit-testing/), [Expo E2E with Maestro](https://docs.expo.dev/eas/workflows/examples/e2e-tests/), [Apple watchOS testing](https://developer.apple.com/documentation/watchos-apps/setting-up-tests-for-your-watchos-app)
+Swift XCTest covers native domain and presentation tests; Maestro covers compiled iPhone journeys and XCTest covers Watch journeys.
 
 ### Continuous integration
 
-Every pull request runs unit, integration, iPhone E2E, and Watch E2E suites. A failure in any required suite blocks merge. Linux jobs may run TypeScript and platform-independent checks, while macOS jobs build native targets and run Swift, simulator, and E2E suites. EAS may run the Maestro iPhone job; Watch UI tests run on macOS CI.
+Every pull request runs unit, integration, iPhone E2E, and Watch E2E suites. A failure in any required suite blocks merge. Linux jobs run Node tooling and webhook-fixture checks, while macOS jobs build native targets and run Swift, simulator, and E2E suites. iPhone Maestro and Watch UI tests run on macOS CI.
 
 ### Physical-device acceptance suite
 

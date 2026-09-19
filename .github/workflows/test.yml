@@ -5,7 +5,7 @@ on:
   push:
 
 jobs:
-  typescript:
+  tooling:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -14,9 +14,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm run test:unit:ts
-      - run: npm run test:integration:ts
+      - run: npm run test:unit:tooling
 
   apple:
     runs-on: macos-latest
@@ -32,8 +30,6 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Install native dependencies
-        run: pod install --project-directory=ios
       - name: Install Maestro
         run: |
           maestro_zip="$RUNNER_TEMP/maestro-$MAESTRO_VERSION.zip"

@@ -8,17 +8,11 @@ whim_derived_data="${WHIM_DERIVED_DATA_PATH:-$whim_root/ios/build/DerivedData}"
 case "${1:-}" in
   unit)
     swift test --package-path "$whim_root/packages/WhimCore" --filter WhimCoreUnitTests
+    swift test --package-path "$whim_root" --filter WhimIPhoneUnitTests
     ;;
   integration)
     swift test --package-path "$whim_root/packages/WhimCore" --filter WhimCoreIntegrationTests
-    : "${WHIM_IPHONE_SIMULATOR_UDID:?Run: eval \"$(./scripts/boot-apple-simulators.sh)\"}"
-    xcodebuild test -quiet \
-      -workspace "$whim_root/ios/Whim.xcworkspace" \
-      -scheme Whim \
-      -derivedDataPath "$whim_derived_data" \
-      -only-testing:WhimBridgeIntegrationTests \
-      -destination "id=${WHIM_IPHONE_SIMULATOR_UDID}" \
-      CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
+    swift test --package-path "$whim_root" --filter WhimIPhoneIntegrationTests
     : "${WHIM_WATCH_SIMULATOR_UDID:?Run: eval \"$(./scripts/boot-apple-simulators.sh)\"}"
     xcodebuild test -quiet \
       -workspace "$whim_root/ios/Whim.xcworkspace" \

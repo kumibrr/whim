@@ -4,9 +4,7 @@ import { pathToFileURL } from 'node:url';
 
 const ignoredDirectories = new Set([
   '.build',
-  '.expo',
   '.git',
-  'Pods',
   'build',
   'dist',
   'node_modules',
@@ -82,12 +80,6 @@ function intendedXcodeTarget(file) {
   if ((file.startsWith('e2e/watch/') || file.startsWith('e2e/cross-device/')) && file.endsWith('.e2e.test.swift')) {
     return 'WhimWatchUITests';
   }
-  if (
-    file.startsWith('packages/expo-whim/ios/') &&
-    file.endsWith('.integration.test.swift')
-  ) {
-    return 'WhimBridgeIntegrationTests';
-  }
   return null;
 }
 
@@ -143,10 +135,6 @@ export async function checkRepository(root = process.cwd()) {
 
   for (const file of normalizedFiles) {
     if (!/(?:\.integration)?\.test\.(?:[cm]?[jt]sx?|swift)$/.test(file)) continue;
-
-    if (file.startsWith('src/iphone/app/')) {
-      errors.push(`${file}: Expo Router route directories must remain test-free`);
-    }
 
     const implementation = implementationFor(file);
     if (!normalizedFiles.has(implementation)) {
@@ -208,6 +196,19 @@ export async function checkRepository(root = process.cwd()) {
     }
   }
 
+  let presentationLists;
+  try {
+    const manifest = await readFile(path.join(root, 'Package.swift'), 'utf8');
+    presentationLists = Object.fromEntries(['modelSources', 'unitSources', 'integrationSources'].map(name => [name, sourceList(manifest, name) ?? []]));
+    for (const file of normalizedFiles) {
+      if (!file.startsWith('src/iphone/') || !file.endsWith('.swift')) continue;
+      const relative = file.slice('src/iphone/'.length);
+      const expected = file.endsWith('.integration.test.swift') || file.endsWith('.test-support.swift') ? 'integrationSources' : file.endsWith('.test.swift') ? 'unitSources' : null;
+      if (expected && !presentationLists[expected].includes(relative)) errors.push(`${file}: missing from ${expected}`);
+      if (expected && presentationLists.modelSources.includes(relative)) errors.push(`${file}: must not appear in modelSources`);
+    }
+  } catch (error) { if (error.code !== 'ENOENT') throw error; }
+
   let xcodeProject;
   try {
     xcodeProject = await readFile(path.join(root, 'ios/whim.xcodeproj/project.pbxproj'), 'utf8');
@@ -218,7 +219,9 @@ export async function checkRepository(root = process.cwd()) {
   if (xcodeProject) {
     const memberships = xcodeSourceMemberships(xcodeProject);
     for (const file of normalizedFiles) {
-      const expectedTarget = intendedXcodeTarget(file);
+      const relative = file.slice('src/iphone/'.length);
+      const inPackage = presentationLists && Object.values(presentationLists).some(list => list.includes(relative));
+      const expectedTarget = file.startsWith('src/iphone/') && file.endsWith('.swift') && !inPackage ? 'whim' : intendedXcodeTarget(file);
       if (!expectedTarget) continue;
       const actualTargets = memberships.get(file) ?? [];
       if (!actualTargets.includes(expectedTarget)) {

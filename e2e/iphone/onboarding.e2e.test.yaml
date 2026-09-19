@@ -3,17 +3,13 @@ appId: app.whim.ios
 - evalScript: '${http.post(WHIM_WEBHOOK_RESET_URL, {body: ""})}'
 - launchApp:
     clearState: true
-    arguments:
-      -EXDevMenuDisableAutoLaunch: true
     permissions:
       all: deny
-- openLink:
-    link: ${EXPO_DEV_CLIENT_URL}
 - runFlow:
     when:
       visible: Open
     commands:
-      - tapOn: Open
+      - tapOn: Cancel
 - extendedWaitUntil:
     visible: Get started
     timeout: 60000

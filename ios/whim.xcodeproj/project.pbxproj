@@ -7,36 +7,40 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0249F4FF23C64A0882023702 /* expo.icon in Resources */ = {isa = PBXBuildFile; fileRef = CFCECEE5603641C88B455648 /* expo.icon */; };
-		0B7C423D583DBB1A0DB602BF /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A2DD7B774782FA3869CAA1 /* ExpoModulesProvider.swift */; };
+		0249F4FF23C64A0882023702 /* Whim.icon in Resources */ = {isa = PBXBuildFile; fileRef = CFCECEE5603641C88B455648 /* Whim.icon */; };
 		102435994F6E0B45FA0BACB4 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D0C8B5D89E20835047FFBE77 /* Foundation.framework */; };
+		1094FF3AD4099062FB4B70A6 /* IPhoneRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E110DAC34F09627A6A0BD4 /* IPhoneRootView.swift */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		1E88AE0AB710B7916355ACA0 /* WhimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7D6ECB88619BE4362A0E9A7D /* WhimCore */; };
+		2574706D69D106062F52CD74 /* WebhookConfigurationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76C7E3809D0F888040984D00 /* WebhookConfigurationView.swift */; };
 		28DBD2344AC58DE887A9941A /* WatchNoteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67F30D8BD15651BCD2AB7CC7 /* WatchNoteDetailView.swift */; };
 		392128B60BAC7DB5DF56E75C /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 7F011AC3443B58190BBE7148 /* PrivacyInfo.xcprivacy */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		42409ABDD4FB88EB12E160FC /* WatchNotes.e2e.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65987B0982A27F5BB971B6BB /* WatchNotes.e2e.test.swift */; };
 		4B3409C958A5FAE62C7D2E80 /* WhimWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 3F96D612B2FFFCD253898A9D /* WhimWatch.app */; };
 		50BA8F2E594DF44030E28FD8 /* WatchRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22BC5C9E162FE46AE50584F2 /* WatchRootView.swift */; };
+		5D43B17D9A1B7B49AC1350F2 /* WhimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 4195615737AD9D45A625BE4C /* WhimCore */; };
 		5FE79E1CF503206737E61500 /* WebhookStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEC421C66148951ED2AA1210 /* WebhookStatusView.swift */; };
+		68346E1FA2FB63C777980259 /* ConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C688B501F4CB5B9425A8C1 /* ConfirmationView.swift */; };
+		7287EE1D8717934E2C1644B3 /* WhimIPhone in Frameworks */ = {isa = PBXBuildFile; productRef = 6FBE938CC68C61BFEEB4612F /* WhimIPhone */; };
+		7B0E9E1DC4E5E3B5AC5ABFFF /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1CDDBAF66816C5DAAFC820 /* PreferencesView.swift */; };
 		7C2CB3AD0710341B81E8888A /* WatchSynchronization.e2e.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1FA5749C9ACB17F7018CAEA /* WatchSynchronization.e2e.test.swift */; };
+		882932C7A98CC539F2A0745B /* WhimIPhoneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8FF888F0042FF03E1356ED8 /* WhimIPhoneApp.swift */; };
 		8DCAF171AA58F288A1813403 /* WhimWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A9899D0BE753D357DD7EEF2 /* WhimWatchApp.swift */; };
 		9144FBCC0CC98B91C62F1196 /* WhimWatch.e2e.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2EB6FC55DB3C583A6CC5AC /* WhimWatch.e2e.test.swift */; };
 		95C4B3C9893B94F3E89A60E3 /* WatchModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B9DDE60C0FA48914C6712F4 /* WatchModel.swift */; };
-		A569D5A62BC09317E4750D46 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6649A6F4F02580A424941D9C /* SceneDelegate.swift */; };
+		9F308020B90AD2C552B23AC7 /* RecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEDEF9C85F66FB3DF846C8E3 /* RecorderView.swift */; };
 		A623DF4AFCE23A167DC3CBE9 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 7F011AC3443B58190BBE7148 /* PrivacyInfo.xcprivacy */; };
-		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
+		A7AF39ADD9FD06BDF0574FFE /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC8E0ADE9AD583BCE52324DF /* TimelineView.swift */; };
 		BD2C55741E6E7233E8612FF8 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D0C8B5D89E20835047FFBE77 /* Foundation.framework */; };
 		C2A3858E4B423C484DA4BA43 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D0C8B5D89E20835047FFBE77 /* Foundation.framework */; };
 		C8D14ACEB565F5B1E9C281AD /* WatchRecording.e2e.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82B454A5FE3E0B5DEFB31BC7 /* WatchRecording.e2e.test.swift */; };
-		CA4FAF6C31FDCB7A8D83614C /* libPods-WhimBridgeIntegrationTests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 56A517DF5BB9492BEEB86EED /* libPods-WhimBridgeIntegrationTests.a */; };
-		CCEE28E8135832416030B0C0 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C9C6DBB925ECBE61481D582 /* ExpoModulesProvider.swift */; };
-		D0A4A8E7736DAEF6C0E29DA3 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B29F0A6D2FC9CA179CAE36B5 /* Foundation.framework */; };
-		D268E7146A61DB755515B0C8 /* ExpoWhimModule.integration.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13324E1C69229C598ECC9642 /* ExpoWhimModule.integration.test.swift */; };
+		D3C39AABC75E309CC9E38582 /* NoteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF8D05853159E384FB0DF192 /* NoteDetailView.swift */; };
+		E3E3240E8E7EBAAA02409C6A /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD88C1F69C08C67C67A5066D /* OnboardingView.swift */; };
 		E58D1D7CB60AB524C4CB6184 /* WatchRecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A0B619E3D9E321A72011895 /* WatchRecorderView.swift */; };
-		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
-		F521800B0163AA349499E8AF /* libPods-whim.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 575D02B68F7C084848C62DDD /* libPods-whim.a */; };
 		F60B53E4DEDAF6369B054FA0 /* WatchModel.integration.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09DBA4E14CC7C8D84866439 /* WatchModel.integration.test.swift */; };
+		FA6DC53F3B9EC6C2996C8B08 /* IPhoneTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5F7837CBE3B90D65AFA04F5 /* IPhoneTheme.swift */; };
+		FB441EFCAA789DF2C09691F6 /* NoteRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 937FF0FBB2E36229CE84E33C /* NoteRowView.swift */; };
 		FD9CB3518EB97FFF3449648B /* WatchRecentNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD2493D9C58BA3F4C76E95EA /* WatchRecentNotesView.swift */; };
 /* End PBXBuildFile section */
 
@@ -47,13 +51,6 @@
 			proxyType = 1;
 			remoteGlobalIDString = 6FE2CA72B8CB7CEE6161295C;
 			remoteInfo = WhimWatch;
-		};
-		694A7267D01A4B10FBD8592B /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 13B07F861A680F5B00A75B9A;
-			remoteInfo = whim;
 		};
 		7EEF325B37FCB27BE2559E12 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -86,44 +83,42 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		13324E1C69229C598ECC9642 /* ExpoWhimModule.integration.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoWhimModule.integration.test.swift; path = "../packages/expo-whim/ios/app-composition/ExpoWhimModule.integration.test.swift"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* whim.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = whim.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = whim/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = whim/Info.plist; sourceTree = "<group>"; };
-		17983C4B5F79BD5119C77D5F /* Pods-whim.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-whim.release.xcconfig"; path = "Target Support Files/Pods-whim/Pods-whim.release.xcconfig"; sourceTree = "<group>"; };
 		1B9DDE60C0FA48914C6712F4 /* WatchModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchModel.swift; path = ../src/watch/recording/WatchModel.swift; sourceTree = "<group>"; };
 		22BC5C9E162FE46AE50584F2 /* WatchRootView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchRootView.swift; path = "../src/watch/app-composition/WatchRootView.swift"; sourceTree = "<group>"; };
 		2D27DACA317E711E2F456A55 /* WhimWatchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WhimWatchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		2E5568B2F576975095BF9E4D /* Pods-WhimBridgeIntegrationTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-WhimBridgeIntegrationTests.release.xcconfig"; path = "Target Support Files/Pods-WhimBridgeIntegrationTests/Pods-WhimBridgeIntegrationTests.release.xcconfig"; sourceTree = "<group>"; };
 		3438C25B567CFE258BDD9A0A /* WhimWatchUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WhimWatchUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3A0B619E3D9E321A72011895 /* WatchRecorderView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchRecorderView.swift; path = ../src/watch/recording/WatchRecorderView.swift; sourceTree = "<group>"; };
-		3C9C6DBB925ECBE61481D582 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-whim/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		3F96D612B2FFFCD253898A9D /* WhimWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WhimWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		56A517DF5BB9492BEEB86EED /* libPods-WhimBridgeIntegrationTests.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-WhimBridgeIntegrationTests.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		575D02B68F7C084848C62DDD /* libPods-whim.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-whim.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		45C688B501F4CB5B9425A8C1 /* ConfirmationView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ConfirmationView.swift; path = "../src/iphone/destructive-actions/ConfirmationView.swift"; sourceTree = "<group>"; };
 		5A9899D0BE753D357DD7EEF2 /* WhimWatchApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WhimWatchApp.swift; path = "../src/watch/app-composition/WhimWatchApp.swift"; sourceTree = "<group>"; };
 		65987B0982A27F5BB971B6BB /* WatchNotes.e2e.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchNotes.e2e.test.swift; path = ../e2e/watch/WatchNotes.e2e.test.swift; sourceTree = "<group>"; };
-		6649A6F4F02580A424941D9C /* SceneDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SceneDelegate.swift; path = whim/SceneDelegate.swift; sourceTree = "<group>"; };
 		67F30D8BD15651BCD2AB7CC7 /* WatchNoteDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchNoteDetailView.swift; path = "../src/watch/recent-notes/WatchNoteDetailView.swift"; sourceTree = "<group>"; };
+		6A1CDDBAF66816C5DAAFC820 /* PreferencesView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PreferencesView.swift; path = ../src/iphone/preferences/PreferencesView.swift; sourceTree = "<group>"; };
 		6C2EB6FC55DB3C583A6CC5AC /* WhimWatch.e2e.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WhimWatch.e2e.test.swift; path = ../e2e/watch/WhimWatch.e2e.test.swift; sourceTree = "<group>"; };
+		76C7E3809D0F888040984D00 /* WebhookConfigurationView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WebhookConfigurationView.swift; path = "../src/iphone/webhook-configuration/WebhookConfigurationView.swift"; sourceTree = "<group>"; };
 		7F011AC3443B58190BBE7148 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = whim/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		7FE31B5830E6C7CDB4E63F89 /* Pods-whim.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-whim.debug.xcconfig"; path = "Target Support Files/Pods-whim/Pods-whim.debug.xcconfig"; sourceTree = "<group>"; };
 		82B454A5FE3E0B5DEFB31BC7 /* WatchRecording.e2e.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchRecording.e2e.test.swift; path = ../e2e/watch/WatchRecording.e2e.test.swift; sourceTree = "<group>"; };
+		937FF0FBB2E36229CE84E33C /* NoteRowView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = NoteRowView.swift; path = ../src/iphone/timeline/NoteRowView.swift; sourceTree = "<group>"; };
 		A1FA5749C9ACB17F7018CAEA /* WatchSynchronization.e2e.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchSynchronization.e2e.test.swift; path = "../e2e/cross-device/WatchSynchronization.e2e.test.swift"; sourceTree = "<group>"; };
+		A8FF888F0042FF03E1356ED8 /* WhimIPhoneApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WhimIPhoneApp.swift; path = "../src/iphone/app-composition/WhimIPhoneApp.swift"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = whim/SplashScreen.storyboard; sourceTree = "<group>"; };
+		AC8E0ADE9AD583BCE52324DF /* TimelineView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TimelineView.swift; path = ../src/iphone/timeline/TimelineView.swift; sourceTree = "<group>"; };
 		AD2493D9C58BA3F4C76E95EA /* WatchRecentNotesView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchRecentNotesView.swift; path = "../src/watch/recent-notes/WatchRecentNotesView.swift"; sourceTree = "<group>"; };
+		B1E110DAC34F09627A6A0BD4 /* IPhoneRootView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = IPhoneRootView.swift; path = "../src/iphone/app-composition/IPhoneRootView.swift"; sourceTree = "<group>"; };
 		B29F0A6D2FC9CA179CAE36B5 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
-		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		BBEACEBE95C11AB14E43109D /* Pods-WhimBridgeIntegrationTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-WhimBridgeIntegrationTests.debug.xcconfig"; path = "Target Support Files/Pods-WhimBridgeIntegrationTests/Pods-WhimBridgeIntegrationTests.debug.xcconfig"; sourceTree = "<group>"; };
-		C1A2DD7B774782FA3869CAA1 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-WhimBridgeIntegrationTests/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		CFCECEE5603641C88B455648 /* expo.icon */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 506747931833; includeInIndex = 0; lastKnownFileType = unknown; name = expo.icon; path = whim/expo.icon; sourceTree = "<group>"; };
+		C5F7837CBE3B90D65AFA04F5 /* IPhoneTheme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = IPhoneTheme.swift; path = ../src/iphone/appearance/IPhoneTheme.swift; sourceTree = "<group>"; };
+		CD88C1F69C08C67C67A5066D /* OnboardingView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = OnboardingView.swift; path = ../src/iphone/onboarding/OnboardingView.swift; sourceTree = "<group>"; };
+		CFCECEE5603641C88B455648 /* Whim.icon */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 506747931833; includeInIndex = 0; lastKnownFileType = unknown; name = Whim.icon; path = whim/Whim.icon; sourceTree = "<group>"; };
 		D09DBA4E14CC7C8D84866439 /* WatchModel.integration.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchModel.integration.test.swift; path = ../src/watch/recording/WatchModel.integration.test.swift; sourceTree = "<group>"; };
 		D0C8B5D89E20835047FFBE77 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS11.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		D6B90A12D30B7BE2D6B31945 /* WhimBridgeIntegrationTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WhimBridgeIntegrationTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DEDEF9C85F66FB3DF846C8E3 /* RecorderView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RecorderView.swift; path = ../src/iphone/recording/RecorderView.swift; sourceTree = "<group>"; };
+		DF8D05853159E384FB0DF192 /* NoteDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = NoteDetailView.swift; path = "../src/iphone/note-detail/NoteDetailView.swift"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		EEC421C66148951ED2AA1210 /* WebhookStatusView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WebhookStatusView.swift; path = "../src/watch/webhook-status/WebhookStatusView.swift"; sourceTree = "<group>"; };
-		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = whim/AppDelegate.swift; sourceTree = "<group>"; };
-		F11748442D0722820044C1D9 /* whim-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "whim-Bridging-Header.h"; path = "whim/whim-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -139,16 +134,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F521800B0163AA349499E8AF /* libPods-whim.a in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		40E8A441C714C858FFCC2640 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				D0A4A8E7736DAEF6C0E29DA3 /* Foundation.framework in Frameworks */,
-				CA4FAF6C31FDCB7A8D83614C /* libPods-WhimBridgeIntegrationTests.a in Frameworks */,
+				5D43B17D9A1B7B49AC1350F2 /* WhimCore in Frameworks */,
+				7287EE1D8717934E2C1644B3 /* WhimIPhone in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -172,39 +159,43 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		12A47AB850124D7A027B0801 /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				69B0E58AAA56CEEDA2238C84 /* whim */,
-				77FBDC0DB0723EA1734DC879 /* WhimBridgeIntegrationTests */,
-			);
-			name = ExpoModulesProviders;
-			sourceTree = "<group>";
-		};
 		13B07FAE1A68108700A75B9A /* whim */ = {
 			isa = PBXGroup;
 			children = (
-				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
-				F11748442D0722820044C1D9 /* whim-Bridging-Header.h */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				CFCECEE5603641C88B455648 /* expo.icon */,
+				CFCECEE5603641C88B455648 /* Whim.icon */,
 				7F011AC3443B58190BBE7148 /* PrivacyInfo.xcprivacy */,
-				6649A6F4F02580A424941D9C /* SceneDelegate.swift */,
 			);
 			name = whim;
+			sourceTree = "<group>";
+		};
+		1BF21CDB5BDE7D2B1A215FE2 /* WhimIPhone */ = {
+			isa = PBXGroup;
+			children = (
+				6A1CDDBAF66816C5DAAFC820 /* PreferencesView.swift */,
+				B1E110DAC34F09627A6A0BD4 /* IPhoneRootView.swift */,
+				A8FF888F0042FF03E1356ED8 /* WhimIPhoneApp.swift */,
+				C5F7837CBE3B90D65AFA04F5 /* IPhoneTheme.swift */,
+				DEDEF9C85F66FB3DF846C8E3 /* RecorderView.swift */,
+				DF8D05853159E384FB0DF192 /* NoteDetailView.swift */,
+				45C688B501F4CB5B9425A8C1 /* ConfirmationView.swift */,
+				76C7E3809D0F888040984D00 /* WebhookConfigurationView.swift */,
+				AC8E0ADE9AD583BCE52324DF /* TimelineView.swift */,
+				937FF0FBB2E36229CE84E33C /* NoteRowView.swift */,
+				CD88C1F69C08C67C67A5066D /* OnboardingView.swift */,
+			);
+			name = WhimIPhone;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				575D02B68F7C084848C62DDD /* libPods-whim.a */,
 				BCD1B505977C0F6E4192DC7F /* watchOS */,
 				44D1209E4307E06FE009220A /* iOS */,
-				56A517DF5BB9492BEEB86EED /* libPods-WhimBridgeIntegrationTests.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -215,22 +206,6 @@
 				B29F0A6D2FC9CA179CAE36B5 /* Foundation.framework */,
 			);
 			name = iOS;
-			sourceTree = "<group>";
-		};
-		5C95CCE02ACBB5FE867595EF /* WhimBridgeIntegrationTests */ = {
-			isa = PBXGroup;
-			children = (
-				13324E1C69229C598ECC9642 /* ExpoWhimModule.integration.test.swift */,
-			);
-			name = WhimBridgeIntegrationTests;
-			sourceTree = "<group>";
-		};
-		69B0E58AAA56CEEDA2238C84 /* whim */ = {
-			isa = PBXGroup;
-			children = (
-				3C9C6DBB925ECBE61481D582 /* ExpoModulesProvider.swift */,
-			);
-			name = whim;
 			sourceTree = "<group>";
 		};
 		725157F415B915541DEC839F /* WhimWatch */ = {
@@ -252,14 +227,6 @@
 			name = WhimWatch;
 			sourceTree = "<group>";
 		};
-		77FBDC0DB0723EA1734DC879 /* WhimBridgeIntegrationTests */ = {
-			isa = PBXGroup;
-			children = (
-				C1A2DD7B774782FA3869CAA1 /* ExpoModulesProvider.swift */,
-			);
-			name = WhimBridgeIntegrationTests;
-			sourceTree = "<group>";
-		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
 			isa = PBXGroup;
 			children = (
@@ -274,10 +241,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				ACD64C03703CF38A76B64963 /* Pods */,
-				12A47AB850124D7A027B0801 /* ExpoModulesProviders */,
 				725157F415B915541DEC839F /* WhimWatch */,
-				5C95CCE02ACBB5FE867595EF /* WhimBridgeIntegrationTests */,
+				1BF21CDB5BDE7D2B1A215FE2 /* WhimIPhone */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -296,21 +261,9 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		ACD64C03703CF38A76B64963 /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				7FE31B5830E6C7CDB4E63F89 /* Pods-whim.debug.xcconfig */,
-				17983C4B5F79BD5119C77D5F /* Pods-whim.release.xcconfig */,
-				2E5568B2F576975095BF9E4D /* Pods-WhimBridgeIntegrationTests.release.xcconfig */,
-				BBEACEBE95C11AB14E43109D /* Pods-WhimBridgeIntegrationTests.debug.xcconfig */,
-			);
-			path = Pods;
-			sourceTree = "<group>";
-		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
 			isa = PBXGroup;
 			children = (
-				BB2F792C24A3F905000567C9 /* Expo.plist */,
 			);
 			name = Supporting;
 			path = whim/Supporting;
@@ -331,15 +284,9 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "whim" */;
 			buildPhases = (
-				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				141E7792FD41669A5202B110 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
-				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
-				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				7B3BED3E26A3421DAE2C9C04 /* [Expo Dev Launcher] Strip Local Network Keys for Release */,
-				84267BC558AF25912D52C9F8 /* [CP] Embed Pods Frameworks */,
 				EEF41F339E101AE078C38A71 /* Embed Watch Content */,
 			);
 			buildRules = (
@@ -348,6 +295,10 @@
 				7570BFDEB492AD4AA3B5509A /* PBXTargetDependency */,
 			);
 			name = whim;
+			packageProductDependencies = (
+				4195615737AD9D45A625BE4C /* WhimCore */,
+				6FBE938CC68C61BFEEB4612F /* WhimIPhone */,
+			);
 			productName = whim;
 			productReference = 13B07F961A680F5B00A75B9A /* whim.app */;
 			productType = "com.apple.product-type.application";
@@ -408,27 +359,6 @@
 			productReference = 2D27DACA317E711E2F456A55 /* WhimWatchTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		D9299C1382377C65EECD3A6B /* WhimBridgeIntegrationTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = E9C1E59E70520031061A833C /* Build configuration list for PBXNativeTarget "WhimBridgeIntegrationTests" */;
-			buildPhases = (
-				18BA7F59D99525E62F4665A7 /* [CP] Check Pods Manifest.lock */,
-				ABF85FCE50ED235A6BB3D635 /* [Expo] Configure project */,
-				ED94F05348EC97675675935D /* Sources */,
-				40E8A441C714C858FFCC2640 /* Frameworks */,
-				2A9F41543631F3CD569D7EAD /* Resources */,
-				FB2C750868796C44254CA521 /* [CP] Copy Pods Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				3AB14E477D1370AF7F70DEF6 /* PBXTargetDependency */,
-			);
-			name = WhimBridgeIntegrationTests;
-			productName = WhimBridgeIntegrationTests;
-			productReference = D6B90A12D30B7BE2D6B31945 /* WhimBridgeIntegrationTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -452,7 +382,8 @@
 			);
 			mainGroup = 83CBB9F61A601CBA00E9B192;
 			packageReferences = (
-				B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "../packages/WhimCore" */,
+				B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "WhimCore" */,
+				65E159F373B2B699E6843778 /* XCLocalSwiftPackageReference ".." */,
 			);
 			productRefGroup = 83CBBA001A601CBA00E9B192 /* Products */;
 			projectDirPath = "";
@@ -462,7 +393,6 @@
 				6FE2CA72B8CB7CEE6161295C /* WhimWatch */,
 				D84195C644A8A45F2CFB2287 /* WhimWatchTests */,
 				736D846F3B19EAACFF168742 /* WhimWatchUITests */,
-				D9299C1382377C65EECD3A6B /* WhimBridgeIntegrationTests */,
 			);
 		};
 /* End PBXProject section */
@@ -472,22 +402,14 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				0249F4FF23C64A0882023702 /* expo.icon in Resources */,
+				0249F4FF23C64A0882023702 /* Whim.icon in Resources */,
 				A623DF4AFCE23A167DC3CBE9 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		23BBF53B65B418299863BD80 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		2A9F41543631F3CD569D7EAD /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -511,241 +433,22 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
-/* Begin PBXShellScriptBuildPhase section */
-		00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/.xcode.env",
-				"$(SRCROOT)/.xcode.env.local",
-			);
-			name = "Bundle React Native code and images";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "if [[ -f \"$PODS_ROOT/../.xcode.env\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env\"\nfi\nif [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.local\"\nfi\n\n# The project root by default is one level up from the ios directory\nexport PROJECT_ROOT=\"$PROJECT_DIR\"/..\n\nif [[ \"$CONFIGURATION\" = *Debug* ]]; then\n  export SKIP_BUNDLING=1\nfi\nif [[ -z \"$ENTRY_FILE\" ]]; then\n  # Set the entry JS file using the bundler's entry resolution.\n  export ENTRY_FILE=\"$(\"$NODE_BINARY\" -e \"require('expo/scripts/resolveAppEntry')\" \"$PROJECT_ROOT\" ios absolute | tail -n 1)\"\nfi\n\nif [[ -z \"$CLI_PATH\" ]]; then\n  # Use Expo CLI\n  export CLI_PATH=\"$(\"$NODE_BINARY\" --print \"require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })\")\"\nfi\nif [[ -z \"$BUNDLE_COMMAND\" ]]; then\n  # Default Expo CLI command for bundling\n  export BUNDLE_COMMAND=\"export:embed\"\nfi\n\n# Source .xcode.env.updates if it exists to allow\n# SKIP_BUNDLING to be unset if needed\nif [[ -f \"$PODS_ROOT/../.xcode.env.updates\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.updates\"\nfi\n# Source local changes to allow overrides\n# if needed\nif [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.local\"\nfi\n\n`\"$NODE_BINARY\" --print \"require('path').dirname(require.resolve('react-native/package.json')) + '/scripts/react-native-xcode.sh'\"`\n\n";
-		};
-		08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
-				"${PODS_ROOT}/Manifest.lock",
-			);
-			name = "[CP] Check Pods Manifest.lock";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-whim-checkManifestLockResult.txt",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
-		141E7792FD41669A5202B110 /* [Expo] Configure project */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/.xcode.env",
-				"$(SRCROOT)/.xcode.env.local",
-				"$(SRCROOT)/whim/whim.entitlements",
-				"$(SRCROOT)/Pods/Target Support Files/Pods-whim/expo-configure-project.sh",
-			);
-			name = "[Expo] Configure project";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(SRCROOT)/Pods/Target Support Files/Pods-whim/ExpoModulesProvider.swift",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-whim/expo-configure-project.sh\"\n";
-		};
-		18BA7F59D99525E62F4665A7 /* [CP] Check Pods Manifest.lock */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
-				"${PODS_ROOT}/Manifest.lock",
-			);
-			name = "[CP] Check Pods Manifest.lock";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-WhimBridgeIntegrationTests-checkManifestLockResult.txt",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
-		7B3BED3E26A3421DAE2C9C04 /* [Expo Dev Launcher] Strip Local Network Keys for Release */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "[Expo Dev Launcher] Strip Local Network Keys for Release";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# Strip dev-launcher-specific local network permission keys from non-Debug builds\n# This only removes _expo._tcp Bonjour services and the dev-launcher usage description.\n# Other Bonjour services and custom descriptions are preserved for production use.\n\nif [ \"$CONFIGURATION\" != \"Debug\" ]; then\n  PLIST_PATH=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n  if [ -f \"$PLIST_PATH\" ]; then\n    # Check if NSBonjourServices exists\n    if /usr/libexec/PlistBuddy -c \"Print :NSBonjourServices\" \"$PLIST_PATH\" >/dev/null 2>&1; then\n      # Get the count of services\n      COUNT=$(/usr/libexec/PlistBuddy -c \"Print :NSBonjourServices\" \"$PLIST_PATH\" 2>/dev/null | grep \"^    \" | wc -l | tr -d ' ')\n\n      # Remove _expo._tcp\n      for ((i=COUNT-1; i>=0; i--)); do\n        SERVICE=$(/usr/libexec/PlistBuddy -c \"Print :NSBonjourServices:$i\" \"$PLIST_PATH\" 2>/dev/null || echo \"\")\n        if echo \"$SERVICE\" | grep -q \"_expo._tcp\"; then\n          /usr/libexec/PlistBuddy -c \"Delete :NSBonjourServices:$i\" \"$PLIST_PATH\" 2>/dev/null || true\n        fi\n      done\n\n      # If the array is now empty, remove it entirely\n      REMAINING=$(/usr/libexec/PlistBuddy -c \"Print :NSBonjourServices\" \"$PLIST_PATH\" 2>/dev/null | grep \"^    \" | wc -l | tr -d ' ')\n      if [ \"$REMAINING\" -eq \"0\" ]; then\n        /usr/libexec/PlistBuddy -c \"Delete :NSBonjourServices\" \"$PLIST_PATH\" 2>/dev/null || true\n      fi\n    fi\n\n    # Only delete the description if it matches the dev-launcher default text\n    DESC=$(/usr/libexec/PlistBuddy -c \"Print :NSLocalNetworkUsageDescription\" \"$PLIST_PATH\" 2>/dev/null || echo \"\")\n    if echo \"$DESC\" | grep -q \"Expo Dev Launcher\"; then\n      /usr/libexec/PlistBuddy -c \"Delete :NSLocalNetworkUsageDescription\" \"$PLIST_PATH\" 2>/dev/null || true\n    fi\n  fi\nfi\n";
-		};
-		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-whim/Pods-whim-resources.sh",
-				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/EXConstants.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/ExpoConstants_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoDevice/ExpoDevice_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoFileSystem/ExpoFileSystem_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoSystemUI/ExpoSystemUI_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoWhim/ExpoWhimContracts.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/React-Core/React-Core_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/React-cxxreact/React-cxxreact_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/React-timing/React-timing_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/WhimCore/WhimCoreConfigurationTest.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/expo-dev-launcher/EXDevLauncher.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/expo-dev-menu/EXDevMenu.bundle",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXConstants.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoConstants_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoDevice_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoFileSystem_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoSystemUI_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoWhimContracts.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-Core_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-cxxreact_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-timing_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/WhimCoreConfigurationTest.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXDevLauncher.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXDevMenu.bundle",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-whim/Pods-whim-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		84267BC558AF25912D52C9F8 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-whim/Pods-whim-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoFileSystem/ExpoFileSystem.framework/ExpoFileSystem",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoFont/ExpoFont.framework/ExpoFont",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoImage/ExpoImage.framework/ExpoImage",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoImage/SDWebImage.framework/SDWebImage",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoImage/SDWebImageAVIFCoder.framework/SDWebImageAVIFCoder",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoImage/SDWebImageSVGCoder.framework/SDWebImageSVGCoder",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoImage/SDWebImageWebPCoder.framework/SDWebImageWebPCoder",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoImage/libavif.framework/libavif",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoModulesCore/ExpoModulesCore.framework/ExpoModulesCore",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoModulesJSI/ExpoModulesJSI.framework/ExpoModulesJSI",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoModulesWorklets/ExpoModulesWorklets.framework/ExpoModulesWorklets",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermesvm.framework/hermesvm",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ExpoFileSystem.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ExpoFont.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ExpoImage.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/SDWebImage.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/SDWebImageAVIFCoder.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/SDWebImageSVGCoder.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/SDWebImageWebPCoder.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/libavif.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ExpoModulesCore.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ExpoModulesJSI.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ExpoModulesWorklets.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermesvm.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-whim/Pods-whim-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		ABF85FCE50ED235A6BB3D635 /* [Expo] Configure project */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/.xcode.env",
-				"$(SRCROOT)/.xcode.env.local",
-				"$(SRCROOT)/Pods/Target Support Files/Pods-WhimBridgeIntegrationTests/expo-configure-project.sh",
-			);
-			name = "[Expo] Configure project";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(SRCROOT)/Pods/Target Support Files/Pods-WhimBridgeIntegrationTests/ExpoModulesProvider.swift",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-WhimBridgeIntegrationTests/expo-configure-project.sh\"\n";
-		};
-		FB2C750868796C44254CA521 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-WhimBridgeIntegrationTests/Pods-WhimBridgeIntegrationTests-resources.sh",
-				"${PODS_CONFIGURATION_BUILD_DIR}/WhimCore/WhimCoreConfigurationTest.bundle",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/WhimCoreConfigurationTest.bundle",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-WhimBridgeIntegrationTests/Pods-WhimBridgeIntegrationTests-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-/* End PBXShellScriptBuildPhase section */
-
 /* Begin PBXSourcesBuildPhase section */
 		13B07F871A680F5B00A75B9A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				CCEE28E8135832416030B0C0 /* ExpoModulesProvider.swift in Sources */,
-				A569D5A62BC09317E4750D46 /* SceneDelegate.swift in Sources */,
+				7B0E9E1DC4E5E3B5AC5ABFFF /* PreferencesView.swift in Sources */,
+				1094FF3AD4099062FB4B70A6 /* IPhoneRootView.swift in Sources */,
+				882932C7A98CC539F2A0745B /* WhimIPhoneApp.swift in Sources */,
+				FA6DC53F3B9EC6C2996C8B08 /* IPhoneTheme.swift in Sources */,
+				9F308020B90AD2C552B23AC7 /* RecorderView.swift in Sources */,
+				D3C39AABC75E309CC9E38582 /* NoteDetailView.swift in Sources */,
+				68346E1FA2FB63C777980259 /* ConfirmationView.swift in Sources */,
+				2574706D69D106062F52CD74 /* WebhookConfigurationView.swift in Sources */,
+				A7AF39ADD9FD06BDF0574FFE /* TimelineView.swift in Sources */,
+				FB441EFCAA789DF2C09691F6 /* NoteRowView.swift in Sources */,
+				E3E3240E8E7EBAAA02409C6A /* OnboardingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -782,15 +485,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		ED94F05348EC97675675935D /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				D268E7146A61DB755515B0C8 /* ExpoWhimModule.integration.test.swift in Sources */,
-				0B7C423D583DBB1A0DB602BF /* ExpoModulesProvider.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -799,12 +493,6 @@
 			name = WhimWatch;
 			target = 6FE2CA72B8CB7CEE6161295C /* WhimWatch */;
 			targetProxy = 7EEF325B37FCB27BE2559E12 /* PBXContainerItemProxy */;
-		};
-		3AB14E477D1370AF7F70DEF6 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = whim;
-			target = 13B07F861A680F5B00A75B9A /* whim */;
-			targetProxy = 694A7267D01A4B10FBD8592B /* PBXContainerItemProxy */;
 		};
 		5FA97F3FF924DF021418D641 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -823,11 +511,11 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 7FE31B5830E6C7CDB4E63F89 /* Pods-whim.debug.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = expo;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Whim;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = whim/whim.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = N896F4D4TA;
 				ENABLE_BITCODE = NO;
@@ -835,6 +523,7 @@
 					"$(inherited)",
 					"FB_SONARKIT_ENABLED=1",
 				);
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = whim/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -843,17 +532,10 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.4;
 				MARKETING_VERSION = 1.0;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-ObjC",
-					"-lc++",
-				);
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = app.whim.ios;
-				PRODUCT_NAME = whim;
-				SWIFT_OBJC_BRIDGING_HEADER = "whim/whim-Bridging-Header.h";
+				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
@@ -861,13 +543,14 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 17983C4B5F79BD5119C77D5F /* Pods-whim.release.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = expo;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Whim;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = whim/whim.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = N896F4D4TA;
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = whim/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -876,16 +559,9 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.4;
 				MARKETING_VERSION = 1.0;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-ObjC",
-					"-lc++",
-				);
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = app.whim.ios;
-				PRODUCT_NAME = whim;
-				SWIFT_OBJC_BRIDGING_HEADER = "whim/whim-Bridging-Header.h";
-				SWIFT_VERSION = 5.0;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
@@ -910,25 +586,6 @@
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 4;
 				WATCHOS_DEPLOYMENT_TARGET = 11.0;
-			};
-			name = Debug;
-		};
-		82176CF2D5FC4DE10207196E /* Debug */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = BBEACEBE95C11AB14E43109D /* Pods-WhimBridgeIntegrationTests.debug.xcconfig */;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_STYLE = Automatic;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
-				PRODUCT_BUNDLE_IDENTIFIER = "app.whim.ios.bridge-integration-tests";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SWIFT_VERSION = 6.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/whim.app/whim";
-				TEST_TARGET_NAME = whim;
 			};
 			name = Debug;
 		};
@@ -987,16 +644,7 @@
 				LIBRARY_SEARCH_PATHS = "$(SDKROOT)/usr/lib/swift\"$(inherited)\"";
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				OTHER_CFLAGS = (
-					"$(inherited)",
-					"-DRCT_REMOVE_LEGACY_ARCH=1",
-				);
-				OTHER_CPLUSPLUSFLAGS = (
-					"$(inherited)",
-					"-DRCT_REMOVE_LEGACY_ARCH=1",
-				);
 				PODFILE_DIR = "$(SRCROOT)";
-				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
@@ -1051,16 +699,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(SDKROOT)/usr/lib/swift\"$(inherited)\"";
 				MTL_ENABLE_DEBUG_INFO = NO;
-				OTHER_CFLAGS = (
-					"$(inherited)",
-					"-DRCT_REMOVE_LEGACY_ARCH=1",
-				);
-				OTHER_CPLUSPLUSFLAGS = (
-					"$(inherited)",
-					"-DRCT_REMOVE_LEGACY_ARCH=1",
-				);
 				PODFILE_DIR = "$(SRCROOT)";
-				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				USE_HERMES = true;
@@ -1161,26 +800,6 @@
 			};
 			name = Release;
 		};
-		E3AF2C73CF36BC885CE19964 /* Release */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 2E5568B2F576975095BF9E4D /* Pods-WhimBridgeIntegrationTests.release.xcconfig */;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_STYLE = Automatic;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
-				PRODUCT_BUNDLE_IDENTIFIER = "app.whim.ios.bridge-integration-tests";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SWIFT_VERSION = 6.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/whim.app/whim";
-				TEST_TARGET_NAME = whim;
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1229,28 +848,33 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		E9C1E59E70520031061A833C /* Build configuration list for PBXNativeTarget "WhimBridgeIntegrationTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				E3AF2C73CF36BC885CE19964 /* Release */,
-				82176CF2D5FC4DE10207196E /* Debug */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "../packages/WhimCore" */ = {
+		65E159F373B2B699E6843778 /* XCLocalSwiftPackageReference ".." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ..;
+		};
+		B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "WhimCore" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../packages/WhimCore;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		4195615737AD9D45A625BE4C /* WhimCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "WhimCore" */;
+			productName = WhimCore;
+		};
+		6FBE938CC68C61BFEEB4612F /* WhimIPhone */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 65E159F373B2B699E6843778 /* XCLocalSwiftPackageReference ".." */;
+			productName = WhimIPhone;
+		};
 		7D6ECB88619BE4362A0E9A7D /* WhimCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "../packages/WhimCore" */;
+			package = B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "WhimCore" */;
 			productName = WhimCore;
 		};
 /* End XCSwiftPackageProductDependency section */

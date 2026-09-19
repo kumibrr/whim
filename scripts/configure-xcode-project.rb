@@ -5,15 +5,10 @@ require 'xcodeproj'
 project_path = File.expand_path('../ios/whim.xcodeproj', __dir__)
 project = Xcodeproj::Project.open(project_path)
 app_target = project.targets.find { |target| target.name == 'whim' }
-abort 'Expected Expo target named whim' unless app_target
+abort 'Expected iPhone target named whim' unless app_target
 
 app_group = project.main_group.groups.find { |group| group.display_name == 'whim' }
-abort 'Expected Expo source group named whim' unless app_group
-scene_delegate = app_group.files.find { |file| file.path == 'whim/SceneDelegate.swift' }
-scene_delegate ||= app_group.new_file('whim/SceneDelegate.swift')
-unless app_target.source_build_phase.files_references.include?(scene_delegate)
-  app_target.add_file_references([scene_delegate])
-end
+abort 'Expected iPhone source group named whim' unless app_group
 
 def virtual_group(project, name)
   group = project.main_group.groups.find { |candidate| candidate.display_name == name }
@@ -131,27 +126,70 @@ watch_ui_tests.build_configurations.each do |configuration|
   settings['TEST_TARGET_NAME'] = 'WhimWatch'
 end
 
-bridge_group = virtual_group(project, 'WhimBridgeIntegrationTests')
-bridge_source = file_reference(
-  bridge_group,
-  '../packages/expo-whim/ios/app-composition/ExpoWhimModule.integration.test.swift'
-)
-bridge_tests = project.targets.find { |target| target.name == 'WhimBridgeIntegrationTests' }
-bridge_tests ||= project.new_target(:unit_test_bundle, 'WhimBridgeIntegrationTests', :ios, '18.0')
-bridge_tests.add_file_references([bridge_source]) unless bridge_tests.source_build_phase.files_references.include?(bridge_source)
-bridge_tests.add_dependency(app_target) unless bridge_tests.dependencies.any? { |dependency| dependency.target == app_target }
-configure_target(bridge_tests, 'app.whim.ios.bridge-integration-tests', '18.0')
-bridge_tests.build_configurations.each do |configuration|
+# Both Apple apps consume the same native package; the iPhone also links presentation models.
+app_target.shell_script_build_phases.each(&:remove_from_project)
+
+iphone_group = virtual_group(project, 'WhimIPhone')
+model_manifest = File.read(File.join(repository_root, 'Package.swift'))
+model_sources = model_manifest.match(/let modelSources = \[(.*?)\]/m)[1].scan(/"([^"]+)"/).flatten
+iphone_views = Dir.glob(File.join(repository_root, 'src/iphone/**/*.swift')).reject do |path|
+  relative = path.delete_prefix(File.join(repository_root, 'src/iphone/'))
+  test_source.call(path) || model_sources.include?(relative)
+end
+view_references = iphone_views.map { |path| file_reference(iphone_group, '../' + path.delete_prefix(repository_root + '/')) }
+app_target.source_build_phase.files.each { |entry| entry.remove_from_project unless view_references.include?(entry.file_ref) }
+view_references.each { |reference| app_target.add_file_references([reference]) unless app_target.source_build_phase.files_references.include?(reference) }
+
+presentation_reference = project.root_object.package_references.find { |reference| reference.respond_to?(:relative_path) && reference.relative_path == '..' }
+unless presentation_reference
+  presentation_reference = project.new(Xcodeproj::Project::Object::XCLocalSwiftPackageReference)
+  presentation_reference.relative_path = '..'
+  project.root_object.package_references << presentation_reference
+end
+[[package_reference, 'WhimCore'], [presentation_reference, 'WhimIPhone']].each do |reference, name|
+  next if app_target.package_product_dependencies.any? { |dependency| dependency.product_name == name }
+  product = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+  product.package = reference; product.product_name = name
+  app_target.package_product_dependencies << product
+  build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
+  build_file.product_ref = product
+  app_target.frameworks_build_phase.files << build_file
+end
+configure_target(app_target, 'app.whim.ios', '18.0')
+app_target.build_configurations.each do |configuration|
+  configuration.base_configuration_reference = nil
   settings = configuration.build_settings
-  settings['BUNDLE_LOADER'] = '$(TEST_HOST)'
-  settings['TEST_HOST'] = '$(BUILT_PRODUCTS_DIR)/whim.app/whim'
-  settings['TEST_TARGET_NAME'] = 'whim'
+  %w[SWIFT_OBJC_BRIDGING_HEADER OTHER_LDFLAGS OTHER_CFLAGS OTHER_SWIFT_FLAGS HEADER_SEARCH_PATHS LIBRARY_SEARCH_PATHS FRAMEWORK_SEARCH_PATHS].each { |key| settings.delete(key) }
+  settings['SWIFT_VERSION'] = '6.0'
+  settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'Whim'
+  settings['INFOPLIST_FILE'] = 'whim/Info.plist'
+  settings['GENERATE_INFOPLIST_FILE'] = 'NO'
+  settings['CODE_SIGN_ENTITLEMENTS'] = 'whim/whim.entitlements'
+  settings['TARGETED_DEVICE_FAMILY'] = '1'
 end
 
+project.build_configurations.each do |configuration|
+  %w[OTHER_CFLAGS OTHER_CPLUSPLUSFLAGS].each { |key| configuration.build_settings.delete(key) }
+end
+# Remove unreachable project objects after source membership changes.
+reachable = {}
+visit = lambda do |value|
+  case value
+  when Hash then value.each_value { |child| visit.call(child) }
+  when Array then value.each { |child| visit.call(child) }
+  when String
+    object = project.objects_by_uuid[value]
+    if object && !reachable[value]
+      reachable[value] = true
+      visit.call(object.to_hash)
+    end
+  end
+end
+visit.call(project.root_object.uuid)
+project.objects.reject { |object| reachable[object.uuid] }.each(&:remove_from_project)
 project.save
 
 def save_scheme(project_path, name, launch_target, test_targets)
-  return if Dir.glob(File.join(project_path, 'xcshareddata/xcschemes/*.xcscheme')).any? { |path| File.basename(path).casecmp?("#{name}.xcscheme") }
   scheme = Xcodeproj::XCScheme.new
   scheme.add_build_target(launch_target)
   scheme.set_launch_target(launch_target)
@@ -170,6 +208,6 @@ def save_scheme(project_path, name, launch_target, test_targets)
   end
 end
 
-save_scheme(project_path, 'Whim', app_target, [bridge_tests])
+save_scheme(project_path, 'Whim', app_target, [])
 save_scheme(project_path, 'WhimWatch', watch_target, [watch_tests, watch_ui_tests])
 save_scheme(project_path, 'WhimWatchUITests', watch_target, [watch_ui_tests])

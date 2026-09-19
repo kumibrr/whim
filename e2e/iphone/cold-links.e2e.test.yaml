@@ -1,0 +1,28 @@
+appId: app.whim.ios
+---
+- runFlow: flows/clean-launch.yaml
+- stopApp
+- openLink: whim://settings
+- runFlow:
+    when:
+      visible: Open
+    commands:
+      - tapOn: Open
+- extendedWaitUntil:
+    visible:
+      id: preferences
+    timeout: 10000
+- assertVisible: Webhook
+- stopApp
+- openLink: whim://note/09000000-0000-0000-0000-000000000099
+- runFlow:
+    when:
+      visible: Open
+    commands:
+      - tapOn: Open
+- extendedWaitUntil:
+    visible: This Note is unavailable.
+    timeout: 10000
+- tapOn: Return to timeline
+- assertVisible:
+    id: whim-home

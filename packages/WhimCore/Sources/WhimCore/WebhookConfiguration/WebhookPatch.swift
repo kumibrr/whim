@@ -21,6 +21,9 @@ public struct HeaderPatch: Codable, Sendable {
     public let action: SecretPatch.Action
     public let value: String?
     public let isSecret: Bool
+    public init(name: String, action: SecretPatch.Action, value: String? = nil, isSecret: Bool) {
+        self.name = name; self.action = action; self.value = value; self.isSecret = isSecret
+    }
 }
 
 public struct WebhookPatch: Codable, Sendable {
