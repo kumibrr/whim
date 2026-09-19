@@ -6,6 +6,31 @@ Task 7 tests; they are not evidence of a release pass.
 Record the build SHA, iPhone model/iOS version, tester, date, result, and a
 non-sensitive evidence path for each execution.
 
+## Recording session configuration on iOS 27
+
+Preconditions: a physical iPhone with microphone permission granted. Skip webhook
+setup or use a controlled test destination and non-sensitive spoken fixture audio.
+
+1. Cold-launch Whim and tap Record. Verify capture starts without a generic error
+   or `SessionCore` invalid-parameter (`4294967246` / `-50`) error.
+2. Speak for at least two seconds, tap Stop, and play the resulting Note. Verify
+   the audio is audible and the duration is correct.
+3. Start another Recording Session after playback and repeat Stop and playback.
+
+Regression: `.record` with `.spokenAudio` failed during category configuration on
+a physical iPhone 15 running iOS 27, while the simulator accepted the combination.
+The 64 kbps AAC setting also failed encoder preparation at 16 kHz mono. Recording
+now uses 32 kbps. The automated audio-adapter tests check the actual iOS session's
+recording mode and encode/decode fixture audio using the production settings;
+microphone capture and playable audio still require this physical acceptance case.
+
+Targeted verification, 2026-09-19: the user confirmed Record, Stop, and audible
+playback on an iPhone 15 running iOS 27, using the working-tree build based on
+`eeed662` with both
+the default session mode and 32 kbps AAC fixes. Evidence: this debugging session's
+device installation and the user's "It works" response. The separate
+repeat-after-playback step and the rest of this document remain pending.
+
 ## Playback releases the audio session
 
 Preconditions: a playable local Note and another audio app that supports resuming

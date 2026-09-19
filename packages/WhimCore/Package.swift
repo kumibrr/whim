@@ -81,6 +81,7 @@ let unitTestSources = [
     "WebhookConfiguration/WebhookRequestBuilder.test.swift",
 ]
 let integrationTestSources = [
+    "Recording/AVAudioRecorderAdapter.integration.test.swift",
     "DeviceSync/ReceivedPeerFileStore.integration.test.swift",
     "DeviceSync/ConnectivityMergeService.integration.test.swift",
     "Delivery/DebugFixtureTransport.integration.test.swift",

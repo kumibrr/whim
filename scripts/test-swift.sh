@@ -13,6 +13,18 @@ case "${1:-}" in
   integration)
     swift test --package-path "$whim_root/packages/WhimCore" --filter WhimCoreIntegrationTests
     swift test --package-path "$whim_root" --filter WhimIPhoneIntegrationTests
+    : "${WHIM_IPHONE_SIMULATOR_UDID:?Run: eval \"$(./scripts/boot-apple-simulators.sh)\"}"
+    # Package schemes expose their test action when opened from the package directory.
+    # Exercise the actual iOS audio session; macOS excludes this platform boundary.
+    (
+      cd "$whim_root/packages/WhimCore"
+      xcodebuild test -quiet \
+        -scheme WhimCore \
+        -derivedDataPath "$whim_derived_data" \
+        -only-testing:WhimCoreIntegrationTests/AVAudioRecorderSessionIntegrationTests \
+        -destination "id=${WHIM_IPHONE_SIMULATOR_UDID}" \
+        CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
+    )
     : "${WHIM_WATCH_SIMULATOR_UDID:?Run: eval \"$(./scripts/boot-apple-simulators.sh)\"}"
     xcodebuild test -quiet \
       -workspace "$whim_root/ios/Whim.xcworkspace" \
