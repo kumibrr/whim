@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { once } from "node:events";
 import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -69,6 +70,37 @@ async function submit(baseURL, { noteID, attemptID, title, audio }) {
   });
 }
 
+async function startServerThroughNPM(t) {
+  const repositoryRoot = fileURLToPath(new URL("../../../../../../", import.meta.url));
+  const child = spawn("npm", ["run", "--silent", "test-server"], {
+    cwd: repositoryRoot,
+    detached: true,
+    env: { ...process.env, WHIM_WEBHOOK_PORT: "0" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let errors = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => { errors += chunk; });
+  const lines = createInterface({ input: child.stdout });
+  const startup = await Promise.race([
+    (async () => {
+      for await (const line of lines) {
+        if (line.startsWith("{")) return JSON.parse(line);
+      }
+      throw new Error(`Server produced no startup line: ${errors}`);
+    })(),
+    once(child, "exit").then(([code]) => { throw new Error(`npm exited ${code}: ${errors}`); }),
+  ]);
+  t.after(async () => {
+    if (child.exitCode === null) {
+      process.kill(-child.pid, "SIGTERM");
+      await once(child, "exit");
+    }
+    assert.equal(errors, "");
+  });
+  return { baseURL: `http://${startup.host}:${startup.port}` };
+}
+
 test("renders an empty browser inbox without changing state JSON", async (t) => {
   const server = await startServer(t);
   const page = await fetch(server.baseURL);
@@ -107,4 +139,11 @@ test("reset clears the inbox and invalidates audio URLs", async (t) => {
   assert.equal((await fetch(`${server.baseURL}/reset`, { method: "POST" })).status, 204);
   assert.equal((await fetch(`${server.baseURL}/audio/${FIRST_ATTEMPT}`)).status, 404);
   assert.match(await (await fetch(server.baseURL)).text(), /No audio notes received yet/);
+});
+
+test("root test-server command starts the browser inbox", async (t) => {
+  const server = await startServerThroughNPM(t);
+  const response = await fetch(server.baseURL);
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /Whim inbox/);
 });
