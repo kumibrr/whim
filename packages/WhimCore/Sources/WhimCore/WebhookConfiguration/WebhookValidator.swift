@@ -86,9 +86,12 @@ public enum WebhookValidator {
         var errors: [WebhookValidationError] = []
         let components = URLComponents(string: input.endpoint)
         let url = components?.url
-        if components?.scheme?.lowercased() != "https" || components?.host?.isEmpty != false ||
+        let usesHTTPS = components?.scheme?.lowercased() == "https"
+        let usesPrivateNetworkHTTP = components?.scheme?.lowercased() == "http" &&
+            isPrivateNetworkIPv4Address(components?.host)
+        if (!usesHTTPS && !usesPrivateNetworkHTTP) || components?.host?.isEmpty != false ||
             components?.user != nil || components?.password != nil || url == nil {
-            errors.append(.init(field: .endpoint, message: "Enter an HTTPS webhook URL without embedded credentials."))
+            errors.append(.init(field: .endpoint, message: "Enter an HTTPS webhook URL, or an HTTP URL on a private network, without embedded credentials."))
         }
         if input.customHeaders.count > 10 {
             errors.append(.init(field: .customHeaders, message: "Use no more than ten custom headers."))
@@ -116,5 +119,14 @@ public enum WebhookValidator {
     private static func normalized(_ value: String?) -> String? {
         guard let value, !value.isEmpty else { return nil }
         return value
+    }
+
+    private static func isPrivateNetworkIPv4Address(_ host: String?) -> Bool {
+        guard let host else { return false }
+        let octets = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard octets.count == 4, let first = UInt8(octets[0]), let second = UInt8(octets[1]) else { return false }
+        return first == 10 || first == 127 ||
+            (first == 172 && (16...31).contains(second)) ||
+            (first == 192 && second == 168)
     }
 }
