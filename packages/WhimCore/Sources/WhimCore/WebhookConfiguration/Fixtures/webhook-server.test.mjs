@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 
 const NOTE_ID = "11111111-1111-4111-8111-111111111111";
 const FIRST_ATTEMPT = "22222222-2222-4222-8222-222222222222";
@@ -39,11 +40,10 @@ async function startServer(t) {
 }
 
 async function submit(baseURL, { noteID, attemptID, title, audio }) {
-  const metadata = Buffer.from(JSON.stringify({
+  const metadataJSON = {
     schema_version: 1,
     event: "note.created",
     note_id: noteID,
-    attempt_id: attemptID,
     created_at: "2026-09-19T10:00:00Z",
     duration_ms: 1200,
     source: "iphone",
@@ -53,19 +53,22 @@ async function submit(baseURL, { noteID, attemptID, title, audio }) {
     workflow_id: "default",
     audio: { sha256: sha256(audio), size_bytes: audio.length },
     app: { version: "1.0.0", build: "1" },
-  }));
+  };
+  if (attemptID !== undefined) metadataJSON.attempt_id = attemptID;
+  const metadata = Buffer.from(JSON.stringify(metadataJSON));
   const form = new FormData();
   form.append("metadata", new Blob([metadata], { type: "application/json" }));
   form.append("audio", new Blob([audio], { type: "audio/mp4" }), "note.m4a");
+  const headers = {
+    "X-Whim-Note-ID": noteID,
+    "X-Whim-Timestamp": "1000",
+    "X-Whim-Metadata-SHA256": sha256(metadata),
+    "X-Whim-Audio-SHA256": sha256(audio),
+  };
+  if (attemptID !== undefined) headers["X-Whim-Attempt-ID"] = attemptID;
   return fetch(`${baseURL}/receive`, {
     method: "POST",
-    headers: {
-      "X-Whim-Note-ID": noteID,
-      "X-Whim-Attempt-ID": attemptID,
-      "X-Whim-Timestamp": "1000",
-      "X-Whim-Metadata-SHA256": sha256(metadata),
-      "X-Whim-Audio-SHA256": sha256(audio),
-    },
+    headers,
     body: form,
   });
 }
@@ -121,7 +124,10 @@ test("lists escaped attempts newest-first and serves exact audio", async (t) => 
   assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.ok(html.indexOf(SECOND_ATTEMPT) < html.indexOf(FIRST_ATTEMPT));
-  assert.match(html, /Duplicate/);
+  const cards = html.match(/<article>[\s\S]*?<\/article>/g);
+  assert.equal(cards.length, 2);
+  assert.match(cards[0], /Duplicate/);
+  assert.doesNotMatch(cards[1], /Duplicate/);
 
   const audio = await fetch(`${server.baseURL}/audio/${SECOND_ATTEMPT}`);
   assert.equal(audio.status, 200);
@@ -129,6 +135,47 @@ test("lists escaped attempts newest-first and serves exact audio", async (t) => 
   assert.deepEqual(Buffer.from(await audio.arrayBuffer()), Buffer.from("second-audio"));
   assert.equal((await fetch(`${server.baseURL}/audio/missing`)).status, 404);
   assert.equal((await fetch(`${server.baseURL}/audio/%E0%A4%A`)).status, 404);
+});
+
+test("refresh waits for active playback and resumes when audio is idle", async (t) => {
+  const server = await startServer(t);
+  const html = await (await fetch(server.baseURL)).text();
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  const audio = { paused: false, ended: false };
+  const timers = [];
+  let reloads = 0;
+  vm.runInNewContext(script, {
+    document: { querySelectorAll: () => [audio] },
+    location: { reload: () => { reloads += 1; } },
+    setTimeout: (callback) => { timers.push(callback); },
+  });
+
+  assert.equal(timers.length, 1);
+  timers.shift()();
+  assert.equal(reloads, 0);
+  assert.equal(timers.length, 1);
+  audio.paused = true;
+  timers.shift()();
+  assert.equal(reloads, 1);
+});
+
+test("rejects missing identities instead of retaining addressable audio", async (t) => {
+  const server = await startServer(t);
+  const response = await submit(server.baseURL, { noteID: NOTE_ID, attemptID: undefined,
+    title: "Missing attempt", audio: Buffer.from("private-audio") });
+  assert.equal(response.status, 400);
+  assert.deepEqual(await (await fetch(`${server.baseURL}/state`)).json(), { received: [] });
+  assert.equal((await fetch(`${server.baseURL}/audio/%E0%A4%A`)).status, 404);
+});
+
+test("rejects non-renderable metadata without terminating the server", async (t) => {
+  const server = await startServer(t);
+  const response = await submit(server.baseURL, { noteID: NOTE_ID, attemptID: FIRST_ATTEMPT,
+    title: { toString: null }, audio: Buffer.from("audio") });
+  assert.equal(response.status, 400);
+  const page = await fetch(server.baseURL);
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /No audio notes received yet/);
 });
 
 test("reset clears the inbox and invalidates audio URLs", async (t) => {

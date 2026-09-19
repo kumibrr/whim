@@ -93,7 +93,18 @@ function renderInbox(records) {
   </style>
 </head>
 <body><main><header><h1>Whim inbox</h1><p>Received audio notes appear here automatically.</p></header><section class="list">${items}</section></main>
-<script>setTimeout(() => location.reload(), 2000);</script>
+<script>
+  const refresh = () => {
+    const isPlaying = [...document.querySelectorAll("audio")]
+      .some((audio) => !audio.paused && !audio.ended);
+    if (isPlaying) {
+      setTimeout(refresh, 2000);
+      return;
+    }
+    location.reload();
+  };
+  setTimeout(refresh, 2000);
+</script>
 </body>
 </html>`;
 }
@@ -129,12 +140,21 @@ function verify(req, body) {
   const noteID = header(req, "x-whim-note-id");
   const attemptID = header(req, "x-whim-attempt-id");
   const timestamp = header(req, "x-whim-timestamp");
+  if (typeof noteID !== "string" || noteID.length === 0
+      || typeof attemptID !== "string" || attemptID.length === 0) {
+    throw new Error("missing identity");
+  }
   const metadataDigest = sha256(metadata.bytes);
   const audioDigest = sha256(audio.bytes);
   if (metadataDigest !== header(req, "x-whim-metadata-sha256")) throw new Error("metadata digest");
   if (audioDigest !== header(req, "x-whim-audio-sha256")) throw new Error("audio digest");
   const json = JSON.parse(metadata.bytes.toString("utf8"));
   if (json.note_id !== noteID || json.attempt_id !== attemptID) throw new Error("identity");
+  if (typeof json.event !== "string" || typeof json.title !== "string"
+      || typeof json.created_at !== "string" || typeof json.source !== "string"
+      || typeof json.duration_ms !== "number" || !Number.isFinite(json.duration_ms)) {
+    throw new Error("metadata");
+  }
   if (hmacSecret) {
     const input = `v1\n${timestamp}\n${noteID}\n${attemptID}\n${metadataDigest}\n${audioDigest}`;
     const expected = `v1=${crypto.createHmac("sha256", hmacSecret).update(input).digest("hex")}`;
@@ -162,7 +182,11 @@ const handleRequest = (req, res) => {
   }
   if (req.method === "GET" && url.pathname.startsWith("/audio/")) {
     let attemptID;
-    try { attemptID = decodeURIComponent(url.pathname.slice("/audio/".length)); } catch {}
+    try { attemptID = decodeURIComponent(url.pathname.slice("/audio/".length)); }
+    catch {
+      res.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("audio not found");
+      return;
+    }
     const record = received.find((item) => item.attemptID === attemptID);
     if (!record) {
       res.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("audio not found");
