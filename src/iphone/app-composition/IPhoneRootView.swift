@@ -55,10 +55,10 @@ struct IPhoneRootView: View {
                     Task { if await model.prepareForNavigation() { path.append(.settings) } }
                 }
                     .accessibilityHidden(model.isHistoryPresented)
-                HistorySheet(model: model, openingTranslation: historyDrag) {
-                    TimelineView(model: model) { id in
-                        Task { if await model.prepareForNavigation() { path.append(.note(id)) } }
-                    }
+            }
+            HistorySheet(model: model, openingTranslation: historyDrag) {
+                TimelineView(model: model) { id in
+                    Task { if await model.prepareForNavigation() { path.append(.note(id)) } }
                 }
             }
         }.simultaneousGesture(DragGesture(minimumDistance: 18)

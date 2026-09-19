@@ -60,37 +60,38 @@ struct HistorySheet<Content: View>: View {
             let isOpen = model.isHistoryPresented
             let reveal = isOpen ? height - max(0, translation) : max(0, -openingTranslation)
             ZStack(alignment: .bottom) {
-                if isOpen || reveal > 0 {
-                    Color.black.opacity(0.5 * min(1, reveal / height)).ignoresSafeArea()
-                        .onTapGesture { close() }.accessibilityHidden(true)
-                    VStack(spacing: 0) {
-                        HStack(spacing: 0) {
-                            Color.clear.frame(width: 44)
-                            Capsule().fill(.white.opacity(0.3)).frame(width: 32, height: 4)
-                                .frame(maxWidth: .infinity).frame(height: 44).contentShape(Rectangle())
-                                .gesture(DragGesture().updating($translation) { value, state, _ in
-                                    state = max(0, value.translation.height)
-                                }.onEnded { value in
-                                    if value.translation.height > 100 || value.predictedEndTranslation.height > height * 0.3 { close() }
-                                }).accessibilityHidden(true)
-                            Button(action: close) {
-                                Image(systemName: "xmark").font(.system(size: 12, weight: .semibold))
-                                    .frame(width: 44, height: 44)
-                            }.buttonStyle(.plain).accessibilityLabel("Close history").accessibilityIdentifier("history-close")
-                        }.padding(.horizontal, 8).frame(height: 44)
-                        content
-                    }.frame(height: height)
-                        .background(Color(white: 0.035), in: UnevenRoundedRectangle(topLeadingRadius: 32, topTrailingRadius: 32))
-                        .overlay(alignment: .top) {
-                            UnevenRoundedRectangle(topLeadingRadius: 32, topTrailingRadius: 32)
-                                .stroke(.white.opacity(0.13), lineWidth: 0.5).allowsHitTesting(false)
-                        }
-                        .offset(y: max(0, height - reveal))
-                        .accessibilityElement(children: .contain).accessibilityIdentifier("history-sheet")
-                        .accessibilityAction(.escape) { close() }
-                }
+                Color.black.opacity(0.5 * min(1, reveal / height)).ignoresSafeArea()
+                    .onTapGesture { close() }.accessibilityHidden(true)
+                VStack(spacing: 0) {
+                    HStack(spacing: 0) {
+                        Color.clear.frame(width: 44)
+                        Capsule().fill(.white.opacity(0.3)).frame(width: 32, height: 4)
+                            .frame(maxWidth: .infinity).frame(height: 44).contentShape(Rectangle())
+                            .gesture(DragGesture().updating($translation) { value, state, _ in
+                                state = max(0, value.translation.height)
+                            }.onEnded { value in
+                                if value.translation.height > 100 || value.predictedEndTranslation.height > height * 0.3 { close() }
+                            }).accessibilityHidden(true)
+                        Button(action: close) {
+                            Image(systemName: "xmark").font(.system(size: 12, weight: .semibold))
+                                .frame(width: 44, height: 44)
+                        }.buttonStyle(.plain).accessibilityLabel("Close history").accessibilityIdentifier("history-close")
+                    }.padding(.horizontal, 8).frame(height: 44)
+                    content
+                }.frame(height: height)
+                    .background(Color(white: 0.035), in: UnevenRoundedRectangle(topLeadingRadius: 32, topTrailingRadius: 32))
+                    .overlay(alignment: .top) {
+                        UnevenRoundedRectangle(topLeadingRadius: 32, topTrailingRadius: 32)
+                            .stroke(.white.opacity(0.13), lineWidth: 0.5).allowsHitTesting(false)
+                    }
+                    .offset(y: max(0, height - reveal))
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier(isOpen ? "history-sheet" : "history-sheet-hidden")
+                    .accessibilityAction(.escape) { close() }
             }.animation(animation, value: model.isHistoryPresented)
                 .animation(animation, value: translation == 0)
+                .allowsHitTesting(isOpen || reveal > 0)
+                .accessibilityHidden(!isOpen)
                 .onChange(of: model.isHistoryPresented) { old, new in
                     if !old && new { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
                 }

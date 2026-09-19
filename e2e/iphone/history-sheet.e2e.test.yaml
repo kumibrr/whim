@@ -45,6 +45,21 @@ appId: app.whim.ios
     id: history-hint
 - assertVisible:
     id: history-sheet
+- tapOn: Sent filter
+- assertVisible: No Notes here yet. Capture a thought.
 - tapOn: Close history
 - assertVisible:
     id: history-hint
+- tapOn:
+    id: history-hint
+- assertVisible: No Notes here yet. Capture a thought.
+- assertNotVisible: 'Open .*Setup required.*'
+- tapOn: Close history
+- tapOn:
+    id: record-button
+- tapOn:
+    id: stop-recording
+- tapOn:
+    id: history-hint
+- assertVisible: No Notes here yet. Capture a thought.
+- assertNotVisible: 'Open .*Setup required.*'
