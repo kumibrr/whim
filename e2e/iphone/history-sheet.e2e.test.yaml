@@ -36,6 +36,22 @@ appId: app.whim.ios
 - assertVisible:
     id: history-sheet
 - swipe:
+    start: 50%, 45%
+    end: 50%, 80%
+    duration: 600
+- assertVisible:
+    id: history-sheet
+- swipe:
+    start: 50%, 45%
+    end: 50%, 80%
+    duration: 600
+- assertVisible:
+    id: history-hint
+- tapOn:
+    id: history-hint
+- assertVisible:
+    id: history-sheet
+- swipe:
     start: 50%, 18%
     end: 50%, 80%
     duration: 600

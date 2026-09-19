@@ -8,7 +8,6 @@ struct IPhoneRootView: View {
     var pendingLink: PendingIPhoneLink?
     @Environment(\.scenePhase) private var phase
     @GestureState private var historyDrag = 0.0
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var path: [IPhoneRoute] = []
     var body: some View {
         NavigationStack(path: $path) {
@@ -56,8 +55,10 @@ struct IPhoneRootView: View {
                 }
                     .accessibilityHidden(model.isHistoryPresented)
             }
-            HistorySheet(model: model, openingTranslation: historyDrag) {
-                TimelineView(model: model) { id in
+            HistorySheet(model: model, openingTranslation: historyDrag) { sheetDragTranslation in
+                TimelineView(model: model, sheetDragTranslation: sheetDragTranslation, dismiss: {
+                    Task { await model.closeHistory() }
+                }) { id in
                     Task { if await model.prepareForNavigation() { path.append(.note(id)) } }
                 }
             }
@@ -68,7 +69,7 @@ struct IPhoneRootView: View {
             }.onEnded { value in
                 guard model.canBrowse, !model.isHistoryPresented else { return }
                 if value.translation.height < -100 || value.predictedEndTranslation.height < -200 {
-                    withAnimation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.9)) { model.openHistory() }
+                    model.openHistory()
                 }
             })
         .overlay(alignment: .top) {
