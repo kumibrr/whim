@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-19
 
-**Status:** Approved. Written specification approved on 2026-09-19.
+**Status:** Implemented on 2026-09-19. Automated verification passed; physical acceptance remains pending.
 
 ## Intent and scope
 

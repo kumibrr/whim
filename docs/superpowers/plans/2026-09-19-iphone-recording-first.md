@@ -10,6 +10,21 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-19-iphone-recording-first-design.md`
 
+## Execution record — 2026-09-19
+
+Implemented in `d86f3ea` on `feature/ui-revamp`. All six deliverables are complete; the original task checklists below are retained as the planned sequence.
+
+- Recording-first monochrome home, full-width reactive line, glass controls, and exclusive Stop/Discard recording state.
+- Finger-following history with canceled-drag, list-scroll, handle-dismissal, close-button, and hint-tap coverage.
+- Bounded real-audio waveform decoding behind WhimClient, with deletion-race and silence/corruption coverage.
+- Inline single-player playback with stale-result protection, scene-aware polling, and navigation cleanup.
+- Glass cards preserving v1 metadata/actions, with accessible stacked layouts and wrapped titles at accessibility sizes.
+- `npm run test:all` passed on the final implementation: unit, integration, all nine iPhone E2E journeys, and Watch E2E. The native iPhone integration target includes 26 passing tests.
+
+Implementation adjustments: related SwiftUI helpers stay in the existing RecorderView, TimelineView, NoteRowView, and IPhoneTheme source files. The opening gesture uses a tuned 100-point actual / 200-point predicted threshold. Independent review produced regression fixes for navigation racing an entire external Recording Session, deep-link playback cleanup, and background polling.
+
+Visual inspection covered native glass on iOS 27 and the iOS 18.6 material fallback on iPhone 16e, including maximum accessibility text size. Local screenshots are under `ios/build/ui-review/`. Physical microphone, haptic, VoiceOver, Reduce Motion, and Reduce Transparency acceptance remains pending in `e2e/physical/iphone-presentation.e2e.test.md`.
+
 ## Global Constraints
 
 - The minimum iPhone deployment version remains iOS 18.

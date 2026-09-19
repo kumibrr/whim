@@ -259,9 +259,11 @@ Deleting delivered Notes is immediate. Deleting queued, sending, failed, or reco
 
 ## iPhone experience
 
-Whim opens to a timeline-first home screen. Notes appear newest-first with title, time, duration, source device, and status. Failed Notes remain in chronological position with prominent text, symbol, and color treatment plus a Retry action. Filters offer All, Queued, Failed, and Sent.
+Whim opens to a recording-first black home screen, as updated by the approved [2026-09-19 iPhone design](2026-09-19-iphone-recording-first-design.md). A plain white line sits in the center, with a glass Record button at bottom center and an icon-only glass settings button at top right. The hint “scroll to see previous notes.” opens history by upward drag or tap. The sheet follows the drag and provides one soft haptic when opening commits.
 
-A floating record button starts recording immediately. The timeline transitions into an active recorder showing elapsed time, waveform, five-minute progress, Stop, and Discard. Visible and haptic feedback confirm start and stop.
+History contains newest-first glass Note cards with a single-line title and date/time on the left, an inline waveform player alongside, and duration, source device, and delivery/review status. Accessibility text sizes stack the layout and allow title wrapping. Failed Notes remain in chronological position with prominent text and symbol treatment plus a Retry action. Filters offer All, Queued, Failed, and Sent. Only one Note plays at a time; leaving history or opening detail stops inline playback.
+
+Record starts capture immediately. The full-width central line reacts to microphone input without progressively filling the screen. During a Recording Session, only Stop and confirmed Discard are available; history and settings are inaccessible. Elapsed time, five-minute progress, and the limit warning remain visible. Stop returns to idle without opening history. Visible and haptic feedback confirm start and stop.
 
 Note detail offers playback, delivery details, Retry when applicable, and Delete. Recovered Notes instead offer Review, Send, and Delete.
 
@@ -275,7 +277,7 @@ Onboarding:
 
 Speech and notification permissions are requested contextually after the first recording. Denied permissions are not repeatedly requested; Settings provides the relevant system-settings route.
 
-Whim follows system Light and Dark Mode, uses native typography, and uses a warm coral recording accent. Every status includes text or symbols rather than relying on color. VoiceOver, Dynamic Type, sufficient contrast, haptic plus visible feedback, logical focus order, and Reduce Motion support are v1 requirements.
+The iPhone uses a sober black appearance with white accents and native typography, native Liquid Glass where available, and a translucent material fallback on iOS 18. Watch appearance remains unchanged. Every status includes text or symbols rather than relying on color. VoiceOver, Dynamic Type, sufficient contrast, haptic plus visible feedback, logical focus order, and Reduce Motion support are v1 requirements.
 
 ## Watch experience
 
