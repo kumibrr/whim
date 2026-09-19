@@ -7,6 +7,8 @@ appId: app.whim.ios
       -WhimFixtureAudio: ${WHIM_PEER_FIXTURE_AUDIO}
       -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
       -WhimPeerScenario: state-first
+- tapOn:
+    id: history-hint
 - extendedWaitUntil:
     visible: 'Open From paired Watch,.*Sent'
     timeout: 30000
@@ -27,5 +29,7 @@ appId: app.whim.ios
     visible:
       id: whim-home
     timeout: 30000
+- tapOn:
+    id: history-hint
 - assertNotVisible: 'Open From paired Watch,.*'
 - assertVisible: No Notes here yet. Capture a thought.

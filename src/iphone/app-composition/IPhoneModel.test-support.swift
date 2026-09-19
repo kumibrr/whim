@@ -36,7 +36,8 @@ final class WhimFacadeHarness: @unchecked Sendable {
                      store selectedStore: (any WhimStore)? = nil,
                      requestBuilder: WebhookRequestBuilder = WebhookRequestBuilder(),
                      peer: ConnectivityMergeService? = nil,
-                     onboarding: any OnboardingStoring = TestOnboarding()) -> WhimService {
+                     onboarding: any OnboardingStoring = TestOnboarding(),
+                     waveform: any AudioWaveformAdapter = AVAudioWaveformAdapter()) -> WhimService {
         let selectedStore = selectedStore ?? store
         let title = TitleService(transcriber: transcriber, store: selectedStore)
         let delivery = DeliveryService(store: selectedStore, credentials: credentials, transport: transport,
@@ -50,7 +51,7 @@ final class WhimFacadeHarness: @unchecked Sendable {
         return WhimService(recording: recording, store: selectedStore, files: files, title: title,
             delivery: delivery, configuration: configuration, configurationTest: configurationTest,
             recovery: RecoveryScanner(store: selectedStore, files: files), preferences: preferences ?? self.preferences,
-            credentials: credentials, scheduler: scheduler, onboarding: onboarding, permissions: permissions, playback: playback, peer: peer)
+            credentials: credentials, scheduler: scheduler, onboarding: onboarding, permissions: permissions, playback: playback, peer: peer, waveform: waveform)
     }
 
     func remove() { try? FileManager.default.removeItem(at: root) }
@@ -361,4 +362,76 @@ actor MutablePermissions: PermissionAdapter {
     func status(_ kind: PermissionKind) -> PermissionStatus { permission }
     func request(_ kind: PermissionKind) -> PermissionStatus { permission }
     func openSettings() {}
+}
+
+actor GatedWaveform: AudioWaveformAdapter {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var started = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    func waveform(at url: URL) async -> [Float] {
+        started = true
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            waiters.forEach { $0.resume() }; waiters.removeAll()
+        }
+        return Array(repeating: 0.5, count: 64)
+    }
+    func waitUntilStarted() async {
+        if started { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+    func release() { continuation?.resume(); continuation = nil }
+}
+
+actor InlinePlaybackHardware: PlaybackAdapter {
+    private var value: PlaybackProjection?
+    private var gate = false
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    func play(noteID: NoteID, url: URL) -> PlaybackProjection {
+        let next = PlaybackProjection(noteID: noteID, isPlaying: true, elapsedSeconds: 0, durationSeconds: 10)
+        value = next; return next
+    }
+    func stop() { value = nil }
+    func arm() { gate = true }
+    func snapshot() async -> PlaybackProjection? {
+        let old = value
+        if gate {
+            gate = false
+            await withCheckedContinuation { continuation in
+                self.continuation = continuation
+                waiters.forEach { $0.resume() }; waiters.removeAll()
+            }
+        }
+        return old
+    }
+    func waitUntilHeld() async {
+        if continuation != nil { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+    func release() { continuation?.resume(); continuation = nil }
+}
+
+actor NavigationPlayback: PlaybackAdapter {
+    private var armed = false
+    private var held: CheckedContinuation<Void, Never>?
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    func play(noteID: NoteID, url: URL) -> PlaybackProjection {
+        .init(noteID: noteID, isPlaying: true, elapsedSeconds: 0, durationSeconds: 10)
+    }
+    func snapshot() -> PlaybackProjection? { nil }
+    func arm() { armed = true }
+    func stop() async {
+        guard armed else { return }
+        armed = false
+        await withCheckedContinuation { continuation in
+            held = continuation
+            waiters.forEach { $0.resume() }; waiters.removeAll()
+        }
+    }
+    func waitUntilHeld() async {
+        if held != nil { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+    func release() { held?.resume(); held = nil }
 }

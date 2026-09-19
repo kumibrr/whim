@@ -17,7 +17,7 @@ struct PendingIPhoneLink { let id = UUID(); let url: URL }
                         if failure != nil { Button("Refresh") { Task { await launch() } } }
                     }.task { await launch() }
                 }
-            }.tint(.primary).buttonStyle(WhimButtonStyle())
+            }.preferredColorScheme(.dark).tint(.white).buttonStyle(WhimButtonStyle())
                 .onOpenURL { pendingLink = PendingIPhoneLink(url: $0) }
         }
     }

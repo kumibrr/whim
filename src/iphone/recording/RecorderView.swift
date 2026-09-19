@@ -1,28 +1,116 @@
 import SwiftUI
 import WhimIPhone
+
+struct CaptureHomeView: View {
+    var model: IPhoneModel
+    var settings: () -> Void
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Color.black.ignoresSafeArea()
+                LiveWaveformView(power: -160).frame(height: 100)
+                    .position(x: geometry.size.width / 2, y: geometry.size.height * 0.45)
+                VStack {
+                    HStack {
+                        Text("whim").font(.system(size: 22, weight: .medium, design: .rounded))
+                            .tracking(-1).foregroundStyle(.white.opacity(0.45)).accessibilityHidden(true)
+                        Spacer()
+                        Button(action: settings) {
+                            Image(systemName: "gearshape").font(.system(size: 20, weight: .regular))
+                                .frame(width: 48, height: 48).whimGlass(in: Circle())
+                        }.buttonStyle(.plain).accessibilityLabel("Settings").accessibilityIdentifier("settings-button")
+                    }.padding(.horizontal, 24).padding(.top, 12)
+                    Spacer()
+                    if !model.feedback.isEmpty {
+                        Text(model.feedback).font(.footnote).foregroundStyle(.secondary).padding(.bottom, 20)
+                    }
+                    Button { Task { await model.startRecording() } } label: {
+                        Circle().fill(.white).frame(width: 26, height: 26)
+                            .frame(width: 80, height: 80).whimGlass(in: Circle())
+                    }.buttonStyle(.plain).accessibilityLabel("Record a Whim").accessibilityIdentifier("record-button")
+                        .disabled(model.isRecordingPending)
+                    Button { model.openHistory() } label: {
+                        VStack(spacing: 10) {
+                            Text("scroll to see previous notes.").font(.system(size: 12))
+                            Image(systemName: "chevron.up").font(.system(size: 9, weight: .semibold))
+                        }.foregroundStyle(.white.opacity(0.5)).padding(.top, 22).padding(.bottom, 12)
+                            .frame(minHeight: 48)
+                    }.buttonStyle(.plain).accessibilityLabel("Show previous Notes").accessibilityIdentifier("history-hint")
+                }
+            }
+        }.accessibilityElement(children: .contain).accessibilityIdentifier("whim-home")
+    }
+}
+
 struct RecorderView: View {
     var model: IPhoneModel
     @State private var confirm = false
     var body: some View {
         if let recording = model.recording {
             let remaining = max(0, recording.maximumDurationSeconds - floor(model.elapsedSeconds))
-            let level = max(0, min(1, (model.peakPowerDBFS + 60) / 60))
-            WhimContent {
-                Text("Recording").whimTitle()
-                Text(TimelineFormat.duration(seconds: model.elapsedSeconds)).font(.system(.largeTitle, design: .monospaced).bold()).monospacedDigit()
-                RoundedRectangle(cornerRadius: 12).fill(Color.whimAccent).frame(height: 8 + level * 52).frame(height: 70)
-                    .accessibilityLabel("Microphone level").accessibilityValue("\(Int((level * 100).rounded())) percent")
-                ProgressView(value: min(model.elapsedSeconds, recording.maximumDurationSeconds), total: recording.maximumDurationSeconds).tint(.whimAccent)
-                    .accessibilityLabel("Recording progress").accessibilityValue("\(TimelineFormat.duration(seconds: model.elapsedSeconds)) of \(TimelineFormat.duration(seconds: recording.maximumDurationSeconds))")
-                Text(remaining <= recording.warningLeadSeconds ? "\(Int(remaining)) seconds remaining" : "Up to \(Int(recording.maximumDurationSeconds / 60)) minutes").foregroundStyle(remaining <= recording.warningLeadSeconds ? Color.red : .secondary)
-                Text("Stop saves your Note and starts delivery.")
-                Button("■ Stop") { Task { await model.stopRecording() } }.accessibilityLabel("Stop recording").accessibilityIdentifier("stop-recording")
-                Button("Discard", role: .destructive) { confirm = true }.accessibilityLabel("Discard recording")
-            }.disabled(model.isRecordingPending).accessibilityIdentifier("recorder-panel")
+            GeometryReader { geometry in
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    LiveWaveformView(power: model.peakPowerDBFS).frame(height: 140)
+                        .position(x: geometry.size.width / 2, y: geometry.size.height * 0.45)
+                    VStack(spacing: 12) {
+                        Text("RECORDING").font(.system(size: 11, weight: .medium)).tracking(3)
+                            .foregroundStyle(.secondary).padding(.top, 32)
+                        Text(TimelineFormat.duration(seconds: model.elapsedSeconds))
+                            .font(.system(size: 32, weight: .light, design: .monospaced)).monospacedDigit()
+                        ProgressView(value: min(model.elapsedSeconds, recording.maximumDurationSeconds), total: recording.maximumDurationSeconds)
+                            .tint(.white).frame(width: 100)
+                            .accessibilityLabel("Recording progress")
+                            .accessibilityValue("\(TimelineFormat.duration(seconds: model.elapsedSeconds)) of \(TimelineFormat.duration(seconds: recording.maximumDurationSeconds))")
+                        if remaining <= recording.warningLeadSeconds {
+                            Text("\(Int(remaining)) seconds remaining").font(.footnote)
+                        }
+                        Spacer()
+                        Text("Stop saves your Note and starts delivery.").font(.caption).foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center).padding(.horizontal, 24).padding(.bottom, 8)
+                        Button { Task { await model.stopRecording() } } label: {
+                            RoundedRectangle(cornerRadius: 5).fill(.white).frame(width: 24, height: 24)
+                                .frame(width: 80, height: 80).whimGlass(in: Circle())
+                        }.buttonStyle(.plain).accessibilityLabel("Stop recording").accessibilityIdentifier("stop-recording")
+                        Button("Discard", role: .destructive) { confirm = true }
+                            .font(.footnote).foregroundStyle(.secondary).buttonStyle(.plain)
+                            .frame(minWidth: 80, minHeight: 48).accessibilityLabel("Discard recording")
+                            .padding(.bottom, 12)
+                    }.frame(maxWidth: .infinity)
+                }
+            }.disabled(model.isRecordingPending).accessibilityElement(children: .contain).accessibilityIdentifier("recorder-panel")
                 .sheet(isPresented: $confirm) {
                     ConfirmationView(title: "Discard this Recording Session?", message: "This recording has not been saved. Discarding permanently removes it.", confirm: "Confirm discard", cancel: "Keep recording", error: model.error?.message, onCancel: { confirm = false }, onConfirm: { await model.discardRecording(); if model.error == nil { confirm = false } })
                         .presentationDetents([.medium, .large]).interactiveDismissDisabled(model.isRecordingPending)
                 }
+        }
+    }
+}
+
+struct LiveWaveformView: View {
+    let power: Double
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private var level: Double { power.isFinite ? max(0, min(1, (power + 60) / 60)) : 0 }
+    var body: some View {
+        ReactiveLine(level: level).stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: level)
+            .accessibilityLabel("Microphone level").accessibilityValue("\(Int(level * 100)) percent")
+            .accessibilityIdentifier("live-waveform")
+    }
+}
+
+private struct ReactiveLine: Shape {
+    var level: Double
+    var animatableData: Double { get { level } set { level = newValue } }
+    func path(in rect: CGRect) -> Path {
+        Path { path in
+            for step in 0...240 {
+                let x = Double(step) / 240
+                let envelope = pow(sin(.pi * x), 2)
+                let wave = sin(8 * .pi * x) * 0.7 + sin(18 * .pi * x) * 0.3
+                let point = CGPoint(x: rect.width * x, y: rect.midY + level * rect.height * 0.4 * envelope * wave)
+                if step == 0 { path.move(to: point) } else { path.addLine(to: point) }
+            }
         }
     }
 }

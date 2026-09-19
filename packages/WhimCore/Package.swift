@@ -19,6 +19,8 @@ let productionSources = [
     "Preferences/OnboardingStore.swift",
     "Permissions/PermissionAdapter.swift",
     "Playback/PlaybackAdapter.swift",
+    "Playback/AudioWaveform.swift",
+    "Playback/AVAudioWaveformAdapter.swift",
     "WebhookConfiguration/WebhookPatch.swift",
     "Delivery/Delivery.swift",
     "Delivery/DeliveryReducer.swift",
@@ -81,6 +83,7 @@ let unitTestSources = [
     "WebhookConfiguration/WebhookRequestBuilder.test.swift",
 ]
 let integrationTestSources = [
+    "Playback/AVAudioWaveformAdapter.integration.test.swift",
     "Recording/AVAudioRecorderAdapter.integration.test.swift",
     "DeviceSync/ReceivedPeerFileStore.integration.test.swift",
     "DeviceSync/ConnectivityMergeService.integration.test.swift",

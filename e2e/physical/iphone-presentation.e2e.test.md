@@ -68,3 +68,16 @@ reset, permission deferral, suspended snapshots and restarted observation;
 RecordingService limit tests; and the installed iPhone Maestro journeys.
 The record-and-review journey also verifies modal confirmation isolation.
 VoiceOver announcements and haptic perception require physical acceptance.
+
+## Recording-first monochrome interface
+
+Status: pending physical-device execution. Simulator checks do not prove haptics or live microphone responsiveness.
+
+1. Launch after onboarding. Expect a black screen, a still white horizontal line, glass Record at bottom center, icon-only Settings at top right, and the exact hint "scroll to see previous notes.".
+2. Start capture. Speak loudly, softly, then remain silent. Expect the full-width line to react to input and settle toward a line during silence, without growing from left to right. Only Stop and Discard are reachable, including with VoiceOver and an attempted history swipe.
+3. Open Discard, choose Keep recording, then Stop. Expect uninterrupted capture after canceling Discard and a saved Note after Stop. History must remain closed. Repeat with interruption and the five-minute limit; playable audio remains recoverable and the home returns to idle.
+4. Slowly drag upward from the hint. Expect the sheet to track the finger. Cancel a short drag: no opening haptic. Complete a drag: one soft opening haptic. Scroll the open list: no dismissal or repeated opening haptic. Drag the handle downward or use Close history to dismiss.
+5. Open history by tapping the hint and with VoiceOver. Play a Note, then another: only the second plays. Close history: audio stops. Open a Note's details: the inline player stops. Start capture after playback: capture takes audio-session ownership.
+6. Inspect long titles, failed and recovered Notes, and expired local audio. Expect readable title/date/time, duration/source/status, reachable Retry/review/detail actions, and disabled playback when audio is unavailable. Playback or review alone must never send a recovered Note.
+7. Enable the largest accessibility text size. Expect stacked card metadata and player, full spoken titles, readable status, and usable controls. Enable Reduce Motion: no decorative continuous motion. Enable Reduce Transparency: opaque dark surfaces with readable boundaries and text.
+8. On iOS 18 inspect the material fallback; on a system with native Liquid Glass inspect the native controls and cards. Both retain the same actions and monochrome appearance. Record OS/device versions and visual evidence with acceptance results.
