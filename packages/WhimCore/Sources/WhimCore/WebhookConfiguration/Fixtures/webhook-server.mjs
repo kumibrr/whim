@@ -20,6 +20,88 @@ function header(req, name) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character]);
+}
+
+function formatDuration(durationMS) {
+  const seconds = Math.max(0, Number(durationMS) || 0) / 1000;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+}
+
+function formatDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) ? String(value ?? "Unknown time") : date.toLocaleString();
+}
+
+function renderInbox(records) {
+  const items = records.length === 0
+    ? '<div class="empty"><span>🎙️</span><h2>No audio notes received yet</h2><p>Configure Whim to send its webhook to <code>/receive</code>.</p></div>'
+    : records.toReversed().map((record) => {
+      const metadata = record.json;
+      const duplicate = record.duplicate ? '<span class="badge">Duplicate</span>' : "";
+      return `<article>
+        <div class="card-heading">
+          <div><p class="eyebrow">${escapeHTML(metadata.event)}</p><h2>${escapeHTML(metadata.title)}</h2></div>
+          ${duplicate}
+        </div>
+        <audio controls preload="none" src="/audio/${encodeURIComponent(record.attemptID)}"></audio>
+        <dl>
+          <div><dt>Received</dt><dd>${escapeHTML(formatDate(metadata.created_at))}</dd></div>
+          <div><dt>Duration</dt><dd>${escapeHTML(formatDuration(metadata.duration_ms))}</dd></div>
+          <div><dt>Source</dt><dd>${escapeHTML(metadata.source)}</dd></div>
+          <div><dt>Note ID</dt><dd><code>${escapeHTML(record.noteID)}</code></dd></div>
+          <div><dt>Attempt ID</dt><dd><code>${escapeHTML(record.attemptID)}</code></dd></div>
+        </dl>
+      </article>`;
+    }).join("");
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Whim test server</title>
+  <style>
+    :root { color-scheme: light dark; font-family: ui-rounded, system-ui, sans-serif; background: #171412; color: #f7eee9; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top, #35231f, #171412 46%); }
+    main { width: min(760px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0; }
+    header { margin-bottom: 28px; }
+    h1 { margin: 0 0 8px; font-size: clamp(2rem, 8vw, 3.5rem); letter-spacing: -0.05em; }
+    header p, .empty p { color: #bca9a0; }
+    .list { display: grid; gap: 16px; }
+    article, .empty { padding: 24px; border: 1px solid #5c433a; border-radius: 20px; background: #241d1a; box-shadow: 0 18px 50px #0004; }
+    .empty { padding: 64px 24px; text-align: center; }
+    .empty span { font-size: 2.5rem; }
+    .card-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+    h2 { margin: 3px 0 16px; overflow-wrap: anywhere; }
+    .eyebrow, dt { margin: 0; color: #f28b74; font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .badge { padding: 5px 9px; border-radius: 999px; background: #f28b74; color: #291511; font-size: .75rem; font-weight: 800; }
+    audio { width: 100%; margin: 4px 0 20px; }
+    dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 0; }
+    dl div:nth-last-child(-n + 2) { grid-column: 1 / -1; }
+    dd { margin: 4px 0 0; color: #dfd1ca; overflow-wrap: anywhere; }
+    code { font-family: ui-monospace, monospace; font-size: .85em; }
+    @media (max-width: 560px) { main { padding: 32px 0; } article { padding: 20px; } dl { grid-template-columns: 1fr; } dl div:nth-last-child(-n + 2) { grid-column: auto; } }
+  </style>
+</head>
+<body><main><header><h1>Whim inbox</h1><p>Received audio notes appear here automatically.</p></header><section class="list">${items}</section></main>
+<script>setTimeout(() => location.reload(), 2000);</script>
+</body>
+</html>`;
+}
+
+function publicRecord({ audioBytes: _audioBytes, ...record }) {
+  return record;
+}
+
 function parseMultipart(req, body) {
   const contentType = header(req, "content-type") ?? "";
   const match = /boundary=([^;]+)/i.exec(contentType);
@@ -61,11 +143,39 @@ function verify(req, body) {
       throw new Error("signature");
     }
   }
-  return { noteID, attemptID, json, duplicate: noteIDs.has(noteID), body: body.toString("base64") };
+  return {
+    noteID,
+    attemptID,
+    json,
+    duplicate: noteIDs.has(noteID),
+    body: body.toString("base64"),
+    audioBytes: Buffer.from(audio.bytes),
+  };
 }
 
 const handleRequest = (req, res) => {
   const url = new URL(req.url ?? "/", `http://${host}`);
+  if (req.method === "GET" && url.pathname === "/") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+    res.end(renderInbox(received));
+    return;
+  }
+  if (req.method === "GET" && url.pathname.startsWith("/audio/")) {
+    let attemptID;
+    try { attemptID = decodeURIComponent(url.pathname.slice("/audio/".length)); } catch {}
+    const record = received.find((item) => item.attemptID === attemptID);
+    if (!record) {
+      res.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("audio not found");
+      return;
+    }
+    res.writeHead(200, {
+      "content-type": "audio/mp4",
+      "content-length": record.audioBytes.length,
+      "cache-control": "no-store",
+    });
+    res.end(record.audioBytes);
+    return;
+  }
   if (req.method === "POST" && url.pathname === "/reset") {
     received.length = 0;
     noteIDs.clear();
@@ -76,7 +186,7 @@ const handleRequest = (req, res) => {
   }
   if (req.method === "GET" && url.pathname === "/state") {
     res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ received }));
+    res.end(JSON.stringify({ received: received.map(publicRecord) }));
     return;
   }
   const chunks = [];
