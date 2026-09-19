@@ -13,6 +13,22 @@ final class WebhookValidatorTests: XCTestCase {
         }
     }
 
+    // Break: a local-network HTTP endpoint cannot be used with the test webhook server.
+    func testAllowsHTTPForPrivateNetworkIPv4Endpoint() {
+        let result = WebhookValidator.validate(.init(endpoint: "http://192.168.1.20:8787/receive"))
+
+        XCTAssertNotNil(result.value)
+        XCTAssertTrue(result.errors.isEmpty)
+    }
+
+    // Break: an HTTP endpoint on the public internet becomes an accepted destination.
+    func testRejectsHTTPForPublicEndpoint() {
+        let result = WebhookValidator.validate(.init(endpoint: "http://example.com/receive"))
+
+        XCTAssertNil(result.value)
+        XCTAssertEqual(result.errors.first?.field, .endpoint)
+    }
+
     // Break: an eleventh header or mixed-case contract header overrides Whim's request.
     func testRejectsTooManyAndCaseInsensitiveReservedHeaders() {
         let many = (0...10).map { CustomHeaderInput(name: "X-Custom-\($0)", value: "value") }
