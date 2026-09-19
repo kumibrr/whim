@@ -119,6 +119,7 @@ import WhimCore
     public private(set) var isRecordingPending = false
     public private(set) var elapsedSeconds = 0.0
     public private(set) var peakPowerDBFS = -160.0
+    public private(set) var recordingTone = 0.0
     public private(set) var feedback = ""
     public private(set) var offersContextualPermissions = false
     public private(set) var revision = 0
@@ -233,7 +234,7 @@ import WhimCore
         switch event.type {
         case .recordingStarted:
             completionGeneration += 1; offersContextualPermissions = false
-            elapsedSeconds = 0; peakPowerDBFS = -160; feedback = "Recording started"
+            elapsedSeconds = 0; peakPowerDBFS = -160; recordingTone = 0; feedback = "Recording started"
         case .recordingStopped:
             feedback = "Recording stopped"
             completionGeneration += 1
@@ -265,6 +266,10 @@ import WhimCore
         case .recordingProgress:
             if let elapsed = event.elapsedSeconds { elapsedSeconds = elapsed }
             if let power = event.peakPowerDBFS { peakPowerDBFS = Double(power) }
+            if let tone = event.recordingTone, tone.isFinite {
+                let bounded = max(0, min(1, Double(tone)))
+                if abs(bounded - recordingTone) >= 0.015 { recordingTone = bounded }
+            }
         default: break
         }
         if event.type == .recordingStarted || event.type == .notesReset {

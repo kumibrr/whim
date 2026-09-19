@@ -3,6 +3,7 @@ import Foundation
 public enum RecordingEvent: Sendable, Equatable {
     case elapsed(TimeInterval)
     case peakPower(Float)
+    case signal(RecordingSignal)
     case interruption
     case routeChanged
     case encoderCompleted(duration: TimeInterval, peakPowerDBFS: Float)

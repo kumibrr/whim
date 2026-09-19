@@ -3,6 +3,33 @@ import WhimCore
 @testable import WhimIPhone
 
 @MainActor final class IPhoneModelIntegrationTests: XCTestCase {
+    func testMeasuredToneReachesRecordingPresentationAndResetsForNextSession() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let model = IPhoneModel(client: harness.makeService(permissions: GrantedPermissions()))
+        await model.start()
+        defer { model.stop() }
+        await model.startRecording()
+        let samples = (0..<1600).map { Float(0.5 * sin(2 * .pi * 800 * Double($0) / 16000)) }
+        let signal = RecordingSignal.measure(samples, sampleRate: 16000)
+        await harness.recorder.emit(.signal(signal))
+        await harness.recorder.emit(.elapsed(1))
+        for _ in 0..<200 where model.elapsedSeconds != 1 { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(model.peakPowerDBFS, Double(signal.peakPowerDBFS), accuracy: 0.01)
+        XCTAssertEqual(model.recordingTone, Double(signal.tone), accuracy: 0.015)
+        let heldTone = model.recordingTone
+        let heldPower = model.peakPowerDBFS
+        await harness.recorder.emit(.elapsed(20))
+        for _ in 0..<200 where model.elapsedSeconds != 20 { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(model.recordingTone, heldTone, "Elapsed time must not drive tone")
+        XCTAssertEqual(model.peakPowerDBFS, heldPower, "Elapsed time must not drive volume")
+        await model.discardRecording()
+        await model.startRecording()
+        XCTAssertEqual(model.recordingTone, 0)
+        XCTAssertEqual(model.peakPowerDBFS, -160)
+        await model.discardRecording()
+    }
+
     func testRecordingClosesHistoryAndStopStaysIdle() async throws {
         let harness = try WhimFacadeHarness()
         defer { harness.remove() }

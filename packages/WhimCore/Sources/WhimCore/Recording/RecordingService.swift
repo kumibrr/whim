@@ -18,6 +18,7 @@ public struct RecordingSnapshot: Sendable, Equatable {
 public enum RecordingServiceEvent: Sendable, Equatable {
     case elapsed(TimeInterval)
     case peakPower(Float)
+    case signal(RecordingSignal)
     case routeChanged
     case maximumDurationWarning
     case finalized(Note?)
@@ -222,6 +223,9 @@ public actor RecordingService {
                 maximumStopRequested = true
                 Task { try? await self.stop() }
             }
+        case .signal(let signal):
+            guard captureExists else { return }
+            serviceEventContinuation.yield(.signal(signal))
         case .peakPower(let power):
             guard captureExists else { return }
             serviceEventContinuation.yield(.peakPower(power))

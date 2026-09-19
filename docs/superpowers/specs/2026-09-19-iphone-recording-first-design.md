@@ -49,6 +49,11 @@ reacts to microphone input in real time. Speech increases its amplitude;
 silence settles it toward a plain line. It never progressively fills the
 screen and is not a left-to-right history of elapsed audio. Rendering may
 smooth between measured levels, but must not invent activity during silence.
+The line holds still for steady input. Volume scales amplitude; measured tonal
+brightness reshapes the center. Smooth only the transitions between changed
+measurements, with no clock-driven phase, perpetual animation, or random motion.
+Both edges taper toward almost zero. Silence settles to a flat line.
+Reduce Motion applies measurement changes without animated interpolation.
 
 Only Stop and Discard are available. Hide settings and the history hint,
 disable the history gesture, and close any presentation that would expose
@@ -117,9 +122,18 @@ SwiftUI owns layout and transient sheet drag geometry.
 
 - Refactor `IPhoneRootView` to compose an idle/active capture surface and the
   history presentation, retaining onboarding, links, permissions, and errors.
-- Reuse recorder commands and native recording-progress events. The current
-  peak-power projection drives the live visual envelope; no new microphone
-  capture path or persisted live sample buffer is required.
+- Reuse recorder commands and native recording-progress events. iPhone capture
+  uses one AVAudioEngine input tap to convert to 16 kHz mono PCM, measure volume
+  and tonal brightness, and write the existing AAC-LC `.m4a` format. Watch retains
+  AVAudioRecorder. Do not persist live samples or analysis metadata.
+- Extend recording progress with optional normalized tonal brightness, derived
+  from normalized first-difference energy of the same PCM saved to the Note.
+  It reflects frequency content, not an exact fundamental-pitch estimate.
+  Ignore tiny tone fluctuations in presentation; no measurement depends on time.
+  Preserve interruption finalization, startup/discard cleanup, and the maximum
+  captured peak used to retain short meaningful Notes.
+- Use Apple's streaming AVAudioConverter API for sample-rate conversion
+  ([TN3136](https://developer.apple.com/documentation/technotes/tn3136-avaudioconverter-performing-sample-rate-conversions)).
 - Extend the typed WhimClient interface with a Note waveform query returning
   bounded normalized amplitude samples and explicit unavailability. Keep
   filesystem paths and audio decoding behind WhimCore and its platform adapter.

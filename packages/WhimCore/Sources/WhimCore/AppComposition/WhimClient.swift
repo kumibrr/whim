@@ -274,12 +274,14 @@ public struct WhimEvent: Codable, Equatable, Sendable {
     public let noteID: String?
     public let elapsedSeconds: TimeInterval?
     public let peakPowerDBFS: Float?
+    public let recordingTone: Float?
 
     public init(sequence: UInt64, type: Kind, recording: RecordingProjection? = nil,
                 note: NoteProjection? = nil, noteID: String? = nil,
-                elapsedSeconds: TimeInterval? = nil, peakPowerDBFS: Float? = nil) {
+                elapsedSeconds: TimeInterval? = nil, peakPowerDBFS: Float? = nil, recordingTone: Float? = nil) {
         schemaVersion = WhimCoreVersion.schema; self.sequence = sequence; self.type = type
         self.recording = recording; self.note = note; self.noteID = noteID
         self.elapsedSeconds = elapsedSeconds; self.peakPowerDBFS = peakPowerDBFS
+        self.recordingTone = recordingTone
     }
 }

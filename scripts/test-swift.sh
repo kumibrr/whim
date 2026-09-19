@@ -22,6 +22,7 @@ case "${1:-}" in
         -scheme WhimCore \
         -derivedDataPath "$whim_derived_data" \
         -only-testing:WhimCoreIntegrationTests/AVAudioRecorderSessionIntegrationTests \
+        -only-testing:WhimCoreIntegrationTests/PCMRecorderHardwareIntegrationTests \
         -destination "id=${WHIM_IPHONE_SIMULATOR_UDID}" \
         CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
     )

@@ -51,7 +51,7 @@ struct RecorderView: View {
             GeometryReader { geometry in
                 ZStack {
                     Color.black.ignoresSafeArea()
-                    LiveWaveformView(power: model.peakPowerDBFS).frame(height: 140)
+                    LiveWaveformView(power: model.peakPowerDBFS, tone: model.recordingTone).frame(height: 180)
                         .position(x: geometry.size.width / 2, y: geometry.size.height * 0.45)
                     VStack(spacing: 12) {
                         Text("RECORDING").font(.system(size: 11, weight: .medium)).tracking(3)
@@ -89,11 +89,14 @@ struct RecorderView: View {
 
 struct LiveWaveformView: View {
     let power: Double
+    var tone: Double = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var level: Double { power.isFinite ? max(0, min(1, (power + 60) / 60)) : 0 }
+    private var level: Double { LiveWaveform.level(power: power) }
     var body: some View {
-        ReactiveLine(level: level).stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: level)
+        ReactiveLine(level: level, tone: tone)
+            .stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: level)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: tone)
             .accessibilityLabel("Microphone level").accessibilityValue("\(Int(level * 100)) percent")
             .accessibilityIdentifier("live-waveform")
     }
@@ -101,14 +104,16 @@ struct LiveWaveformView: View {
 
 private struct ReactiveLine: Shape {
     var level: Double
-    var animatableData: Double { get { level } set { level = newValue } }
+    var tone: Double
+    var animatableData: AnimatablePair<Double, Double> {
+        get { AnimatablePair(level, tone) }
+        set { level = newValue.first; tone = newValue.second }
+    }
     func path(in rect: CGRect) -> Path {
         Path { path in
             for step in 0...240 {
                 let x = Double(step) / 240
-                let envelope = pow(sin(.pi * x), 2)
-                let wave = sin(8 * .pi * x) * 0.7 + sin(18 * .pi * x) * 0.3
-                let point = CGPoint(x: rect.width * x, y: rect.midY + level * rect.height * 0.4 * envelope * wave)
+                let point = CGPoint(x: rect.width * x, y: rect.midY + rect.height * LiveWaveform.displacement(at: x, level: level, tone: tone))
                 if step == 0 { path.move(to: point) } else { path.addLine(to: point) }
             }
         }
