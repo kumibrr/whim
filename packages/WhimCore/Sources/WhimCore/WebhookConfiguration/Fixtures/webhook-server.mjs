@@ -4,7 +4,7 @@ import http from "node:http";
 import https from "node:https";
 import os from "node:os";
 
-const host = "127.0.0.1";
+const host = process.env.WHIM_WEBHOOK_HOST || "127.0.0.1";
 const port = Number(process.env.WHIM_WEBHOOK_PORT ?? "0");
 const hmacSecret = process.env.WHIM_HMAC_SECRET ?? "";
 const received = [];

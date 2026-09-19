@@ -18,7 +18,7 @@ function sha256(bytes) {
 async function startServer(t) {
   const script = fileURLToPath(new URL("./webhook-server.mjs", import.meta.url));
   const child = spawn(process.execPath, [script], {
-    env: { ...process.env, WHIM_WEBHOOK_PORT: "0" },
+    env: { ...process.env, WHIM_WEBHOOK_PORT: "0", WHIM_WEBHOOK_HOST: "" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let errors = "";
@@ -73,12 +73,12 @@ async function submit(baseURL, { noteID, attemptID, title, audio }) {
   });
 }
 
-async function startServerThroughNPM(t) {
+async function startServerThroughNPM(t, host = "") {
   const repositoryRoot = fileURLToPath(new URL("../../../../../../", import.meta.url));
   const child = spawn("npm", ["run", "--silent", "test-server"], {
     cwd: repositoryRoot,
     detached: true,
-    env: { ...process.env, WHIM_WEBHOOK_PORT: "0" },
+    env: { ...process.env, WHIM_WEBHOOK_PORT: "0", WHIM_WEBHOOK_HOST: host },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let errors = "";
@@ -101,7 +101,7 @@ async function startServerThroughNPM(t) {
     }
     assert.equal(errors, "");
   });
-  return { baseURL: `http://${startup.host}:${startup.port}` };
+  return { host: startup.host, baseURL: `http://127.0.0.1:${startup.port}` };
 }
 
 test("renders an empty browser inbox without changing state JSON", async (t) => {
@@ -192,7 +192,18 @@ test("reset clears the inbox and invalidates audio URLs", async (t) => {
 
 test("root test-server command starts the browser inbox", async (t) => {
   const server = await startServerThroughNPM(t);
+  assert.equal(server.host, "127.0.0.1");
   const response = await fetch(server.baseURL);
   assert.equal(response.status, 200);
   assert.match(await response.text(), /Whim inbox/);
+});
+
+test("root test-server command can bind all IPv4 interfaces for LAN access", async (t) => {
+  const server = await startServerThroughNPM(t, "0.0.0.0");
+  assert.equal(server.host, "0.0.0.0");
+  const audio = Buffer.from("LAN recording");
+  assert.equal((await submit(server.baseURL, { noteID: NOTE_ID, attemptID: FIRST_ATTEMPT,
+    title: "LAN note", audio })).status, 200);
+  assert.match(await (await fetch(server.baseURL)).text(), /LAN note/);
+  assert.deepEqual(Buffer.from(await (await fetch(`${server.baseURL}/audio/${FIRST_ATTEMPT}`)).arrayBuffer()), audio);
 });
