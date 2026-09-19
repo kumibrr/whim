@@ -4,18 +4,15 @@ appId: app.whim.ios
 - launchApp:
     clearState: true
     arguments:
-      -EXDevMenuDisableAutoLaunch: true
       -WhimFixtureAudio: ${WHIM_FIXTURE_AUDIO}
       -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
     permissions:
       all: allow
-- openLink:
-    link: ${EXPO_DEV_CLIENT_URL}
 - runFlow:
     when:
       visible: Open
     commands:
-      - tapOn: Open
+      - tapOn: Cancel
 - extendedWaitUntil:
     visible: Get started
     timeout: 60000

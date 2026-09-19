@@ -15,7 +15,7 @@ appId: app.whim.ios
     visible: Webhook saved. Test it to check delivery.
     timeout: 10000
 - tapOn:
-    id: BackButton
+    text: Back
 - tapOn:
     id: record-button
 - assertVisible:
@@ -24,7 +24,6 @@ appId: app.whim.ios
 - stopApp
 - launchApp:
     arguments:
-      -EXDevMenuDisableAutoLaunch: true
       -WhimFixtureAudio: ${WHIM_FIXTURE_AUDIO}
       -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
 - extendedWaitUntil:

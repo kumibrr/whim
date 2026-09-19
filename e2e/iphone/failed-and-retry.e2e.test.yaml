@@ -16,7 +16,7 @@ appId: app.whim.ios
     visible: Webhook saved. Test it to check delivery.
     timeout: 10000
 - tapOn:
-    id: BackButton
+    text: Back
 - tapOn:
     id: record-button
 - tapOn:
@@ -31,7 +31,7 @@ appId: app.whim.ios
 - assertVisible: '⚠ Failed · HTTP 400'
 - assertVisible: The destination rejected this Attempt.
 - tapOn:
-    id: BackButton
+    text: Back
 - tapOn: Settings
 - tapOn:
     id: webhook-url
@@ -55,7 +55,7 @@ appId: app.whim.ios
     centerElement: true
 - tapOn: Retry unsent Notes
 - tapOn:
-    id: BackButton
+    text: Back
 - extendedWaitUntil:
     visible: 'Open .*Sent.*'
     timeout: 60000

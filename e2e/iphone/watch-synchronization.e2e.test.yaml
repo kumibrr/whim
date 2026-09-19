@@ -4,12 +4,9 @@ appId: app.whim.ios
 - stopApp
 - launchApp:
     arguments:
-      -EXDevMenuDisableAutoLaunch: true
       -WhimFixtureAudio: ${WHIM_PEER_FIXTURE_AUDIO}
       -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
       -WhimPeerScenario: state-first
-- openLink:
-    link: ${EXPO_DEV_CLIENT_URL}
 - extendedWaitUntil:
     visible: 'Open From paired Watch,.*Sent'
     timeout: 30000
@@ -23,12 +20,9 @@ appId: app.whim.ios
 - stopApp
 - launchApp:
     arguments:
-      -EXDevMenuDisableAutoLaunch: true
       -WhimFixtureAudio: ${WHIM_PEER_FIXTURE_AUDIO}
       -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
       -WhimPeerScenario: file-first
-- openLink:
-    link: ${EXPO_DEV_CLIENT_URL}
 - extendedWaitUntil:
     visible:
       id: whim-home

@@ -1,8 +1,0 @@
-{
-  "schemaVersion": 1,
-  "preferences": { "retentionPolicy": "thirty_days", "transcriptionEnabled": true, "transcriptionLocaleIdentifier": null },
-  "webhook": null,
-  "watch": { "availability": "unavailable", "lastSynchronizedAt": null, "resetState": "unavailable" },
-  "onboardingCompleted": false,
-  "permissions": { "microphone": "not_determined", "speech": "denied", "notifications": "granted" }
-}

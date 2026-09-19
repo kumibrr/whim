@@ -6,7 +6,9 @@ appId: app.whim.ios
 - assertVisible:
     id: recorder-panel
 - tapOn: Discard recording
+- assertNotVisible: Stop recording
 - tapOn: Keep recording
+- assertVisible: Stop recording
 - tapOn:
     id: stop-recording
 - assertVisible: Note saved

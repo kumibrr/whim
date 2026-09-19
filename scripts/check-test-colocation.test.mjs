@@ -36,16 +36,13 @@ test('accepts adjacent tests and explicit non-overlapping SwiftPM source lists',
   assert.deepEqual(await checkRepository(root), []);
 });
 
-test('rejects tests without adjacent implementations and tests inside Router routes', async (t) => {
+test('rejects tests without adjacent implementations', async (t) => {
   const root = await fixture(t, {
     'src/iphone/timeline/Missing.test.ts': '',
-    'src/iphone/app/index.tsx': '',
-    'src/iphone/app/index.test.tsx': '',
   });
 
   const errors = await checkRepository(root);
   assert.ok(errors.some((error) => error.includes('Missing.test.ts')));
-  assert.ok(errors.some((error) => error.includes('src/iphone/app/index.test.tsx')));
 });
 
 test('rejects generic architecture folders', async (t) => {
@@ -110,4 +107,13 @@ test('rejects Xcode tests in production targets and missing intended production 
   const errors = await checkRepository(root);
   assert.ok(errors.some((error) => error.includes('WhimWatchApp.test.swift: must not compile in WhimWatch')));
   assert.ok(errors.some((error) => error.includes('WhimWatchApp.swift: missing from WhimWatch')));
+});
+
+test('rejects native iPhone tests omitted from the presentation package', async (t) => {
+  const root = await fixture(t, {
+    'src/iphone/timeline/TimelineFormat.swift': '',
+    'src/iphone/timeline/TimelineFormat.test.swift': '',
+    'Package.swift': 'let modelSources = ["timeline/TimelineFormat.swift"]\nlet unitSources = []\nlet integrationSources = []',
+  });
+  assert.ok((await checkRepository(root)).some(error => error.includes('TimelineFormat.test.swift') && error.includes('unitSources')));
 });

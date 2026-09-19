@@ -37,16 +37,6 @@
          </BuildableReference>
       </MacroExpansion>
       <Testables>
-         <TestableReference
-            skipped = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "D9299C1382377C65EECD3A6B"
-               BuildableName = "WhimBridgeIntegrationTests.xctest"
-               BlueprintName = "WhimBridgeIntegrationTests"
-               ReferencedContainer = "container:whim.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

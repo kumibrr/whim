@@ -38,6 +38,8 @@ playback controls through the real app.
 4. Repeat navigation with large Dynamic Type, Dark Mode, and Reduce Motion.
    Verify controls remain reachable and statuses remain understandable.
 
-Closest deterministic coverage: timeline accessibility tests, Router integration
-tests for automatic finalization and stale completions, RecordingService limit
-tests, and the installed iPhone Maestro journeys.
+Closest deterministic coverage: native IPhoneModel integration tests for capture,
+reset, permission deferral, suspended snapshots and restarted observation;
+RecordingService limit tests; and the installed iPhone Maestro journeys.
+The record-and-review journey also verifies modal confirmation isolation.
+VoiceOver announcements and haptic perception require physical acceptance.
