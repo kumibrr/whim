@@ -452,7 +452,7 @@
 			);
 			mainGroup = 83CBB9F61A601CBA00E9B192;
 			packageReferences = (
-				B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "WhimCore" */,
+				B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "../packages/WhimCore" */,
 			);
 			productRefGroup = 83CBBA001A601CBA00E9B192 /* Products */;
 			projectDirPath = "";
@@ -829,6 +829,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = whim/whim.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N896F4D4TA;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
@@ -866,6 +867,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = whim/whim.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N896F4D4TA;
 				INFOPLIST_FILE = whim/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -894,6 +896,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = WhimWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = N896F4D4TA;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "WhimWatch-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Whim;
@@ -1123,6 +1126,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = WhimWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = N896F4D4TA;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "WhimWatch-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Whim;
@@ -1237,7 +1241,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "WhimCore" */ = {
+		B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "../packages/WhimCore" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../packages/WhimCore;
 		};
@@ -1246,7 +1250,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		7D6ECB88619BE4362A0E9A7D /* WhimCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "WhimCore" */;
+			package = B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "../packages/WhimCore" */;
 			productName = WhimCore;
 		};
 /* End XCSwiftPackageProductDependency section */
