@@ -29,9 +29,17 @@ public enum RecordingServiceError: Error, Sendable, Equatable {
     case eventStreamEnded
 }
 
+/// System boundary for the activity associated with one canonical Recording Session.
+/// Implementations must make ending an absent or already-ended session harmless.
+public protocol RecordingActivityManaging: Sendable {
+    func start(_ recording: RecordingSnapshot) async throws
+    func end(sessionID: RecordingSessionID) async
+}
+
 public actor RecordingService {
     private typealias EncoderMetrics = (duration: TimeInterval, peakPowerDBFS: Float)
 
+    private let activity: (any RecordingActivityManaging)?
     private let recorder: any AudioRecorder
     private let store: any WhimStore
     private let files: any AudioFileManaging
@@ -57,11 +65,13 @@ public actor RecordingService {
         recorder: any AudioRecorder,
         store: any WhimStore,
         files: any AudioFileManaging,
+        activity: (any RecordingActivityManaging)? = nil,
         now: @escaping @Sendable () -> Date = { Date() },
         timestampTitle: @escaping @Sendable (Date) -> String = {
             $0.formatted(date: .abbreviated, time: .shortened)
         }
     ) {
+        self.activity = activity
         self.recorder = recorder
         self.store = store
         self.files = files
@@ -106,6 +116,7 @@ public actor RecordingService {
             maximumStopRequested = false
             interruptionDuringActivation = false
             activating = snapshot
+            try await activity?.start(snapshot)
             beginConsumingRecorderEvents()
             try await recorder.start(at: files.temporaryURL(for: snapshot.sessionID))
             active = snapshot
@@ -122,6 +133,7 @@ public actor RecordingService {
             encoderFailure = nil
             encoderWaiter = nil
             await recorder.discard()
+            await activity?.end(sessionID: snapshot.sessionID)
             try? files.deleteTemporary(sessionID: snapshot.sessionID)
             try? await store.discardRecordingSession(sessionID: snapshot.sessionID)
             throw error
@@ -179,6 +191,7 @@ public actor RecordingService {
 
     private func performDiscard(_ snapshot: RecordingSnapshot) async throws {
         await recorder.discard()
+        await activity?.end(sessionID: snapshot.sessionID)
         try files.deleteTemporary(sessionID: snapshot.sessionID)
         try await store.discardRecordingSession(sessionID: snapshot.sessionID)
     }
@@ -264,6 +277,7 @@ public actor RecordingService {
                 && metrics.peakPowerDBFS <= RecordingLimits.meaningfulPeakPowerDBFS {
                 try files.deleteTemporary(sessionID: snapshot.sessionID)
                 try await store.discardRecordingSession(sessionID: snapshot.sessionID)
+                await activity?.end(sessionID: snapshot.sessionID)
                 active = nil
                 serviceEventContinuation.yield(.finalized(nil))
                 return nil
@@ -274,10 +288,12 @@ public actor RecordingService {
                 duration: audio.duration, source: snapshot.source, captureOutcome: outcome, requiresReview: false,
                 audioURL: audio.url)
             let note = try await store.saveFinalized(finalized)
+            await activity?.end(sessionID: snapshot.sessionID)
             active = nil
             serviceEventContinuation.yield(.finalized(note))
             return note
         } catch {
+            await activity?.end(sessionID: snapshot.sessionID)
             active = nil
             let localError: LocalAudioError
             if let posix = error as? POSIXError, posix.code == .ENOSPC {

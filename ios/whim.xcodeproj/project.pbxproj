@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -106,7 +106,7 @@
 		6649A6F4F02580A424941D9C /* SceneDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SceneDelegate.swift; path = whim/SceneDelegate.swift; sourceTree = "<group>"; };
 		67F30D8BD15651BCD2AB7CC7 /* WatchNoteDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchNoteDetailView.swift; path = "../src/watch/recent-notes/WatchNoteDetailView.swift"; sourceTree = "<group>"; };
 		6C2EB6FC55DB3C583A6CC5AC /* WhimWatch.e2e.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WhimWatch.e2e.test.swift; path = ../e2e/watch/WhimWatch.e2e.test.swift; sourceTree = "<group>"; };
-		7F011AC3443B58190BBE7148 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = whim/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		7F011AC3443B58190BBE7148 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = whim/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		7FE31B5830E6C7CDB4E63F89 /* Pods-whim.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-whim.debug.xcconfig"; path = "Target Support Files/Pods-whim/Pods-whim.debug.xcconfig"; sourceTree = "<group>"; };
 		82B454A5FE3E0B5DEFB31BC7 /* WatchRecording.e2e.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchRecording.e2e.test.swift; path = ../e2e/watch/WatchRecording.e2e.test.swift; sourceTree = "<group>"; };
 		A1FA5749C9ACB17F7018CAEA /* WatchSynchronization.e2e.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchSynchronization.e2e.test.swift; path = "../e2e/cross-device/WatchSynchronization.e2e.test.swift"; sourceTree = "<group>"; };
@@ -116,7 +116,7 @@
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		BBEACEBE95C11AB14E43109D /* Pods-WhimBridgeIntegrationTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-WhimBridgeIntegrationTests.debug.xcconfig"; path = "Target Support Files/Pods-WhimBridgeIntegrationTests/Pods-WhimBridgeIntegrationTests.debug.xcconfig"; sourceTree = "<group>"; };
 		C1A2DD7B774782FA3869CAA1 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-WhimBridgeIntegrationTests/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		CFCECEE5603641C88B455648 /* expo.icon */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = expo.icon; path = whim/expo.icon; sourceTree = "<group>"; };
+		CFCECEE5603641C88B455648 /* expo.icon */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 506747931833; includeInIndex = 0; lastKnownFileType = unknown; name = expo.icon; path = whim/expo.icon; sourceTree = "<group>"; };
 		D09DBA4E14CC7C8D84866439 /* WatchModel.integration.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchModel.integration.test.swift; path = ../src/watch/recording/WatchModel.integration.test.swift; sourceTree = "<group>"; };
 		D0C8B5D89E20835047FFBE77 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS11.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		D6B90A12D30B7BE2D6B31945 /* WhimBridgeIntegrationTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WhimBridgeIntegrationTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -304,7 +304,6 @@
 				2E5568B2F576975095BF9E4D /* Pods-WhimBridgeIntegrationTests.release.xcconfig */,
 				BBEACEBE95C11AB14E43109D /* Pods-WhimBridgeIntegrationTests.debug.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};

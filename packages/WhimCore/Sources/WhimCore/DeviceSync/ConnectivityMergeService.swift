@@ -45,7 +45,7 @@ public actor ConnectivityMergeService {
         guard envelope.generation == state.generation else { return nil }
         switch envelope.payload {
         case .acknowledgement(.durable(let id)):
-            try journal.acknowledge(id)
+            try journal.acknowledge(id, durableOnly: true)
             return nil
         case .deletion(let id):
             try await store.delete(noteID: id)
@@ -59,6 +59,7 @@ public actor ConnectivityMergeService {
         case .acknowledgement(.deletion(let id, let endpoint)):
             if (try await store.deletions()).contains(where: { $0.noteID == id }) {
                 try await store.acknowledgeDeletion(noteID: id, endpoint: endpoint)
+                if endpoint != device { try journal.acknowledgeApplied(.deletion(id), generation: envelope.generation) }
             }
             return nil
         case .acknowledgement(.configuration(let id)):
@@ -71,6 +72,7 @@ public actor ConnectivityMergeService {
             var endpoints = try journal.read("resetAcknowledged", as: [String].self) ?? []
             if !endpoints.contains(endpoint.rawValue) { endpoints.append(endpoint.rawValue) }
             try journal.write(endpoints, key: "resetAcknowledged")
+            if endpoint != device { try journal.acknowledgeApplied(.reset, generation: envelope.generation) }
             try journal.write([envelope.sentAt], key: "lastSynchronizedAt")
             return nil
         default: break
@@ -181,6 +183,10 @@ public actor ConnectivityMergeService {
         for envelope in try journal.inbox() where envelope.generation == state.generation {
             _ = try await applyNew(envelope)
         }
+        for deletion in try await store.deletions() {
+            try files.delete(noteID: deletion.noteID)
+            if Set(deletion.acknowledgedEndpoints).count < 2 { try await queueDeletion(deletion.noteID) }
+        }
     }
 
     public func queueNote(_ id: NoteID) async throws {
@@ -208,10 +214,10 @@ public actor ConnectivityMergeService {
     }
 
     public func queueDeletion(_ id: NoteID) async throws {
+        try journal.enqueue(.init(generation: generation(), payload: .deletion(id)))
         try journal.discardNotePayloads(id)
         try removePendingFile(id)
         try await store.acknowledgeDeletion(noteID: id, endpoint: device)
-        try journal.enqueue(.init(generation: generation(), payload: .deletion(id)))
         try await flush()
     }
 
@@ -271,9 +277,8 @@ public actor ConnectivityMergeService {
         let current = try generation()
         let ticks = UInt64(max(0, now.timeIntervalSince1970 * 1_000))
         let next = ResetGeneration(counter: max(current.counter, ticks) + 1, origin: UUID())
-        try journal.write(ConnectivityJournal.ResetState(generation: next, complete: false), key: "reset")
         let envelope = ConnectivityEnvelope(generation: next, payload: .reset)
-        try journal.enqueue(envelope)
+        try journal.enqueue(envelope, reset: .init(generation: next, complete: false))
         return envelope
     }
 

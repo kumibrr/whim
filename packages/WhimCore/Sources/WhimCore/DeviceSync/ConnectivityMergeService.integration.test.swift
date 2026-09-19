@@ -1,8 +1,92 @@
 import Foundation
 import XCTest
+import GRDB
 @testable import WhimCore
 
 final class ConnectivityMergeTests: XCTestCase {
+    func testDestructiveRequestReplaysUntilAppliedAcknowledgementSurvivesCapture() async throws {
+        for isReset in [false, true] {
+            let source = try SyncHarness(); defer { source.remove() }
+            let destination = try SyncHarness(); defer { destination.remove() }
+            let outgoing = SyncTransport(); outgoing.active = true
+            let incoming = SyncTransport(); incoming.active = true
+            func sender() throws -> ConnectivityMergeService {
+                try .init(store: source.store, files: source.files, databaseURL: source.root.appendingPathComponent("whim.sqlite"),
+                    root: source.root.appendingPathComponent("Peer"), device: .iphone, transport: outgoing)
+            }
+            let receiver = try ConnectivityMergeService(store: destination.store, files: destination.files,
+                databaseURL: destination.root.appendingPathComponent("whim.sqlite"), root: destination.root.appendingPathComponent("Peer"),
+                device: .appleWatch, transport: incoming)
+            let first = try sender()
+            let id = NoteID()
+            if isReset { let reset = try await first.prepareReset(); _ = try await first.apply(reset) }
+            else { try await source.store.delete(noteID: id); try await first.queueDeletion(id) }
+            try await first.flush()
+            let payload: ConnectivityEnvelope.Payload = isReset ? .reset : .deletion(id)
+            let request = try XCTUnwrap(outgoing.sent.first { $0.payload == payload })
+            _ = try await receiver.apply(request); try await receiver.flush()
+            let durable = try XCTUnwrap(incoming.sent.first { $0.payload == .acknowledgement(.durable(request.messageID)) })
+            _ = try await first.apply(durable) // applied acknowledgement capture fails; only durable arrives
+            let restarted = try sender()
+            try await restarted.recover(); try await restarted.activated()
+            XCTAssertEqual(outgoing.sent.filter { $0.messageID == request.messageID }.count, 2,
+                "Destructive request stays replayable after durable-only acceptance")
+            _ = try await receiver.apply(request); try await receiver.flush()
+            let appliedPayload: ConnectivityEnvelope.Payload = isReset ? .acknowledgement(.reset(.appleWatch)) : .acknowledgement(.deletion(id, .appleWatch))
+            let applied = try XCTUnwrap(incoming.sent.last { $0.payload == appliedPayload })
+            _ = try await restarted.apply(applied)
+            try await restarted.activated()
+            XCTAssertEqual(outgoing.sent.filter { $0.messageID == request.messageID }.count, 2)
+            if isReset {
+                let status = try await restarted.status(); XCTAssertEqual(status.resetState, "synchronized")
+            } else {
+                let tombstone = try await source.store.deletions().first
+                XCTAssertEqual(Set(tombstone?.acknowledgedEndpoints ?? []), [.iphone, .appleWatch])
+            }
+        }
+    }
+
+    func testTombstoneRecoversDeletionAfterOutboxWriteFails() async throws {
+        let h = try SyncHarness(); defer { h.remove() }
+        let transport = SyncTransport(); transport.active = true
+        func merge() throws -> ConnectivityMergeService {
+            try .init(store: h.store, files: h.files, databaseURL: h.root.appendingPathComponent("whim.sqlite"),
+                root: h.root.appendingPathComponent("Peer"), device: .iphone, transport: transport)
+        }
+        let first = try merge()
+        let id = NoteID()
+        try await h.store.delete(noteID: id) // durable Delete before filesystem/outbox completion
+        let injector = try DatabaseQueue(path: h.root.appendingPathComponent("whim.sqlite").path)
+        try await injector.write { db in
+            try db.execute(sql: "CREATE TRIGGER fail_peer_outbox BEFORE INSERT ON peer_outbox BEGIN SELECT RAISE(FAIL, 'disk write failure'); END")
+        }
+        do { try await first.queueDeletion(id); XCTFail("Expected outgoing intent persistence to fail") } catch {}
+        try await injector.write { db in try db.execute(sql: "DROP TRIGGER fail_peer_outbox") }
+        let restarted = try merge()
+        try await restarted.recover()
+        try await restarted.activated()
+        XCTAssertTrue(transport.sent.contains { $0.payload == .deletion(id) }, "Durable tombstone reconstructs interrupted outgoing deletion")
+    }
+
+    func testResetRequestAndGenerationRollBackTogetherWhenOutboxWriteFails() async throws {
+        let h = try SyncHarness(); defer { h.remove() }
+        let merge = try h.merge()
+        let injector = try DatabaseQueue(path: h.root.appendingPathComponent("whim.sqlite").path)
+        try await injector.write { db in
+            try db.execute(sql: "CREATE TRIGGER fail_peer_outbox BEFORE INSERT ON peer_outbox BEGIN SELECT RAISE(FAIL, 'disk write failure'); END")
+        }
+        do { _ = try await merge.prepareReset(); XCTFail("Expected reset request persistence to fail") } catch {}
+        let generation = try await h.merge().generation()
+        XCTAssertEqual(generation, .initial, "An unsent reset cannot advance a committed barrier")
+        try await injector.write { db in try db.execute(sql: "DROP TRIGGER fail_peer_outbox") }
+        let reset = try await merge.prepareReset()
+        let transport = SyncTransport(); transport.active = true
+        let restarted = try ConnectivityMergeService(store: h.store, files: h.files, databaseURL: h.root.appendingPathComponent("whim.sqlite"),
+            root: h.root.appendingPathComponent("Peer"), device: .iphone, transport: transport)
+        try await restarted.recover(); try await restarted.activated()
+        XCTAssertTrue(transport.sent.contains { $0.messageID == reset.messageID && $0.payload == .reset })
+    }
+
     func testDeletionAndResetReportPendingUntilPeerAcknowledgesAppliedState() async throws {
         let h = try SyncHarness(); defer { h.remove() }
         let transport = SyncTransport(); transport.active = true

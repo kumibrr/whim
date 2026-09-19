@@ -27,12 +27,16 @@ struct ConnectivityJournal: Sendable {
         }
     }
     struct Outgoing: Sendable { let envelope: ConnectivityEnvelope; let file: URL? }
-    func enqueue(_ envelope: ConnectivityEnvelope, file: URL? = nil, resubmit: Bool = false) throws {
+    func enqueue(_ envelope: ConnectivityEnvelope, file: URL? = nil, resubmit: Bool = false, reset: ResetState? = nil) throws {
         struct Identity: Encodable { let generation: ResetGeneration; let payload: ConnectivityEnvelope.Payload; let file: Bool }
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
         let key = SHA256.hash(data: try encoder.encode(Identity(generation: envelope.generation,
             payload: envelope.payload, file: file != nil))).map { String(format: "%02x", $0) }.joined()
         try database.write { db in
+            if let reset {
+                try db.execute(sql: "INSERT OR REPLACE INTO peer_state (key, value) VALUES ('reset', ?)",
+                    arguments: [try PropertyListEncoder().encode(reset)])
+            }
             try db.execute(sql: "INSERT OR IGNORE INTO peer_outbox (key, id, envelope, file) VALUES (?, ?, ?, ?)",
                 arguments: [key, envelope.messageID.uuidString, try envelope.sanitized.encoded(), file?.path])
             if resubmit { try db.execute(sql: "UPDATE peer_outbox SET submitted = 0 WHERE key = ?", arguments: [key]) }
@@ -61,9 +65,22 @@ struct ConnectivityJournal: Sendable {
         try database.write { db in try db.execute(sql: "INSERT OR IGNORE INTO peer_applied (id) VALUES (?)", arguments: [id.uuidString]) }
     }
 
-    func acknowledge(_ id: UUID) throws {
+    func acknowledge(_ id: UUID, durableOnly: Bool = false) throws {
         try database.write { db in
+            if durableOnly, let data = try Data.fetchOne(db, sql: "SELECT envelope FROM peer_outbox WHERE id = ?", arguments: [id.uuidString]) {
+                switch try ConnectivityEnvelope.decode(data).payload { case .deletion, .reset: return; default: break }
+            }
             try db.execute(sql: "UPDATE peer_outbox SET submitted = 2 WHERE id = ?", arguments: [id.uuidString])
+        }
+    }
+    func acknowledgeApplied(_ payload: ConnectivityEnvelope.Payload, generation: ResetGeneration) throws {
+        try database.write { db in
+            for data in try Data.fetchAll(db, sql: "SELECT envelope FROM peer_outbox WHERE submitted != 2") {
+                let envelope = try ConnectivityEnvelope.decode(data)
+                if envelope.generation == generation && envelope.payload == payload {
+                    try db.execute(sql: "UPDATE peer_outbox SET submitted = 2 WHERE id = ?", arguments: [envelope.messageID.uuidString])
+                }
+            }
         }
     }
     func replayUnacknowledged() throws {
