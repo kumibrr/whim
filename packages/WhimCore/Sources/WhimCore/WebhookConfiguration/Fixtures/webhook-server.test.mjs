@@ -109,7 +109,9 @@ test("renders an empty browser inbox without changing state JSON", async (t) => 
   const page = await fetch(server.baseURL);
   assert.equal(page.status, 200);
   assert.match(page.headers.get("content-type"), /^text\/html/);
-  assert.match(await page.text(), /No audio notes received yet/);
+  const html = await page.text();
+  assert.match(html, /No audio notes received yet/);
+  assert.match(html, /<p>IP address: (?:\d{1,3}\.){3}\d{1,3}<\/p>/);
   assert.deepEqual(await (await fetch(`${server.baseURL}/state`)).json(), { received: [] });
 });
 
