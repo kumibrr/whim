@@ -6,6 +6,23 @@ import WhimCore
 
 @MainActor
 final class WatchModelIntegrationTests: XCTestCase {
+    func testRecordingPowerEventsDriveTheLiveWaveformAndStopResetsIt() async throws {
+        let fixture = try WatchFixture()
+        defer { fixture.remove() }
+        let model = WatchModel(client: fixture.client, haptic: { _ in })
+        await model.activate()
+
+        await fixture.microphone.emit(.peakPower(-18))
+        for _ in 0..<100 {
+            if model.peakPowerDBFS == -18 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(model.peakPowerDBFS, -18)
+
+        await model.stop()
+        XCTAssertEqual(model.peakPowerDBFS, -160)
+    }
+
     func testLaunchAndWristDownRestoreOneRecordingSession() async throws {
         let fixture = try WatchFixture()
         defer { fixture.remove() }

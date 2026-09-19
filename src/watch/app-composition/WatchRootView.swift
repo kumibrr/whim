@@ -4,33 +4,40 @@ import WhimCore
 struct WatchRootView: View {
     @Bindable var model: WatchModel
     @Environment(\.scenePhase) private var scenePhase
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack {
-                    if model.recording != nil { WatchRecorderView(model: model) }
-                    else if model.permission == .granted {
-                        Text("Ready to record")
-                        Button("Record") { Task { await model.record() } }
-                            .accessibilityIdentifier("watch-record")
-                    } else {
-                        Text("Microphone access is required to capture a Note.")
-                        if model.permission == .notDetermined {
-                            Button("Allow microphone") { Task { await model.requestPermission() } }
-                        } else {
-                            Text("On Apple Watch, open Settings > Privacy & Security > Microphone and allow Whim.")
+            GeometryReader { geometry in
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        WatchCaptureView(model: model)
+                            .frame(height: geometry.size.height)
+                            .id("capture")
+
+                        VStack(spacing: 14) {
+                            WatchRecentNotesView(model: model)
+                            WebhookStatusView(available: model.configurationAvailable,
+                                synchronization: model.synchronization)
+                            if let error = model.error {
+                                Text(error).foregroundStyle(.red)
+                            }
                         }
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 20)
+                        .frame(minHeight: geometry.size.height, alignment: .top)
+                        .id("previous-notes")
                     }
-                    Button("Recent Notes") { model.showsRecent = true }
-                        .accessibilityIdentifier("watch-recent-notes")
-                    WebhookStatusView(available: model.configurationAvailable, synchronization: model.synchronization)
-                    if let error = model.error { Text(error).foregroundStyle(.red) }
+                    .scrollTargetLayout()
                 }
+                .scrollTargetBehavior(.paging)
+                .scrollBounceBehavior(.always)
+                .background(Color.black)
             }
-            .navigationTitle("Whim")
-            .navigationDestination(isPresented: $model.showsRecent) { WatchRecentNotesView(model: model) }
+            .ignoresSafeArea()
+            .toolbar(.hidden, for: .navigationBar)
         }
-        .tint(Color(red: 1, green: 0.40, blue: 0.32))
+        .tint(.white)
+        .preferredColorScheme(.dark)
         .task { await model.activate() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await model.activate() } }
