@@ -14,10 +14,12 @@
 		2574706D69D106062F52CD74 /* WebhookConfigurationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76C7E3809D0F888040984D00 /* WebhookConfigurationView.swift */; };
 		28DBD2344AC58DE887A9941A /* WatchNoteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67F30D8BD15651BCD2AB7CC7 /* WatchNoteDetailView.swift */; };
 		392128B60BAC7DB5DF56E75C /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 7F011AC3443B58190BBE7148 /* PrivacyInfo.xcprivacy */; };
-		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
+        3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		42409ABDD4FB88EB12E160FC /* WatchNotes.e2e.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65987B0982A27F5BB971B6BB /* WatchNotes.e2e.test.swift */; };
 		4B3409C958A5FAE62C7D2E80 /* WhimWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 3F96D612B2FFFCD253898A9D /* WhimWatch.app */; };
 		50BA8F2E594DF44030E28FD8 /* WatchRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22BC5C9E162FE46AE50584F2 /* WatchRootView.swift */; };
+		585A2FAF306064EE009CB6FA /* Whim.icon in Resources */ = {isa = PBXBuildFile; fileRef = 585A2FAB306064BE009CB6FA /* Whim.icon */; };
+		585A2FB0306065A9009CB6FA /* Whim.icon in Resources */ = {isa = PBXBuildFile; fileRef = 585A2FAB306064BE009CB6FA /* Whim.icon */; };
 		5D43B17D9A1B7B49AC1350F2 /* WhimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 4195615737AD9D45A625BE4C /* WhimCore */; };
 		5FE79E1CF503206737E61500 /* WebhookStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEC421C66148951ED2AA1210 /* WebhookStatusView.swift */; };
 		68346E1FA2FB63C777980259 /* ConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C688B501F4CB5B9425A8C1 /* ConfirmationView.swift */; };
@@ -92,6 +94,7 @@
 		3A0B619E3D9E321A72011895 /* WatchRecorderView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchRecorderView.swift; path = ../src/watch/recording/WatchRecorderView.swift; sourceTree = "<group>"; };
 		3F96D612B2FFFCD253898A9D /* WhimWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WhimWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		45C688B501F4CB5B9425A8C1 /* ConfirmationView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ConfirmationView.swift; path = "../src/iphone/destructive-actions/ConfirmationView.swift"; sourceTree = "<group>"; };
+		585A2FAB306064BE009CB6FA /* Whim.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Whim.icon; sourceTree = "<group>"; };
 		5A9899D0BE753D357DD7EEF2 /* WhimWatchApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WhimWatchApp.swift; path = "../src/watch/app-composition/WhimWatchApp.swift"; sourceTree = "<group>"; };
 		65987B0982A27F5BB971B6BB /* WatchNotes.e2e.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchNotes.e2e.test.swift; path = ../e2e/watch/WatchNotes.e2e.test.swift; sourceTree = "<group>"; };
 		67F30D8BD15651BCD2AB7CC7 /* WatchNoteDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchNoteDetailView.swift; path = "../src/watch/recent-notes/WatchNoteDetailView.swift"; sourceTree = "<group>"; };
@@ -163,6 +166,7 @@
 				BB2F792B24A3F905000567C9 /* Supporting */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
+				585A2FAB306064BE009CB6FA /* Whim.icon */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
 				7F011AC3443B58190BBE7148 /* PrivacyInfo.xcprivacy */,
 			);
@@ -362,7 +366,8 @@
 		83CBB9F71A601CBA00E9B192 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 1130;
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
 						LastSwiftMigration = 1250;
@@ -400,6 +405,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
+				585A2FB0306065A9009CB6FA /* Whim.icon in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
 				A623DF4AFCE23A167DC3CBE9 /* PrivacyInfo.xcprivacy in Resources */,
 			);
@@ -424,6 +430,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				392128B60BAC7DB5DF56E75C /* PrivacyInfo.xcprivacy in Resources */,
+				585A2FAF306064EE009CB6FA /* Whim.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -566,6 +573,7 @@
 		5AB108D3D59259189418D887 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = Whim;
 				CODE_SIGN_ENTITLEMENTS = WhimWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = N896F4D4TA;
@@ -588,6 +596,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
 				CLANG_CXX_LIBRARY = "libc++";
@@ -641,6 +650,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PODFILE_DIR = "$(SRCROOT)";
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				USE_HERMES = true;
@@ -651,6 +661,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
 				CLANG_CXX_LIBRARY = "libc++";
@@ -696,6 +707,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PODFILE_DIR = "$(SRCROOT)";
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				USE_HERMES = true;
 				VALIDATE_PRODUCT = YES;
@@ -755,6 +767,7 @@
 		A03A87A20E9BE950DA1A6E44 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = Whim;
 				CODE_SIGN_ENTITLEMENTS = WhimWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = N896F4D4TA;
