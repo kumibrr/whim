@@ -79,7 +79,21 @@ Lazy initialization is appropriate for configuration-test fixture loading and no
 
 ## Failure and lifecycle behavior
 
-Essential storage/recorder preparation failures appear on the mounted destination with Retry. Do not publish capture ready after a failed critical step. A microphone denial retains existing permission/settings controls.
+On both iPhone and Watch, startup and capture-related error states appear in a rounded Liquid Glass container in the upper half of the mounted screen, within its safe area. Each container includes a concise, human-readable explanation and a clearly labeled, tappable action that helps resolve that specific problem. Do not expose raw exceptions or show a generic Retry action for a problem that requires changing permissions or configuration.
+
+Use the existing appearance conventions: native Liquid Glass on iOS/watchOS 26+, a translucent material fallback on earlier supported versions, and an opaque, high-contrast background when Reduce Transparency is enabled. Error text and actions support Dynamic Type and VoiceOver. The container must not obscure Stop, Discard, elapsed time, or essential onboarding controls; reflow the upper content when necessary. At large accessibility text sizes, allow the message area to scroll while keeping its action and capture controls reachable.
+
+| Error | Message intent | Action |
+| --- | --- | --- |
+| Essential preparation failed | Explain that Whim could not prepare recording. | **Try again**, retrying only failed preparation. |
+| Microphone denied or restricted | Explain why capture is unavailable and where access can be changed. | **Open Settings** when the platform adapter supports that route; otherwise **Show instructions**, opening device-specific guidance. Do not promise that a system restriction can be changed by Whim. |
+| Storage full | Explain that more free storage is needed to save audio. | **Show instructions**, explaining how to free storage, with **Check again** in that guidance to retry preparation afterward. |
+| History, settings, recovery, or synchronization failed | Name the affected operation and, when true, explain that recording remains available. | A specific retry label, such as **Retry history** or **Retry sync**. |
+| Webhook configuration prevents Delivery | Explain that saved Notes need a working destination. | **Configure webhook** on iPhone; **Show instructions** on Watch, explaining how to configure it on iPhone. |
+
+Show one error container at a time: capture-blocking errors take precedence over auxiliary failures. Retain other failures in model state and surface the next relevant one after resolution. Auxiliary errors may be dismissed; capture-blocking errors persist until resolved. Actions show in-flight feedback and reject duplicate taps. A failed action leaves a useful message and action available; successful resolution removes the corresponding error. Automatic state refresh also removes errors that have been resolved outside the app.
+
+Do not publish capture ready after a failed critical step. Permission denial uses this same actionable container rather than a disconnected text-only warning. Unknown permission status remains a loading state, not an error.
 
 History, settings, recovery, and synchronization errors are independently observable and retryable, without replacing the recorder. Keep unresolved old Notes ineligible for automatic Delivery. Retry is single-flight and idempotent; completed work is not blindly repeated. Service-owned tasks retain errors rather than silently swallowing them.
 
@@ -97,7 +111,10 @@ Build each behavior as a vertical test-driven slice, using real owned modules an
 | Recording/storage boundary | A live writer is excluded from recovery; simultaneous startup callers share readiness and do not duplicate recovery/capture. Include same-device ownership coverage for separately composed clients. |
 | Cross-device/reset boundary | Pending reset completes before capture; reset/delete during recovery prevents stale writes and resurrection. Receipt precedence survives replay. |
 | Auxiliary services | Missing test fixture or delayed/failing credentials does not block capture; the relevant auxiliary operation reports its own error. |
+| Error presentation | Correct message/action mapping, capture-blocking priority, independent retry state, and removal after resolution. Auxiliary failure cannot disable recording. |
 | Installed apps | First-run onboarding, returning iPhone capture, Watch auto-capture, and Stop while maintenance is delayed. Keep assertions at the lowest sufficient suite. |
+
+Add installed-app coverage for a preparation failure followed by successful retry and for microphone denial followed by the available settings/guidance action. Visually verify upper-half placement, glass/material/opaque appearances, readable contrast, and reachable controls on both device sizes, including large accessibility text. Never hide Watch startup errors exclusively on the Previous Notes page.
 
 Use gates/continuations to prove non-dependency, with bounded test timeouts only as deadlock guards. Avoid pass/fail assertions based on arbitrary millisecond sleep thresholds.
 
