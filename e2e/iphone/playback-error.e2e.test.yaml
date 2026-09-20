@@ -1,0 +1,33 @@
+appId: app.whim.ios
+---
+- runFlow: flows/clean-launch.yaml
+- launchApp:
+    stopApp: true
+    arguments:
+      -WhimFixtureAudio: ${WHIM_FIXTURE_AUDIO}
+      -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
+      -WhimPlaybackFailureOnce: true
+- tapOn:
+    id: record-button
+- tapOn:
+    id: stop-recording
+- tapOn:
+    id: history-hint
+- assertVisible:
+    id: history-sheet
+- tapOn:
+    id: note-play-.*
+    index: 0
+- assertVisible: The audio player could not open this Note. Try playback again.
+- assertNotVisible:
+    id: startup-error-action
+- assertVisible:
+    id: history-sheet
+- tapOn:
+    id: startup-error
+- assertVisible:
+    id: note-stop-.*
+- assertNotVisible:
+    id: startup-error
+- assertVisible:
+    id: history-sheet

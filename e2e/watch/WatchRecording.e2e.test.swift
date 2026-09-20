@@ -33,6 +33,27 @@ final class WatchRecordingUITests: XCTestCase {
         ).count, 2)
     }
 
+    func testPreparationErrorCanBeResolvedWithoutRelaunching() throws {
+        guard let fixturePath = ProcessInfo.processInfo.environment["WHIM_WATCH_FIXTURE_AUDIO"] else {
+            throw XCTSkip("Runner-provided audio fixture is required")
+        }
+        let source = URL(fileURLWithPath: fixturePath)
+        let delayed = source.deletingLastPathComponent().appendingPathComponent("delayed-\(UUID()).m4a")
+        defer { try? FileManager.default.removeItem(at: delayed) }
+        let app = XCUIApplication()
+        app.launchArguments = ["-WhimWatchTestID", UUID().uuidString, "-WhimFixtureAudio", delayed.path]
+        app.launch()
+        let action = app.buttons["startup-error"]
+        guard action.waitForExistence(timeout: 10) else { return XCTFail("The preparation error card must be a distinct button") }
+        XCTAssertTrue(action.label.contains("could not prepare recording"))
+        XCTAssertFalse(app.buttons["watch-stop"].exists)
+        try FileManager.default.copyItem(at: source, to: delayed)
+        action.tap()
+        XCTAssertTrue(app.buttons["watch-stop"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["startup-error"].exists)
+        app.buttons["watch-stop"].tap()
+    }
+
     func testLaunchCapturesAndStopSavesLocallyWithoutConfiguration() {
         let app = XCUIApplication()
         app.launchArguments = WatchUITestConfiguration.arguments
@@ -129,8 +150,23 @@ extension WatchRecordingUITests {
         let app = XCUIApplication()
         app.launchArguments = WatchUITestConfiguration.arguments + ["-WhimWatchMicrophoneDenied"]
         app.launch()
-        XCTAssertTrue(app.staticTexts["Microphone access is required to capture a Note."].waitForExistence(timeout: 10))
+        let message = app.buttons["startup-error"]
+        guard message.waitForExistence(timeout: 10) else { return XCTFail("The entire error card must be a button") }
+        XCTAssertTrue(message.label.lowercased().contains("microphone access"))
+        let action = app.buttons["startup-error"]
+        XCTAssertTrue(action.exists)
+        XCTAssertLessThan(action.frame.midY, app.windows.firstMatch.frame.midY)
+        XCTAssertLessThan(action.frame.height, app.windows.firstMatch.frame.height * 0.30)
+        XCTAssertFalse(app.buttons["startup-error-action"].exists)
         XCTAssertFalse(app.buttons["watch-stop"].exists)
+        let appearance = XCTAttachment(screenshot: app.screenshot())
+        appearance.name = "Compact tappable error card"
+        appearance.lifetime = .keepAlways
+        add(appearance)
+        action.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.15)).tap()
+        XCTAssertTrue(app.staticTexts["On Apple Watch, open Settings > Privacy & Security > Microphone and allow Whim."].waitForExistence(timeout: 5))
+        app.buttons["Check again"].tap()
+        XCTAssertTrue(app.buttons["startup-error"].waitForExistence(timeout: 5))
     }
 
     func testDiscardImmediatelyLeavesNoNote() {

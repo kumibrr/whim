@@ -41,15 +41,15 @@ import WhimCore
         guard !Task.isCancelled, audioGeneration == token, note?.hasLocalAudio == true else { return }
         waveform = value ?? .unavailable
     }
-    public func play() async { await perform { _ = try await client.playNote(noteID) } }
+    public func play() async { await perform(context: .playback) { _ = try await client.playNote(noteID) } }
     public func stopPlayback() async { await client.stopPlayback(); playback = nil; isPlaying = false }
     public func retry() async { await perform { try await client.retry(noteID: noteID) } }
     public func sendRecovered() async { await perform { try await client.sendRecovered(noteID: noteID) } }
     public func delete() async { await perform { try await client.delete(noteID: noteID); deleted = true } }
-    private func perform(_ operation: () async throws -> Void) async {
+    private func perform(context: ActionableFailure.Operation = .request, _ operation: () async throws -> Void) async {
         guard !isPending else { return }; isPending = true; error = nil
         defer { isPending = false }
         do { try await operation(); await refresh() }
-        catch is CancellationError {} catch { self.error = IPhoneError(error) }
+        catch is CancellationError {} catch { self.error = IPhoneError(error, operation: context) }
     }
 }

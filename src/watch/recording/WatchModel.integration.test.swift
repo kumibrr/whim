@@ -6,6 +6,19 @@ import WhimCore
 
 @MainActor
 final class WatchModelIntegrationTests: XCTestCase {
+    func testLaunchRecordsBeforeOptionalSettingsComplete() async throws {
+        let permissions = SlowWatchPermissions()
+        let fixture = try WatchFixture(permissions: permissions)
+        defer { fixture.remove() }
+        let model = WatchModel(client: fixture.client, haptic: { _ in })
+        let activation = Task { await model.activate() }
+        await permissions.waitUntilBlocked()
+        XCTAssertNotNil(model.recording, "Microphone capture must precede optional settings")
+        await permissions.release()
+        await activation.value
+        await model.discard()
+    }
+
     func testRecordingPowerEventsDriveTheLiveWaveformAndStopResetsIt() async throws {
         let fixture = try WatchFixture()
         defer { fixture.remove() }
@@ -222,7 +235,7 @@ private final class WatchFixture {
     let client: WhimService
     let microphone: WatchMicrophone
     let transport = WatchTransport()
-    init(permission: PermissionStatus = .granted, connected: Bool = false) throws {
+    init(permission: PermissionStatus = .granted, connected: Bool = false, permissions: (any PermissionAdapter)? = nil) throws {
         root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let store = try SQLiteWhimStore.open(at: root.appendingPathComponent("whim.sqlite"))
@@ -242,7 +255,7 @@ private final class WatchFixture {
                 fixtureAudioURL: root.appendingPathComponent("fixture.m4a"), appVersion: "1", appBuild: "1"),
             recovery: RecoveryScanner(store: store, files: files),
             preferences: try UserDefaultsPreferenceStore(suiteName: "watch-test-\(UUID())"),
-            credentials: credentials, scheduler: scheduler, permissions: WatchPermissions(value: permission))
+            credentials: credentials, scheduler: scheduler, permissions: permissions ?? WatchPermissions(value: permission))
     }
     func remove() { try? FileManager.default.removeItem(at: root) }
 }
@@ -301,4 +314,23 @@ private struct WatchPermissions: PermissionAdapter {
     func status(_ kind: PermissionKind) async -> PermissionStatus { value }
     func request(_ kind: PermissionKind) async -> PermissionStatus { value }
     func openSettings() async {}
+}
+
+private actor SlowWatchPermissions: PermissionAdapter {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var released = false
+    func status(_ kind: PermissionKind) async -> PermissionStatus {
+        if kind == .notifications, !released {
+            await withCheckedContinuation { continuation = $0; waiters.forEach { $0.resume() }; waiters = [] }
+        }
+        return .granted
+    }
+    func waitUntilBlocked() async {
+        if continuation != nil { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+    func release() { released = true; continuation?.resume(); continuation = nil }
+    func request(_ kind: PermissionKind) async throws -> PermissionStatus { .granted }
+    func openSettings() {}
 }

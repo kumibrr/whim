@@ -13,6 +13,54 @@ final class WatchModel {
     private(set) var recording: RecordingProjection?
     private(set) var notes: [NoteProjection] = []
     private(set) var permission: PermissionStatus = .notDetermined
+    private(set) var captureReady = false
+    private(set) var isResolvingError = false
+    private var commandFailure: ActionableFailure?
+    private var maintenanceFailure: ActionableFailure?
+    private var maintenanceTask: Task<Void, Never>?
+    private var failedPlaybackNote: NoteProjection?
+    private var settingsFailure: ActionableFailure?
+    private var settingsRevision = 0
+    private var captureRevision = 0
+    private var lastCaptureCommand = CaptureCommand.start
+    private enum CaptureCommand { case start, stop, discard }
+    var visibleFailure: ActionableFailure? {
+        if let commandFailure, commandFailure.blocksCapture { return commandFailure }
+        if captureReady, permission == .denied || permission == .restricted {
+            return ActionableFailure(WhimServiceError.permissionDenied, operation: .capture)
+        }
+        if let commandFailure { return commandFailure }
+        if refreshError != nil { return ActionableFailure(WhimServiceError.audioUnavailable, operation: .history) }
+        return settingsFailure ?? maintenanceFailure
+    }
+    func dismissAuxiliaryError() {
+        if refreshError != nil { refreshError = nil } else if settingsFailure != nil { settingsFailure = nil } else { maintenanceFailure = nil }
+    }
+    func retryVisibleFailure() async {
+        guard !isResolvingError else { return }
+        isResolvingError = true
+        defer { isResolvingError = false }
+        if visibleFailure?.action == .microphoneSettings { await activate(); return }
+        switch visibleFailure?.operation {
+        case .history: await refreshNotes()
+        case .settings: await refreshSettings()
+        case .request:
+            commandFailure = nil; commandError = nil
+            await refreshNotes()
+        case .playback:
+            if let note = failedPlaybackNote { await play(note) }
+        case .maintenance:
+            maintenanceTask = nil; startMaintenanceIfNeeded()
+            await maintenanceTask?.value
+        case .capture:
+            switch lastCaptureCommand {
+            case .start: await record()
+            case .stop: await stop()
+            case .discard: await discard()
+            }
+        default: await activate()
+        }
+    }
     private(set) var configurationAvailable = false
     private(set) var synchronization = WatchSettingsProjection.unavailable
     private(set) var elapsed: TimeInterval = 0
@@ -39,21 +87,59 @@ final class WatchModel {
     func activate() async {
         guard !activating else { return }
         activating = true
-        defer { activating = false }
         observeIfNeeded()
-        await perform {
-            let settings = try await self.client.settings()
-            self.permission = settings.permissions.microphone
-            self.configurationAvailable = settings.webhook != nil
-            self.synchronization = settings.watch
-            self.recording = try await self.client.activeRecording()
+        let loaded = await perform(operation: .preparation) {
+            let revision = self.captureRevision
+            let startup = try await self.client.startup()
+            self.permission = startup.microphone
+            self.captureReady = true
+            if revision == self.captureRevision { self.recording = startup.recording }
             if self.recording != nil { self.showsRecent = false }
-            if !self.activated, self.recording == nil, self.permission == .granted {
+            if !self.activated, self.recording == nil, self.permission == .granted, !self.captureBusy {
+                self.captureBusy = true
+                defer { self.captureBusy = false }
+                self.lastCaptureCommand = .start
                 try await self.beginCapture()
             }
             self.activated = true
-            await self.refreshNotes()
         }
+        activating = false
+        if loaded {
+            startMaintenanceIfNeeded()
+            async let settings: Void = refreshSettings()
+            async let notes: Void = refreshNotes()
+            _ = await (settings, notes)
+        }
+    }
+    private func startMaintenanceIfNeeded() {
+        guard maintenanceTask == nil else { return }
+        maintenanceTask = Task { [weak self, client] in
+            do {
+                try await client.maintain()
+                guard let self, !Task.isCancelled else { return }
+                self.maintenanceFailure = nil
+                await self.refreshNotes()
+            } catch is CancellationError {
+                guard let self, !Task.isCancelled else { return }
+                self.maintenanceTask = nil
+                self.startMaintenanceIfNeeded()
+            } catch {
+                guard let self, !Task.isCancelled else { return }
+                self.maintenanceFailure = ActionableFailure(error, operation: .maintenance)
+                await self.refreshNotes()
+            }
+        }
+    }
+    private func refreshSettings() async {
+        settingsRevision += 1
+        let revision = settingsRevision
+        do {
+            let settings = try await client.settings()
+            guard revision == settingsRevision else { return }
+            configurationAvailable = settings.webhook != nil
+            synchronization = settings.watch
+            settingsFailure = nil
+        } catch { if revision == settingsRevision { settingsFailure = ActionableFailure(error, operation: .settings) } }
     }
     func requestPermission() async {
         await performCapture {
@@ -61,7 +147,10 @@ final class WatchModel {
             if self.permission == .granted { try await self.beginCapture() }
         }
     }
-    func record() async { await performCapture { try await self.beginCapture() } }
+    func record() async {
+        lastCaptureCommand = .start
+        await performCapture { try await self.beginCapture() }
+    }
     private func beginCapture() async throws {
         let existing = try await client.activeRecording()
         recording = try await client.startRecording(source: .appleWatch)
@@ -69,15 +158,17 @@ final class WatchModel {
         if existing == nil { elapsed = 0; peakPowerDBFS = -160; warned = false; haptic(.start) }
     }
     func stop() async {
+        lastCaptureCommand = .stop
         await performCapture {
             _ = try await self.client.stopRecording()
             self.recording = nil
             self.peakPowerDBFS = -160
             self.haptic(.stop)
-            await self.refreshNotes()
+            Task { await self.refreshNotes() }
         }
     }
     func discard() async {
+        lastCaptureCommand = .discard
         await performCapture {
             try await self.client.discardRecording()
             self.recording = nil
@@ -110,7 +201,8 @@ final class WatchModel {
         }
     }
     func play(_ note: NoteProjection) async {
-        await perform { self.playback = try await self.client.playNote(note.id) }
+        failedPlaybackNote = note
+        if await perform(operation: .playback, { self.playback = try await self.client.playNote(note.id) }) { failedPlaybackNote = nil }
     }
     func stopPlayback() async { await client.stopPlayback(); playback = nil }
     func refreshPlayback() async { playback = await client.playbackSnapshot() }
@@ -131,22 +223,22 @@ final class WatchModel {
         guard !captureBusy else { return }
         captureBusy = true
         defer { captureBusy = false }
-        await perform(operation)
+        await perform(operation: .capture, operation)
     }
     @discardableResult
-    private func perform(_ operation: () async throws -> Void) async -> Bool {
+    private func perform(operation context: ActionableFailure.Operation = .request, _ operation: () async throws -> Void) async -> Bool {
         let revision = UUID()
         commandRevision = revision
         do {
             try await operation()
-            if commandRevision == revision { commandError = nil }
+            if commandRevision == revision { commandError = nil; commandFailure = nil }
             return true
         } catch is CancellationError {
             return false
         } catch {
             if commandRevision == revision {
-                commandError = (error as? WhimServiceError)?.description
-                    ?? "Whim could not complete this action. Try again."
+                commandFailure = ActionableFailure(error, operation: context)
+                commandError = commandFailure?.message
             }
             return false
         }
@@ -159,21 +251,24 @@ final class WatchModel {
                 guard let self else { return }
                 switch event.type {
                 case .recordingStarted:
+                    self.captureRevision += 1
                     self.recording = event.recording
                     self.peakPowerDBFS = -160
                 case .recordingStopped, .recordingDiscarded:
+                    self.captureRevision += 1
                     self.recording = nil
                     self.peakPowerDBFS = -160
                 case .recordingProgress:
                     if let elapsed = event.elapsedSeconds { self.elapsed = elapsed }
                     if let power = event.peakPowerDBFS { self.peakPowerDBFS = Double(power) }
                 case .recordingMaximumDurationWarning: self.warned = true; self.haptic(.notification)
-                case .noteChanged, .noteDeleted, .notesReset: await self.refreshNotes()
+                case .noteChanged, .noteDeleted: Task { await self.refreshNotes() }
+                case .notesReset:
+                    self.captureRevision += 1
+                    self.recording = nil; self.notes = []
+                    Task { await self.refreshNotes(); await self.refreshSettings() }
                 case .settingsChanged:
-                    if let settings = try? await self.client.settings() {
-                        self.configurationAvailable = settings.webhook != nil
-                        self.synchronization = settings.watch
-                    }
+                    Task { await self.refreshSettings() }
                 default: break
                 }
             }

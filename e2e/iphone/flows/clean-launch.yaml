@@ -22,7 +22,27 @@ appId: app.whim.ios
     direction: DOWN
     centerElement: true
 - tapOn: Skip webhook setup
-- tapOn: Start using Whim
+- runFlow:
+    when:
+      visible: Allow microphone
+    commands:
+      - tapOn: Allow microphone
+      - runFlow:
+          when:
+            visible: Allow
+          commands:
+            - tapOn: Allow
+      - runFlow:
+          when:
+            visible: OK
+          commands:
+            - tapOn: OK
+# Granting permission also completes onboarding; pre-granted launches need this button.
+- runFlow:
+    when:
+      visible: Start using Whim
+    commands:
+      - tapOn: Start using Whim
 - extendedWaitUntil:
     visible:
       id: whim-home

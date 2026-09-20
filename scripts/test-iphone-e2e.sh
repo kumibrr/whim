@@ -85,6 +85,7 @@ xcrun simctl uninstall "$WHIM_IPHONE_SIMULATOR_UDID" "$whim_bundle_id" >/dev/nul
 xcrun simctl install "$WHIM_IPHONE_SIMULATOR_UDID" "$whim_app"
 whim_flows=(
   "$whim_root/e2e/iphone/history-sheet.e2e.test.yaml"
+  "$whim_root/e2e/iphone/playback-error.e2e.test.yaml"
   "$whim_root/e2e/iphone/onboarding.e2e.test.yaml"
   "$whim_root/e2e/iphone/record-and-review.e2e.test.yaml"
   "$whim_root/e2e/iphone/offline-and-retry.e2e.test.yaml"

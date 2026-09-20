@@ -67,3 +67,11 @@ primary-action Button during verification.
 3. Enable Reduce Motion. Repeat: controls change without the morph animation. Enable Reduce Transparency: controls remain legible with opaque surfaces.
 4. Verify the existing large hit targets and VoiceOver labels. On pre-26 systems, retain the existing material capture button and plain red Discard without morphing.
 5. Record a slow-motion screen capture on physical OS 26 hardware for the visual transition; automated journeys cover the resulting state and operable controls.
+
+## Capture-first launch and error presentation
+
+Measure first capture-frame appearance and actual microphone onset separately on cold and warm launches, with empty and populated stores. First activation with granted permission must capture while old audio recovery/synchronization continues. Stop must respond before that work finishes. Returning after wrist-down or Stop must not start a second session.
+
+Deny microphone permission and launch: verify the error container/action sits in the upper half and tapping the whole glass card opens device-specific guidance. Grant access in Watch Settings and return: the error clears, and Record starts explicitly after the initial activation. Verify glass, older-OS material fallback, Reduce Transparency, VoiceOver, and large text. The compact message must wrap at large text sizes. Tap near the card edge as well as its text: both trigger recovery. Verify VoiceOver announces the action and offers Dismiss error for auxiliary failures; a horizontal swipe dismisses those failures without triggering retry. Stop/Discard must remain accessible. Include storage-full guidance followed by Check again after freeing space. Check initial speech preservation and wrist-down continuity on hardware.
+
+Compact errors: verify the glass card fits its message without an empty scrolling area or a separate action row. Tapping anywhere on the card runs its recovery action; repeated taps during work are disabled.

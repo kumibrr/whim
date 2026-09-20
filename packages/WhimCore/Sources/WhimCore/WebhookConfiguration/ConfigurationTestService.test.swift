@@ -3,6 +3,16 @@ import XCTest
 @testable import WhimCore
 
 final class ConfigurationTestServiceTests: XCTestCase {
+    func testMissingFixtureDoesNotFailConstruction() async throws {
+        let revision = ConfigurationRevisionID()
+        let credentials = ConfigurationCredentialFake(revision: revision,
+            credentials: .init(endpoint: URL(string: "https://example.com")!, bearerToken: nil, hmacSecret: nil, customHeaders: []))
+        let service = ConfigurationTestService(credentials: credentials, transport: ConfigurationCaptureTransport(),
+            fixtureAudio: { try missingFixture() }, appVersion: "1", appBuild: "1")
+        do { _ = try await service.send(revisionID: revision); XCTFail("Expected missing fixture") }
+        catch FixtureFailure.missing { }
+    }
+
     // Break: configuration tests consume Note state, reuse IDs, emit note.created, or require acknowledgement to pass.
     func testSendsFreshConfigurationTestAndReportsOptionalIdempotencyConfirmation() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -65,3 +75,6 @@ private actor ConfigurationCredentialFake: CredentialStore {
     func remove(for revisionID: ConfigurationRevisionID) throws {}
     func removeAll() throws {}
 }
+
+private enum FixtureFailure: Error { case missing }
+private func missingFixture() throws -> URL { throw FixtureFailure.missing }

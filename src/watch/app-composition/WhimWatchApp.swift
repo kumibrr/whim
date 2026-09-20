@@ -6,24 +6,28 @@ import WatchKit
 struct WhimWatchApp: App {
     @WKApplicationDelegateAdaptor(WhimWatchDelegate.self) private var delegate
     @State private var model: WatchModel?
-    @State private var error: String?
+    @State private var error: ActionableFailure?
+    @State private var starting = false
     var body: some Scene {
         WindowGroup {
             Group {
                 if let model { WatchRootView(model: model) }
-                else if let error { Text(error) }
-                else { ProgressView("Opening Whim") }
+                else { WatchStartupShell(failure: error, busy: starting) { Task { await launch() } } }
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("watch-root")
-            .task {
-                guard model == nil else { return }
-                #if DEBUG
-                if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }
-                #endif
-                do { model = WatchModel(client: try await WhimWatchRuntime.service()) }
-                catch { self.error = String(describing: error) }
-            }
+            .task { await launch() }
         }
+    }
+    @MainActor private func launch() async {
+        guard model == nil, !starting else { return }
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }
+        #endif
+        starting = true
+        defer { starting = false }
+        do { model = WatchModel(client: try await WhimWatchRuntime.service()); error = nil }
+        catch { self.error = ActionableFailure(error, operation: .preparation) }
     }
 }
 
@@ -32,7 +36,12 @@ final class WhimWatchDelegate: NSObject, WKApplicationDelegate {
         for task in backgroundTasks {
             if let connectivity = task as? WKWatchConnectivityRefreshBackgroundTask {
                 WatchBackgroundTaskCoordinator.shared.retain(connectivity)
-                Task { _ = try? await WhimWatchRuntime.service() }
+                Task {
+                    let coordinator = WatchBackgroundTaskCoordinator.shared
+                    coordinator.beginProcessing()
+                    defer { coordinator.endProcessing() }
+                    if let service = try? await WhimWatchRuntime.service() { try? await service.launch() }
+                }
             } else { task.setTaskCompletedWithSnapshot(false) }
         }
     }

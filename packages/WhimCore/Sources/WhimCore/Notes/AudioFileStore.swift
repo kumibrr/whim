@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import Darwin
 
 public struct FinalizedAudio: Sendable {
     public let url: URL
@@ -12,7 +13,16 @@ public struct PartialAudio: Sendable {
     public let duration: TimeInterval
 }
 
+/// A file-descriptor lease survives actor suspension and is released on process exit.
+public final class AudioFileOwnership: @unchecked Sendable {
+    private let descriptor: Int32?
+    public init() { descriptor = nil }
+    fileprivate init(descriptor: Int32) { self.descriptor = descriptor }
+    deinit { if let descriptor { _ = flock(descriptor, LOCK_UN); close(descriptor) } }
+}
+
 public protocol AudioFileManaging: Sendable {
+    func claimOwnership(noteID: NoteID) throws -> AudioFileOwnership?
     func deleteTemporary(sessionID: RecordingSessionID) throws
     func audioError(at url: URL) -> LocalAudioError?
     func durableNoteIDs() throws -> [NoteID]
@@ -23,6 +33,10 @@ public protocol AudioFileManaging: Sendable {
     func makeDeliveredProtectionStrict(noteID: NoteID) throws
     func delete(noteID: NoteID) throws
     func playablePartial(sessionID: RecordingSessionID) throws -> PartialAudio?
+}
+
+public extension AudioFileManaging {
+    func claimOwnership(noteID: NoteID) throws -> AudioFileOwnership? { AudioFileOwnership() }
 }
 
 public struct AudioFileStore: AudioFileManaging {
@@ -36,10 +50,24 @@ public struct AudioFileStore: AudioFileManaging {
         self.root = root
         self.durability = durability
         self.closeWriter = closeWriter
-        for name in ["Notes", "RecordingSessions"] {
+        for name in ["Notes", "RecordingSessions", "Ownership"] {
             try FileManager.default.createDirectory(at: root.appendingPathComponent(name), withIntermediateDirectories: true)
             try durability.protect(root.appendingPathComponent(name), as: .unsent)
         }
+    }
+
+    public func claimOwnership(noteID: NoteID) throws -> AudioFileOwnership? {
+        let url = root.appendingPathComponent("Ownership").appendingPathComponent(noteID.rawValue.uuidString)
+        let descriptor = open(url.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
+            let code = errno
+            close(descriptor)
+            if code == EWOULDBLOCK { return nil }
+            throw POSIXError(POSIXErrorCode(rawValue: code) ?? .EIO)
+        }
+        // Never unlink lock files: doing so would allow two owners on different inodes.
+        return AudioFileOwnership(descriptor: descriptor)
     }
 
     public func temporaryURL(for sessionID: RecordingSessionID) throws -> URL {

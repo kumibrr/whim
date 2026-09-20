@@ -175,12 +175,25 @@ public actor ConnectivityMergeService {
         try journal.enqueue(.init(generation: envelope.generation, payload: .acknowledgement(.configuration(revision.id))))
     }
 
-    public func recover() async throws {
+    /// Finish destructive work before admitting any new Recording Session.
+    @discardableResult public func recoverReset() async throws -> Bool {
+        let before = try journal.resetState()
         let resets = try journal.inbox().filter { if case .reset = $0.payload { true } else { false } }
         if let latest = resets.max(by: { $0.generation < $1.generation }) { _ = try await apply(latest) }
         let state = try journal.resetState()
         if !state.complete { try await eraseForReset(state.generation) }
+        return !before.complete || before.generation != state.generation
+    }
+
+    public func recover() async throws {
+        try await recoverReset()
+        try await recoverPreparedState()
+    }
+
+    public func recoverPreparedState() async throws {
+        let state = try journal.resetState()
         for envelope in try journal.inbox() where envelope.generation == state.generation {
+            if case .reset = envelope.payload { continue }
             _ = try await applyNew(envelope)
         }
         for deletion in try await store.deletions() {
@@ -222,7 +235,9 @@ public actor ConnectivityMergeService {
     }
 
     public func flush() async throws {
-        guard let transport, transport.isActivated else { return }
+        // Activation alone does not mean a companion is installed. Keep the
+        // journal pending until it is available; reachability is not required.
+        guard let transport, transport.isActivated, transport.isAvailable else { return }
         let current = try generation()
         for pending in try journal.outgoing() {
             guard pending.envelope.generation == current else {

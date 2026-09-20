@@ -16,7 +16,6 @@ struct TimelineView: View {
     }
     var body: some View {
         WhimContent {
-            if let error = model.error { WhimErrorText(message: error.message) }
             ViewThatFits(in: .horizontal) {
                 HStack { filters }
                 VStack(alignment: .leading) { filters }
@@ -27,7 +26,11 @@ struct TimelineView: View {
                 }
             }
             if visible.isEmpty {
-                Text("No Notes here yet. Capture a thought.").foregroundStyle(.secondary)
+                if model.historyError != nil {
+                    Text("History is unavailable. Retry loading your saved Notes.").foregroundStyle(.secondary)
+                } else {
+                    Text("No Notes here yet. Capture a thought.").foregroundStyle(.secondary)
+                }
             }
             LazyVStack(spacing: 14) {
                 ForEach(visible, id: \.id) { note in

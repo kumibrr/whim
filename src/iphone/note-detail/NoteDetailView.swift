@@ -42,8 +42,15 @@ struct NoteDetailView: View {
                 Text("This Note is unavailable.")
                 Button("Return to timeline") { dismiss() }
             }
-            if let error = model.error { WhimErrorText(message: error.message) }
+            if let error = model.error, error.recovery.operation != .playback { WhimErrorText(message: error.message) }
         }.accessibilityIdentifier("note-detail").disabled(model.isPending).navigationTitle("").navigationBarTitleDisplayMode(.inline).toolbar(.visible, for: .navigationBar)
+            .safeAreaInset(edge: .top) {
+                if let failure = model.error?.recovery, failure.operation == .playback {
+                    WhimErrorContainer(message: failure.message, actionLabel: failure.actionLabel, busy: model.isPending) {
+                        Task { await model.play() }
+                    }.padding(.horizontal, 20)
+                }
+            }
             .toolbar {
                 if let note = model.note {
                     ToolbarItem(placement: .topBarTrailing) {

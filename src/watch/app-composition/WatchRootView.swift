@@ -19,9 +19,6 @@ struct WatchRootView: View {
                             WatchRecentNotesView(model: model)
                             WebhookStatusView(available: model.configurationAvailable,
                                 synchronization: model.synchronization)
-                            if let error = model.error {
-                                Text(error).foregroundStyle(.red)
-                            }
                         }
                         .padding(.horizontal, 8)
                         .padding(.top, 90)

@@ -2,8 +2,10 @@ import Foundation
 import WhimCore
 
 public struct IPhoneError: Error, Equatable, Sendable {
+    public let recovery: ActionableFailure
     public let message: String
-    public init(_ error: any Error) {
+    public init(_ error: any Error, operation: ActionableFailure.Operation = .capture) {
+        recovery = ActionableFailure(error, operation: operation)
         switch error {
         case WhimServiceError.recordingActive: message = "Stop recording before playing a Note."
         case WhimServiceError.audioUnavailable: message = "This Note's audio is unavailable."

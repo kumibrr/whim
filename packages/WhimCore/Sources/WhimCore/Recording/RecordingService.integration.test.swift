@@ -4,6 +4,26 @@ import XCTest
 @testable import WhimCore
 
 final class RecordingServiceIntegrationTests: XCTestCase {
+    // Break: a second composition recovers a Recording Session whose writer is still alive.
+    func testRecoveryDoesNotTouchAnotherLiveRecorder() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let database = root.appendingPathComponent("whim.sqlite")
+        let store = try SQLiteWhimStore.open(at: database)
+        let files = try AudioFileStore(root: root.appendingPathComponent("Audio"), closeWriter: { _ in })
+        let service = RecordingService(recorder: FixtureAudioRecorder(), store: store, files: files)
+        let session = try await service.start(source: .iphone)
+        let reopened = try SQLiteWhimStore.open(at: database)
+        let otherFiles = try AudioFileStore(root: root.appendingPathComponent("Audio"), closeWriter: { _ in })
+        try await RecoveryScanner(store: reopened, files: otherFiles).scan()
+        let recovered = try await reopened.note(id: session.noteID)
+        XCTAssertNil(recovered, "Live audio must not be finalized as crash recovery")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try files.temporaryURL(for: session.sessionID).path))
+        let saved = try await service.stop()
+        XCTAssertEqual(saved?.captureOutcome, .completed)
+    }
+
     func testRecordingOwnsOneActivityUntilStop() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

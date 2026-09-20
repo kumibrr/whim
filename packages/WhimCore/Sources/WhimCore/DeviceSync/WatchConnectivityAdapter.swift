@@ -150,8 +150,15 @@ public final class SystemWatchConnectivitySession: NSObject, WatchConnectivitySe
            let envelope = try? ConnectivityEnvelope.decode(data) { emit(.failed(envelope.messageID)) }
     }
     #if os(iOS)
+    public func sessionWatchStateDidChange(_ session: WCSession) {
+        if isAvailable { emit(.activated) }
+    }
     public func sessionDidBecomeInactive(_ session: WCSession) { updateBackground() }
     public func sessionDidDeactivate(_ session: WCSession) { session.activate() }
+    #else
+    public func sessionCompanionAppInstalledDidChange(_ session: WCSession) {
+        if isAvailable { emit(.activated) }
+    }
     #endif
 }
 #endif

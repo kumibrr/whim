@@ -382,7 +382,7 @@
 			);
 			mainGroup = 83CBB9F61A601CBA00E9B192;
 			packageReferences = (
-				B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "../packages/WhimCore" */,
+				B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "WhimCore" */,
 				65E159F373B2B699E6843778 /* XCLocalSwiftPackageReference ".." */,
 			);
 			productRefGroup = 83CBBA001A601CBA00E9B192 /* Products */;
@@ -849,7 +849,7 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ..;
 		};
-		B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "../packages/WhimCore" */ = {
+		B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "WhimCore" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../packages/WhimCore;
 		};
@@ -858,7 +858,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		4195615737AD9D45A625BE4C /* WhimCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "../packages/WhimCore" */;
+			package = B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "WhimCore" */;
 			productName = WhimCore;
 		};
 		6FBE938CC68C61BFEEB4612F /* WhimIPhone */ = {
@@ -868,7 +868,7 @@
 		};
 		7D6ECB88619BE4362A0E9A7D /* WhimCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "../packages/WhimCore" */;
+			package = B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "WhimCore" */;
 			productName = WhimCore;
 		};
 /* End XCSwiftPackageProductDependency section */

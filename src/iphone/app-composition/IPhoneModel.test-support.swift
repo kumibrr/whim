@@ -37,7 +37,8 @@ final class WhimFacadeHarness: @unchecked Sendable {
                      requestBuilder: WebhookRequestBuilder = WebhookRequestBuilder(),
                      peer: ConnectivityMergeService? = nil,
                      onboarding: any OnboardingStoring = TestOnboarding(),
-                     waveform: any AudioWaveformAdapter = AVAudioWaveformAdapter()) -> WhimService {
+                     waveform: any AudioWaveformAdapter = AVAudioWaveformAdapter(),
+                     recoveryFiles: (any AudioFileManaging)? = nil) -> WhimService {
         let selectedStore = selectedStore ?? store
         let title = TitleService(transcriber: transcriber, store: selectedStore)
         let delivery = DeliveryService(store: selectedStore, credentials: credentials, transport: transport,
@@ -50,7 +51,7 @@ final class WhimFacadeHarness: @unchecked Sendable {
             fixtureAudioURL: root.appendingPathComponent("test.m4a"), appVersion: "1.0.0", appBuild: "1")
         return WhimService(recording: recording, store: selectedStore, files: files, title: title,
             delivery: delivery, configuration: configuration, configurationTest: configurationTest,
-            recovery: RecoveryScanner(store: selectedStore, files: files), preferences: preferences ?? self.preferences,
+            recovery: RecoveryScanner(store: selectedStore, files: recoveryFiles ?? files), preferences: preferences ?? self.preferences,
             credentials: credentials, scheduler: scheduler, onboarding: onboarding, permissions: permissions, playback: playback, peer: peer, waveform: waveform)
     }
 
@@ -434,4 +435,23 @@ actor NavigationPlayback: PlaybackAdapter {
         await withCheckedContinuation { waiters.append($0) }
     }
     func release() { held?.resume(); held = nil }
+}
+
+struct FailingRecoveryOwnership: AudioFileManaging {
+    let base: AudioFileStore
+    var beforeClaim: @Sendable () throws -> Void = { throw POSIXError(.EIO) }
+    func claimOwnership(noteID: NoteID) throws -> AudioFileOwnership? {
+        try beforeClaim()
+        return try base.claimOwnership(noteID: noteID)
+    }
+    func deleteTemporary(sessionID: RecordingSessionID) throws { try base.deleteTemporary(sessionID: sessionID) }
+    func audioError(at url: URL) -> LocalAudioError? { base.audioError(at: url) }
+    func durableNoteIDs() throws -> [NoteID] { try base.durableNoteIDs() }
+    func durableAudio(noteID: NoteID) throws -> FinalizedAudio? { try base.durableAudio(noteID: noteID) }
+    func audioURL(for id: NoteID) -> URL { base.audioURL(for: id) }
+    func temporaryURL(for id: RecordingSessionID) throws -> URL { try base.temporaryURL(for: id) }
+    func finalize(sessionID: RecordingSessionID, noteID: NoteID) throws -> FinalizedAudio { try base.finalize(sessionID: sessionID, noteID: noteID) }
+    func makeDeliveredProtectionStrict(noteID: NoteID) throws { try base.makeDeliveredProtectionStrict(noteID: noteID) }
+    func delete(noteID: NoteID) throws { try base.delete(noteID: noteID) }
+    func playablePartial(sessionID: RecordingSessionID) throws -> PartialAudio? { try base.playablePartial(sessionID: sessionID) }
 }

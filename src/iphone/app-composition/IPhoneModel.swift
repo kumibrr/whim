@@ -55,10 +55,13 @@ import WhimCore
                 let value = try await client.playNote(id)
                 guard self.inlineGeneration == generation else { return }
                 self.playback = value
+                self.failedPlaybackNoteID = nil
+                if self.error?.recovery.operation == .playback { self.error = nil }
                 self.startInlinePolling()
             } catch {
                 guard self.inlineGeneration == generation else { return }
-                self.error = IPhoneError(error); self.playback = nil; self.inlineNoteID = nil
+                self.failedPlaybackNoteID = id
+                self.error = IPhoneError(error, operation: .playback); self.playback = nil; self.inlineNoteID = nil
             }
         }
         inlineCommand = task
@@ -95,7 +98,12 @@ import WhimCore
             playback = value
         } else { playback = nil; inlineNoteID = nil }
     }
+    private func clearPlaybackFailure() {
+        failedPlaybackNoteID = nil
+        if error?.recovery.operation == .playback { error = nil }
+    }
     public func stopInlinePlayback() async {
+        clearPlaybackFailure()
         inlineGeneration += 1
         inlineTask?.cancel(); inlineTask = nil
         inlineNoteID = nil; playback = nil
@@ -109,11 +117,78 @@ import WhimCore
     }
 
     public let client: any WhimClient
+    public private(set) var startupState: StartupProjection? { didSet { reconcileCollapsedFailures() } }
+    public private(set) var historyError: IPhoneError? { didSet { reconcileCollapsedFailures() } }
+    public private(set) var settingsError: IPhoneError? { didSet { reconcileCollapsedFailures() } }
+    public private(set) var maintenanceError: IPhoneError? { didSet { reconcileCollapsedFailures() } }
+    @ObservationIgnored private var maintenanceTask: Task<Void, Never>?
+    @ObservationIgnored private var failedPlaybackNoteID: NoteID?
+    public var captureReady: Bool { startupState != nil }
+    public private(set) var isResolvingError = false
+    @ObservationIgnored private var lastCaptureCommand = CaptureCommand.start
+    private enum CaptureCommand { case start, stop, discard }
+    // Keep resolved issues collapsed, but surface any newly appearing failure.
+    private var collapsedFailures: [ActionableFailure] = []
+    private var activeFailures: [ActionableFailure] {
+        var failures: [ActionableFailure] = []
+        if let value = error?.recovery, value.blocksCapture { failures.append(value) }
+        if let microphone = startupState?.microphone, microphone == .denied || microphone == .restricted,
+           !failures.contains(where: { $0.action == .microphoneSettings }) {
+            failures.append(ActionableFailure(WhimServiceError.permissionDenied, operation: .capture))
+        }
+        if let value = error?.recovery, !value.blocksCapture { failures.append(value) }
+        failures.append(contentsOf: [historyError, settingsError, maintenanceError].compactMap { $0?.recovery })
+        return failures
+    }
+    public var failureCount: Int { activeFailures.count }
+    public var areFailuresCollapsed: Bool { !collapsedFailures.isEmpty && collapsedFailures == activeFailures }
+    public func collapseFailures() { collapsedFailures = activeFailures }
+    public func expandFailures() { collapsedFailures = [] }
+    private func reconcileCollapsedFailures() {
+        guard !collapsedFailures.isEmpty else { return }
+        let current = activeFailures
+        collapsedFailures = current.allSatisfy { collapsedFailures.contains($0) } ? current : []
+    }
+    public var visibleFailure: ActionableFailure? { activeFailures.first }
+    public func dismissAuxiliaryError() {
+        if historyError != nil { historyError = nil } else if settingsError != nil { settingsError = nil } else { maintenanceError = nil }
+    }
+    public func retryVisibleFailure() async {
+        guard !isResolvingError else { return }
+        isResolvingError = true
+        defer { isResolvingError = false }
+        switch visibleFailure?.operation {
+        case .history: await loadHistory(generation: refreshGeneration)
+        case .settings: await loadPreferences(generation: refreshGeneration)
+        case .request: error = nil; await refresh()
+        case .playback:
+            if let id = failedPlaybackNoteID { await playInline(id) }
+        case .maintenance:
+            maintenanceTask = nil
+            startMaintenanceIfNeeded()
+            await maintenanceTask?.value
+        case .capture:
+            switch lastCaptureCommand {
+            case .start: await startRecording()
+            case .stop: await stopRecording()
+            case .discard: await discardRecording()
+            }
+        default:
+            await refreshCapture()
+            if captureReady { Task { await self.refresh() } }
+        }
+    }
+    public var onboardingCompleted: Bool { startupState?.onboardingCompleted ?? onboardingHint }
+    private let onboardingHint: Bool
+    @ObservationIgnored private var captureRevision = 0
+    @ObservationIgnored private var resetRevision = 0
+    @ObservationIgnored private var historyRevision = 0
+    @ObservationIgnored private var followupRefresh: Task<Void, Never>?
     public private(set) var settings: SettingsProjection?
     public private(set) var recording: RecordingProjection?
     public private(set) var notes: [NoteProjection] = []
     public private(set) var playback: PlaybackProjection?
-    public private(set) var error: IPhoneError?
+    public private(set) var error: IPhoneError? { didSet { reconcileCollapsedFailures() } }
     public private(set) var isRefreshing = false
     public private(set) var isPending = false
     public private(set) var isRecordingPending = false
@@ -131,7 +206,9 @@ import WhimCore
     @ObservationIgnored private var refreshRequested = false
     @ObservationIgnored private var completionGeneration = 0
 
-    public init(client: any WhimClient) { self.client = client }
+    public init(client: any WhimClient, onboardingCompletedHint: Bool = false) {
+        self.client = client; self.onboardingHint = onboardingCompletedHint
+    }
     deinit { observation?.cancel(); inlineTask?.cancel() }
     public func start() async {
         guard observation == nil else { return }
@@ -151,6 +228,8 @@ import WhimCore
         inlineNoteID = nil
         let prior = inlineCommand
         Task { [client] in await prior?.value; await client.stopPlayback() }
+        followupRefresh?.cancel(); followupRefresh = nil
+        maintenanceTask?.cancel(); maintenanceTask = nil
         observation?.cancel(); observation = nil
         refreshTask?.cancel(); refreshTask = nil
         refreshGeneration += 1; completionGeneration += 1
@@ -170,59 +249,137 @@ import WhimCore
         await task.value
         refreshTask = nil
     }
+    public func refreshCapture() async {
+        let revision = captureRevision
+        let reset = resetRevision
+        let generation = refreshGeneration
+        do {
+            let value = try await client.startup()
+            guard generation == refreshGeneration, !Task.isCancelled else { return }
+            if revision == captureRevision { recording = value.recording }
+            startupState = StartupProjection(onboardingCompleted: reset == resetRevision ? value.onboardingCompleted : onboardingCompleted,
+                microphone: value.microphone, recording: recording)
+            if let settings {
+                self.settings = SettingsProjection(preferences: settings.preferences, webhook: settings.webhook,
+                    onboardingCompleted: onboardingCompleted, permissions: settings.permissions, watch: settings.watch)
+            }
+            if error?.recovery.operation == .preparation || error?.recovery.action == .microphoneSettings { error = nil }
+            if let recording { elapsedSeconds = max(elapsedSeconds, Date().timeIntervalSince(recording.createdAt)) }
+            if recording != nil || !onboardingCompleted { isHistoryPresented = false }
+        } catch is CancellationError {} catch { self.error = IPhoneError(error, operation: .preparation) }
+    }
+
     private func loadSnapshot() async {
-        error = nil
         refreshGeneration += 1
         let generation = refreshGeneration
         let playbackGeneration = inlineGeneration
         eventsDuringRefresh = []; isRefreshing = true
         defer { if generation == refreshGeneration { isRefreshing = false; eventsDuringRefresh = [] } }
+        await refreshCapture()
+        guard generation == refreshGeneration, !Task.isCancelled else { return }
+        startMaintenanceIfNeeded()
+        async let history: Void = loadHistory(generation: generation)
+        async let preferences: Void = loadPreferences(generation: generation)
+        let playing = await client.playbackSnapshot()
+        if generation == refreshGeneration, playbackGeneration == inlineGeneration { playback = playing }
+        _ = await (history, preferences)
+        guard generation == refreshGeneration, !Task.isCancelled else { return }
+        for event in eventsDuringRefresh { fold(event) }
+        sortNotes(); revision += 1
+        waveforms = waveforms.filter { id, _ in notes.contains { $0.id == id && $0.hasLocalAudio } }
+    }
+
+    private func startMaintenanceIfNeeded() {
+        guard maintenanceTask == nil else { return }
+        maintenanceTask = Task { [weak self, client] in
+            do {
+                try await client.maintain()
+                guard let self, !Task.isCancelled else { return }
+                self.maintenanceError = nil
+                await self.loadHistory(generation: self.refreshGeneration)
+            } catch is CancellationError {
+                // Delete cancels service maintenance, not this presentation task.
+                guard let self, !Task.isCancelled else { return }
+                self.maintenanceTask = nil
+                self.startMaintenanceIfNeeded()
+            } catch {
+                guard let self, !Task.isCancelled else { return }
+                self.maintenanceError = IPhoneError(error, operation: .maintenance)
+                // Recovery may have made partial progress before an unrelated candidate failed.
+                await self.loadHistory(generation: self.refreshGeneration)
+            }
+        }
+    }
+
+    private func loadHistory(generation: Int) async {
+        let before = historyRevision
         do {
             let snapshot = try await client.listNotes(filter: .all)
-            let active = try await client.activeRecording()
-            let preferences = try await client.settings()
-            let playing = await client.playbackSnapshot()
             guard generation == refreshGeneration, !Task.isCancelled else { return }
-            notes = snapshot; recording = active; settings = preferences
-            if playbackGeneration == inlineGeneration { playback = playing }
-            for event in eventsDuringRefresh { fold(event) }
-            sortNotes(); revision += 1
-            waveforms = waveforms.filter { id, _ in notes.contains { $0.id == id && $0.hasLocalAudio } }
-            if recording != nil || settings?.onboardingCompleted == false { isHistoryPresented = false }
-            if let recording { elapsedSeconds = max(elapsedSeconds, Date().timeIntervalSince(recording.createdAt)) }
+            // A Note event may have arrived while this snapshot was being read.
+            guard before == historyRevision else { return await loadHistory(generation: generation) }
+            notes = snapshot; historyError = nil
+            sortNotes()
         } catch is CancellationError {} catch {
-            if generation == refreshGeneration { self.error = IPhoneError(error) }
+            if generation == refreshGeneration { historyError = IPhoneError(error, operation: .history) }
+        }
+    }
+
+    private func loadPreferences(generation: Int) async {
+        do {
+            let preferences = try await client.settings()
+            guard generation == refreshGeneration, !Task.isCancelled else { return }
+            settings = SettingsProjection(preferences: preferences.preferences, webhook: preferences.webhook,
+                onboardingCompleted: onboardingCompleted, permissions: preferences.permissions, watch: preferences.watch)
+            settingsError = nil
+        } catch is CancellationError {} catch {
+            if generation == refreshGeneration { settingsError = IPhoneError(error, operation: .settings) }
         }
     }
     public func perform(_ operation: () async throws -> Void) async {
         guard !isPending else { return }
         isPending = true; error = nil
         defer { isPending = false }
-        do { try await operation(); await refresh() }
-        catch is CancellationError {} catch { self.error = IPhoneError(error) }
+        do {
+            try await operation()
+            await refreshCapture()
+            followupRefresh?.cancel()
+            followupRefresh = Task { [weak self] in
+                guard !Task.isCancelled else { return }
+                await self?.refresh()
+            }
+        } catch is CancellationError {} catch { self.error = IPhoneError(error, operation: .request) }
     }
     public func startRecording() async {
         guard recording == nil else { return }
+        lastCaptureCommand = .start
         await capture {
             await stopInlinePlayback()
             _ = try await client.startRecording(source: .iphone)
         }
     }
     public func stopRecording() async {
+        lastCaptureCommand = .stop
         await capture {
             let note = try await client.stopRecording()
-            if note == nil { feedback = "Short recording discarded" }
+            if let note {
+                notes.removeAll { $0.id == note.id }; notes.append(note); sortNotes()
+                offersContextualPermissions = true; feedback = "Note saved"
+            } else { feedback = "Short recording discarded" }
         }
     }
     public func dismissContextualPermissions() { offersContextualPermissions = false }
     public func discardRecording() async {
+        lastCaptureCommand = .discard
         await capture { try await client.discardRecording(); feedback = "Recording discarded" }
     }
     private func capture(_ operation: () async throws -> Void) async {
         guard !isRecordingPending else { return }; isRecordingPending = true; error = nil
         defer { isRecordingPending = false }
-        do { try await operation(); await refresh() }
-        catch is CancellationError {} catch { self.error = IPhoneError(error) }
+        do {
+            try await operation()
+            await refreshCapture()
+        } catch is CancellationError {} catch { self.error = IPhoneError(error) }
     }
     private func receive(_ event: WhimEvent) {
         guard event.sequence > lastSequence else { return }
@@ -256,11 +413,20 @@ import WhimCore
         }
     }
     private func fold(_ event: WhimEvent) {
+        if [.noteChanged, .noteDeleted, .notesReset].contains(event.type) { historyRevision += 1 }
+        if [.recordingStarted, .recordingStopped, .recordingDiscarded, .notesReset].contains(event.type) {
+            captureRevision += 1
+        }
         switch event.type {
         case .noteChanged:
             if let note = event.note { notes.removeAll { $0.id == note.id }; notes.append(note); sortNotes() }
         case .noteDeleted: notes.removeAll { $0.id.rawValue.uuidString.lowercased() == event.noteID }
-        case .notesReset: notes = []; recording = nil; playback = nil; isHistoryPresented = false
+        case .notesReset:
+            maintenanceTask?.cancel(); maintenanceTask = nil; maintenanceError = nil
+            resetRevision += 1
+            notes = []; recording = nil; playback = nil; isHistoryPresented = false
+            startupState = StartupProjection(onboardingCompleted: false,
+                microphone: startupState?.microphone ?? .notDetermined, recording: nil)
         case .recordingStarted: recording = event.recording; playback = nil; isHistoryPresented = false
         case .recordingStopped, .recordingDiscarded: recording = nil
         case .recordingProgress:
@@ -273,10 +439,14 @@ import WhimCore
         default: break
         }
         if event.type == .recordingStarted || event.type == .notesReset {
+            clearPlaybackFailure()
             navigationGeneration += 1
             inlineGeneration += 1; inlineTask?.cancel(); inlineTask = nil; inlineNoteID = nil
         }
         if event.type == .noteDeleted || event.type == .notesReset || event.type == .noteChanged {
+            if let failedPlaybackNoteID, !notes.contains(where: { $0.id == failedPlaybackNoteID && $0.hasLocalAudio }) {
+                clearPlaybackFailure()
+            }
             waveforms = waveforms.filter { id, _ in notes.contains { $0.id == id && $0.hasLocalAudio } }
             if let id = inlineNoteID, !notes.contains(where: { $0.id == id && $0.hasLocalAudio }) {
                 Task { await stopInlinePlayback() }

@@ -33,4 +33,4 @@ When native view files change, run `ruby scripts/configure-xcode-project.rb` (re
 
 `npm run test-server` starts the development webhook inbox on port 8787. Its page documents URLs and signed request details.
 
-See [CONTEXT.md](CONTEXT.md), the [v1 design](docs/superpowers/specs/2026-09-04-whim-v1-design.md), and [migration verification](docs/swiftui-migration-verification.md). Real hardware acceptance procedures live under `e2e/physical/`.
+See [CONTEXT.md](CONTEXT.md), the [v1 design](docs/superpowers/specs/2026-09-04-whim-v1-design.md), the [iPhone and Watch startup timelines](docs/startup-flow.md), and [migration verification](docs/swiftui-migration-verification.md). Real hardware acceptance procedures live under `e2e/physical/`.

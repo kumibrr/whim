@@ -27,29 +27,38 @@ public enum ConfigurationTestError: Error, CustomStringConvertible {
 public struct ConfigurationTestService: Sendable {
     private let credentialStore: any CredentialStore
     private let transport: any HTTPTransport
-    private let fixtureAudioURL: URL
+    private let fixtureAudioURL: @Sendable () throws -> URL
     private let clock: any Clock
     private let requestBuilder: WebhookRequestBuilder
     private let appVersion: String
     private let appBuild: String
 
     public init(credentials: any CredentialStore, transport: any HTTPTransport,
-                fixtureAudioURL: URL, clock: any Clock = SystemClock(),
+                fixtureAudio: @escaping @Sendable () throws -> URL, clock: any Clock = SystemClock(),
                 requestBuilder: WebhookRequestBuilder = WebhookRequestBuilder(),
                 appVersion: String, appBuild: String) {
         self.credentialStore = credentials
         self.transport = transport
-        self.fixtureAudioURL = fixtureAudioURL
+        self.fixtureAudioURL = fixtureAudio
         self.clock = clock
         self.requestBuilder = requestBuilder
         self.appVersion = appVersion
         self.appBuild = appBuild
     }
 
+    public init(credentials: any CredentialStore, transport: any HTTPTransport,
+                fixtureAudioURL: URL, clock: any Clock = SystemClock(),
+                requestBuilder: WebhookRequestBuilder = WebhookRequestBuilder(),
+                appVersion: String, appBuild: String) {
+        self.init(credentials: credentials, transport: transport, fixtureAudio: { fixtureAudioURL },
+            clock: clock, requestBuilder: requestBuilder, appVersion: appVersion, appBuild: appBuild)
+    }
+
     public func send(revisionID: ConfigurationRevisionID) async throws -> ConfigurationTestResult {
         guard let credentials = try await credentialStore.credentials(for: revisionID) else {
             throw ConfigurationTestError.missingConfiguration
         }
+        let fixtureAudioURL = try self.fixtureAudioURL()
         let noteID = NoteID()
         let attemptID = AttemptID()
         let note = Note(id: noteID, recordingSessionID: RecordingSessionID(), title: "Configuration test",

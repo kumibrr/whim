@@ -41,6 +41,7 @@ public actor RecordingService {
     private typealias EncoderMetrics = (duration: TimeInterval, peakPowerDBFS: Float)
 
     private let activity: (any RecordingActivityManaging)?
+    private var ownership: AudioFileOwnership?
     private let recorder: any AudioRecorder
     private let store: any WhimStore
     private let files: any AudioFileManaging
@@ -109,6 +110,10 @@ public actor RecordingService {
         let session = RecordingSession(id: snapshot.sessionID, noteID: snapshot.noteID,
             createdAt: snapshot.createdAt, source: snapshot.source)
         do {
+            guard let ownership = try files.claimOwnership(noteID: snapshot.noteID) else {
+                throw RecordingServiceError.encoderFailed
+            }
+            self.ownership = ownership
             try await store.saveRecordingSession(session)
             encoderCompletion = nil
             encoderFailure = nil
@@ -137,6 +142,7 @@ public actor RecordingService {
             await activity?.end(sessionID: snapshot.sessionID)
             try? files.deleteTemporary(sessionID: snapshot.sessionID)
             try? await store.discardRecordingSession(sessionID: snapshot.sessionID)
+            ownership = nil
             throw error
         }
     }
@@ -191,6 +197,7 @@ public actor RecordingService {
     }
 
     private func performDiscard(_ snapshot: RecordingSnapshot) async throws {
+        defer { ownership = nil }
         await recorder.discard()
         await activity?.end(sessionID: snapshot.sessionID)
         try files.deleteTemporary(sessionID: snapshot.sessionID)
@@ -271,6 +278,7 @@ public actor RecordingService {
     }
 
     private func finalize(_ snapshot: RecordingSnapshot, outcome: CaptureOutcome) async throws -> Note? {
+        defer { ownership = nil }
         if recorderStreamEnded { encoderFailure = .eventStreamEnded }
         do {
             if encoderCompletion == nil, encoderFailure == nil {
