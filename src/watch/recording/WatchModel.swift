@@ -16,6 +16,7 @@ final class WatchModel {
     private(set) var configurationAvailable = false
     private(set) var synchronization = WatchSettingsProjection.unavailable
     private(set) var elapsed: TimeInterval = 0
+    private(set) var peakPowerDBFS = -160.0
     private(set) var warned = false
     private(set) var playback: PlaybackProjection?
     private var commandError: String?
@@ -65,12 +66,13 @@ final class WatchModel {
         let existing = try await client.activeRecording()
         recording = try await client.startRecording(source: .appleWatch)
         showsRecent = false
-        if existing == nil { elapsed = 0; warned = false; haptic(.start) }
+        if existing == nil { elapsed = 0; peakPowerDBFS = -160; warned = false; haptic(.start) }
     }
     func stop() async {
         await performCapture {
             _ = try await self.client.stopRecording()
             self.recording = nil
+            self.peakPowerDBFS = -160
             self.haptic(.stop)
             await self.refreshNotes()
         }
@@ -79,6 +81,7 @@ final class WatchModel {
         await performCapture {
             try await self.client.discardRecording()
             self.recording = nil
+            self.peakPowerDBFS = -160
             self.haptic(.stop)
         }
     }
@@ -155,9 +158,15 @@ final class WatchModel {
             for await event in stream {
                 guard let self else { return }
                 switch event.type {
-                case .recordingStarted: self.recording = event.recording
-                case .recordingStopped, .recordingDiscarded: self.recording = nil
-                case .recordingProgress: if let elapsed = event.elapsedSeconds { self.elapsed = elapsed }
+                case .recordingStarted:
+                    self.recording = event.recording
+                    self.peakPowerDBFS = -160
+                case .recordingStopped, .recordingDiscarded:
+                    self.recording = nil
+                    self.peakPowerDBFS = -160
+                case .recordingProgress:
+                    if let elapsed = event.elapsedSeconds { self.elapsed = elapsed }
+                    if let power = event.peakPowerDBFS { self.peakPowerDBFS = Double(power) }
                 case .recordingMaximumDurationWarning: self.warned = true; self.haptic(.notification)
                 case .noteChanged, .noteDeleted, .notesReset: await self.refreshNotes()
                 case .settingsChanged:

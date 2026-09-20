@@ -10,7 +10,7 @@ final class WatchSynchronizationUITests: XCTestCase {
             app.launchArguments = WatchUITestConfiguration.arguments + ["-WhimPeerScenario", order]
             app.launch()
             XCTAssertTrue(app.buttons["watch-stop"].waitForExistence(timeout: 15))
-            app.buttons["watch-recent-notes"].tap()
+            app.swipeUp()
             XCTAssertTrue(app.staticTexts["From paired Watch"].waitForExistence(timeout: 10))
             XCTAssertTrue(app.staticTexts["Sent"].exists)
             app.staticTexts["From paired Watch"].tap()
@@ -34,7 +34,7 @@ final class WatchSynchronizationUITests: XCTestCase {
             app.launch()
             XCTAssertTrue(app.buttons["watch-stop"].waitForExistence(timeout: 15))
             app.buttons["watch-stop"].tap()
-            app.buttons["watch-recent-notes"].tap()
+            app.swipeUp()
             XCTAssertTrue(app.staticTexts["Peer confirmed title"].waitForExistence(timeout: 10))
             XCTAssertTrue(app.staticTexts["Sent"].exists)
             let (data, _) = try await URLSession.shared.data(from: URL(string: base + "/state")!)
