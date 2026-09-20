@@ -2,9 +2,21 @@ import SwiftUI
 
 struct WatchCaptureView: View {
     @Bindable var model: WatchModel
-    @State private var confirmsDiscard = false
+    @Namespace private var glassNamespace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
+        if #available(watchOS 26, *) {
+            GlassEffectContainer(spacing: 8) { captureContent }
+                .animation(reduceMotion || reduceTransparency ? nil : .smooth(duration: 0.35),
+                           value: model.recording != nil)
+        } else {
+            captureContent
+        }
+    }
+
+    private var captureContent: some View {
         ZStack {
             Color.black
             WatchWaveformView(power: model.recording == nil ? -160 : model.peakPowerDBFS)
@@ -29,21 +41,28 @@ struct WatchCaptureView: View {
                 }
 
                 Spacer()
+                if model.recording != nil && model.warned {
+                    Text("Stopping at five minutes")
+                        .font(.caption2)
+                        .accessibilityIdentifier("watch-limit-warning")
+                }
                 captureControl
-                Spacer()
+                if #unavailable(watchOS 26) { Spacer() }
 
                 if model.recording != nil {
-                    if model.warned {
-                        Text("Stopping at five minutes")
-                            .font(.caption2)
-                            .accessibilityIdentifier("watch-limit-warning")
+                    Button(role: .destructive) {
+                        Task { await model.discard() }
+                    } label: {
+                        if #available(watchOS 26, *) {
+                            discardLabel.watchGlass(in: Capsule())
+                                .modifier(WatchCaptureGlassIdentity(id: "discard", namespace: glassNamespace))
+                        } else {
+                            discardLabel
+                        }
                     }
-                    Button("Discard", role: .destructive) { confirmsDiscard = true }
-                        .font(.caption2)
-                        .buttonStyle(.plain)
-                        .frame(minWidth: 64, minHeight: 36)
-                        .accessibilityIdentifier("watch-discard")
-                        .disabled(model.captureBusy)
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("watch-discard")
+                    .disabled(model.captureBusy)
                 } else if model.permission == .granted {
                     VStack(spacing: 3) {
                         Text("scroll for previous notes")
@@ -60,11 +79,14 @@ struct WatchCaptureView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("watch-capture")
-        .confirmationDialog("Discard this Recording Session?", isPresented: $confirmsDiscard,
-                            titleVisibility: .visible) {
-            Button("Discard Recording", role: .destructive) { Task { await model.discard() } }
-            Button("Keep Recording", role: .cancel) {}
-        }
+    }
+
+    private var discardLabel: some View {
+        Text("Discard")
+            .font(.body.weight(.semibold))
+            .foregroundStyle(.red)
+            .frame(minWidth: 100, minHeight: 44)
+            .contentShape(Rectangle())
     }
 
     @ViewBuilder private var captureControl: some View {
@@ -88,6 +110,7 @@ struct WatchCaptureView: View {
                     .frame(width: 22, height: 22)
                     .frame(width: 72, height: 72)
                     .watchGlass(in: Circle())
+                    .modifier(WatchCaptureGlassIdentity(id: "capture", namespace: glassNamespace))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Stop recording")
@@ -100,6 +123,7 @@ struct WatchCaptureView: View {
                     .frame(width: 24, height: 24)
                     .frame(width: 72, height: 72)
                     .watchGlass(in: Circle())
+                    .modifier(WatchCaptureGlassIdentity(id: "capture", namespace: glassNamespace))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Record a Whim")
@@ -161,4 +185,20 @@ private struct WatchGlass<S: Shape>: ViewModifier {
 
 private extension View {
     func watchGlass<S: Shape>(in shape: S) -> some View { modifier(WatchGlass(shape: shape)) }
+}
+
+
+private struct WatchCaptureGlassIdentity: ViewModifier {
+    let id: String
+    let namespace: Namespace.ID
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        if #available(watchOS 26, *) {
+            content.glassEffectID(id, in: namespace)
+                .glassEffectTransition(reduceMotion ? .identity : .matchedGeometry)
+        } else {
+            content
+        }
+    }
 }

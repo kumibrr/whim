@@ -113,7 +113,7 @@ Active and unsent files use data protection compatible with Lock Screen capture 
 
 Recordings use a speech-oriented bitrate. The maximum duration is five minutes and is defined in one internal configuration location so a future release can change it without rewriting recording behavior. Whim warns shortly before the limit and stops safely at the limit.
 
-There is no pause action. Stop saves and sends; Discard destroys the current Recording Session after clear confirmation. Invoking Record while the same device is already recording focuses the active recorder instead of toggling or starting another session.
+There is no pause action. Stop saves and sends; Discard immediately destroys the current Recording Session without confirmation. Its button is red with an enlarged tap target. On iOS 26 and watchOS 26 or later, its glass capsule morphs from the Record/Stop control; Reduce Motion disables the morph. Invoking Record while the same device is already recording focuses the active recorder instead of toggling or starting another session.
 
 Audio interruptions stop and safely finalize playable audio as an interrupted Note, which follows normal automatic delivery. Whim never resumes microphone capture without a new user action.
 
@@ -263,7 +263,7 @@ Whim opens to a recording-first black home screen, as updated by the approved [2
 
 History contains newest-first glass Note cards with a single-line title and date/time on the left, an inline waveform player alongside, and duration, source device, and delivery/review status. Accessibility text sizes stack the layout and allow title wrapping. Failed Notes remain in chronological position with prominent text and symbol treatment plus a Retry action. Filters offer All, Queued, Failed, and Sent. Only one Note plays at a time; leaving history or opening detail stops inline playback.
 
-Record starts capture immediately. The full-width central line reacts to microphone input without progressively filling the screen. During a Recording Session, only Stop and confirmed Discard are available; history and settings are inaccessible. Elapsed time, five-minute progress, and the limit warning remain visible. Stop returns to idle without opening history. Visible and haptic feedback confirm start and stop.
+Record starts capture immediately. The full-width central line reacts to microphone input without progressively filling the screen. During a Recording Session, only Stop and immediate Discard are available; history and settings are inaccessible. Elapsed time, five-minute progress, and the limit warning remain visible. Stop returns to idle without opening history. Visible and haptic feedback confirm start and stop.
 
 Note detail offers playback, delivery details, Retry when applicable, and Delete. Recovered Notes instead offer Review, Send, and Delete.
 

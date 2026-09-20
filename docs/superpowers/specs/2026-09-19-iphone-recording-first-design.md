@@ -63,7 +63,7 @@ competing visually with the waveform. Keep start/stop feedback.
 
 Stop saves and starts the existing workflow. After successful finalization,
 return to idle with the plain line. Do not automatically open history.
-Discard retains the existing confirmation and Keep recording escape action.
+Discard immediately ends and removes the Recording Session without confirmation. The red button has a minimum 120 × 56 point tappable area. On iOS 26 and later, its glass capsule morphs out of the Record/Stop glass control using a shared Liquid Glass container and namespace. Reduce Motion disables the morph; older systems retain the plain red button.
 No pause/resume recording is introduced.
 
 Pending commands prevent duplicate actions. A failed command preserves the

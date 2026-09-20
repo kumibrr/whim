@@ -49,3 +49,42 @@ struct WhimGlass<S: Shape>: ViewModifier {
 extension View {
     func whimGlass<S: Shape>(in shape: S) -> some View { modifier(WhimGlass(shape: shape)) }
 }
+
+// Keep the container above the idle/recording branches so their glass can morph.
+struct CaptureGlassContainer<Content: View>: View {
+    let isRecording: Bool
+    @ViewBuilder var content: Content
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        if #available(iOS 26, *) {
+            GlassEffectContainer(spacing: 12) { content }
+                .animation(reduceMotion || reduceTransparency ? nil : .smooth(duration: 0.35),
+                           value: isRecording)
+        } else {
+            content
+        }
+    }
+}
+
+private struct CaptureGlassIdentity: ViewModifier {
+    let id: String
+    let namespace: Namespace.ID
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content.glassEffectID(id, in: namespace)
+                .glassEffectTransition(reduceMotion ? .identity : .matchedGeometry)
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    func captureGlassIdentity(_ id: String, in namespace: Namespace.ID) -> some View {
+        modifier(CaptureGlassIdentity(id: id, namespace: namespace))
+    }
+}
