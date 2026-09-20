@@ -4,6 +4,7 @@ import WhimCore
 struct WatchRootView: View {
     @Bindable var model: WatchModel
     @Environment(\.scenePhase) private var scenePhase
+    @State private var visiblePage: String? = "capture"
 
     var body: some View {
         NavigationStack {
@@ -23,6 +24,7 @@ struct WatchRootView: View {
                             }
                         }
                         .padding(.horizontal, 8)
+                        .padding(.top, 90)
                         .padding(.bottom, 20)
                         .frame(minHeight: geometry.size.height, alignment: .top)
                         .id("previous-notes")
@@ -30,11 +32,15 @@ struct WatchRootView: View {
                     .scrollTargetLayout()
                 }
                 .scrollTargetBehavior(.paging)
+                .scrollPosition(id: $visiblePage)
                 .scrollBounceBehavior(.always)
                 .background(Color.black)
             }
             .ignoresSafeArea()
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationTitle(visiblePage == "previous-notes" ? "Previous Notes" : "")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(visiblePage == "previous-notes" ? .visible : .hidden,
+                for: .navigationBar)
         }
         .tint(.white)
         .preferredColorScheme(.dark)

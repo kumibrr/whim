@@ -5,13 +5,7 @@ struct WatchRecentNotesView: View {
     @Bindable var model: WatchModel
 
     var body: some View {
-      LazyVStack(alignment: .leading, spacing: 8) {
-            Text("Previous Notes")
-                .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("watch-previous-notes")
-
+        LazyVStack(alignment: .leading, spacing: 8) {
             if let error = model.error {
                 Text(error).accessibilityIdentifier("watch-notes-error")
                 Button("Refresh Notes") { Task { await model.refreshNotes() } }

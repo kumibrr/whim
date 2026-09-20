@@ -9,7 +9,7 @@ final class WatchRecordingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["watch-stop"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.descendants(matching: .any)["watch-waveform"].firstMatch.exists)
         XCTAssertTrue(app.staticTexts["watch-recorder"].exists)
-        let historyHeading = app.staticTexts["watch-previous-notes"]
+        let historyHeading = app.navigationBars["Previous Notes"]
         XCTAssertTrue(!historyHeading.exists
             || historyHeading.frame.minY >= app.windows.firstMatch.frame.maxY - 2)
         app.buttons["watch-stop"].tap()
@@ -32,9 +32,11 @@ extension WatchRecordingUITests {
         app.swipeUp()
         let notesToolbar = app.navigationBars["Previous Notes"]
         XCTAssertTrue(notesToolbar.waitForExistence(timeout: 5))
-        let firstNoteStatus = app.staticTexts["Setup required"]
-        XCTAssertTrue(firstNoteStatus.waitForExistence(timeout: 5))
-        XCTAssertLessThan(notesToolbar.frame.midY, firstNoteStatus.frame.midY)
+        let firstNote = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "watch-note-")
+        ).firstMatch
+        XCTAssertTrue(firstNote.waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(firstNote.frame.minY - notesToolbar.frame.maxY, 44)
     }
 
     func testPartialScrollSpringsBackWithoutLeavingEmptySpace() {
@@ -48,7 +50,7 @@ extension WatchRecordingUITests {
         XCTAssertTrue(recordButton.waitForExistence(timeout: 5))
         let restingMidY = recordButton.frame.midY
         let window = app.windows.firstMatch
-        let historyHeading = app.staticTexts["watch-previous-notes"]
+        let historyHeading = app.navigationBars["Previous Notes"]
         window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65))
             .press(forDuration: 0.1,
                 thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
@@ -74,7 +76,7 @@ extension WatchRecordingUITests {
         XCTAssertTrue(recordButton.waitForExistence(timeout: 5))
         let restingMidY = recordButton.frame.midY
         let window = app.windows.firstMatch
-        let historyHeading = app.staticTexts["watch-previous-notes"]
+        let historyHeading = app.navigationBars["Previous Notes"]
 
         app.swipeUp()
         let historyIsFullPage = expectation(for: NSPredicate { _, _ in
