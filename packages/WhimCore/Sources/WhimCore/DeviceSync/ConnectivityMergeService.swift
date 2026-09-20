@@ -235,7 +235,9 @@ public actor ConnectivityMergeService {
     }
 
     public func flush() async throws {
-        guard let transport, transport.isActivated else { return }
+        // Activation alone does not mean a companion is installed. Keep the
+        // journal pending until it is available; reachability is not required.
+        guard let transport, transport.isActivated, transport.isAvailable else { return }
         let current = try generation()
         for pending in try journal.outgoing() {
             guard pending.envelope.generation == current else {

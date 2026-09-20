@@ -26,6 +26,19 @@ appId: app.whim.ios
     id: whim-home
 - assertVisible:
     id: startup-error
+- swipe:
+    start: 50%, 11%
+    end: 50%, 3%
+    duration: 400
+- assertNotVisible:
+    id: startup-error
+- assertNotVisible:
+    id: history-sheet
+- assertVisible: "1 notification"
+- tapOn:
+    id: error-notifications
+- assertVisible:
+    id: startup-error
 - tapOn:
     id: startup-error
 # Simulator Settings may open its root while the app entry is still registering.

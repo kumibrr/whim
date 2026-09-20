@@ -135,8 +135,41 @@ Watch synchronization iPhone journeys cover the shared player and deletion paths
 
 ## Capture-first startup and actionable failures
 
+Companion availability regression (2026-09-20): the physical iPhone's maintenance
+catch received `WCErrorDomain` code 7006, “Watch app is not installed.” The session
+was activated and paired, but reported `isWatchAppInstalled == false`; CoreDevice
+independently listed `app.whim.ios.watchkitapp` on the Watch. This proves a companion
+recognition mismatch, not missing local Notes. Its underlying OS/install cause is
+not yet established. No app data was erased during diagnosis.
+
+Verify standalone iPhone startup with a configured webhook shows no recovery error
+when no Watch companion is available. Repeat with a paired Watch whose companion
+is unrecognized. Record, browse, and play local Notes. When the companion becomes
+available, verify queued metadata and configuration synchronize without restarting
+Whim. Repeat with the recognized Watch temporarily offline: durable synchronization
+must remain queued without requiring immediate reachability. The automated
+`testActivatedSessionWithoutCompanionDefersSyncUntilCompanionIsAvailable` covers
+deferral and replay across restart; physical post-fix verification remains pending.
+
 Compare cold and warm launches with empty storage and a populated history, including playable crash remnants. Record time to the first onboarding/capture frame separately from time to microphone onset; do not infer capture readiness from the shell alone. Verify Record and Stop remain responsive while old Notes recover or synchronization is offline. Speak immediately after the recording indication and confirm the beginning is preserved.
 
 Deny microphone permission: verify the upper-half glass container explains the issue and Open Settings reaches Whim's permissions. Grant permission and return: the error clears and Record works. Repeat with Reduce Transparency, an earlier supported OS material fallback, VoiceOver, and the largest text sizes; verify the message can scroll and actions/Stop/Discard remain reachable. For storage exhaustion, verify storage guidance and Check again after freeing space. Record physical-device timing evidence; simulator fixtures do not measure real microphone onset.
 
 Compact errors: verify the glass card fits its message without an empty scrolling area or a separate action row. Tapping anywhere on the card runs its recovery action; repeated taps during work are disabled.
+
+
+## Collapsible recording-screen errors
+
+Status: pending physical iPhone execution.
+
+Deny microphone access, then swipe the error card upward. Verify it becomes a
+warning-triangle button with count 1 in the top-left corner, without opening
+history or Settings. Tap it to restore the full message, then tap the message
+to open Settings. Grant access and return; the card and warning button disappear.
+Repeat with VoiceOver's Collapse notifications action, large Dynamic Type,
+Reduce Motion, Reduce Transparency, and the iOS 18 material fallback. For a
+failure during capture, verify collapse/reopen leaves Stop and Discard usable.
+
+Closest deterministic coverage: IPhoneModel integration tests cover collapse,
+error counts, recovery preservation and resolution; the onboarding iPhone E2E
+journey covers upward swipe, the warning button and reopening the recovery card.

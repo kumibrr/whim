@@ -3,6 +3,49 @@ import WhimCore
 @testable import WhimIPhone
 
 @MainActor final class IPhoneModelIntegrationTests: XCTestCase {
+    func testCollapsedFailurePreservesRecoveryAndClearsWhenResolved() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let permissions = MutablePermissions()
+        let model = IPhoneModel(client: harness.makeService(permissions: permissions))
+        await model.start()
+        defer { model.stop() }
+        await model.startRecording()
+        let failure = try XCTUnwrap(model.visibleFailure)
+        XCTAssertEqual(model.failureCount, 1, "Permission denial is one issue, even after failed capture")
+        model.collapseFailures()
+        XCTAssertTrue(model.areFailuresCollapsed)
+        XCTAssertEqual(model.visibleFailure, failure)
+        await model.refresh()
+        XCTAssertTrue(model.areFailuresCollapsed, "Refreshing the same issue must not reopen it")
+        model.expandFailures()
+        XCTAssertFalse(model.areFailuresCollapsed)
+        XCTAssertEqual(model.visibleFailure?.action, .microphoneSettings)
+        model.collapseFailures()
+        await permissions.grant()
+        await model.refresh()
+        XCTAssertEqual(model.failureCount, 0)
+        XCTAssertFalse(model.areFailuresCollapsed)
+    }
+
+    func testNewFailureExpandsCardAndCountsIndependentIssues() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let model = IPhoneModel(client: harness.makeService(permissions: DeniedFacadePermissions()))
+        await model.start()
+        defer { model.stop() }
+        model.collapseFailures()
+        await model.perform { throw ConfigurationTestError.missingConfiguration }
+        XCTAssertEqual(model.failureCount, 2)
+        XCTAssertFalse(model.areFailuresCollapsed)
+        XCTAssertEqual(model.visibleFailure?.action, .microphoneSettings)
+        model.collapseFailures()
+        XCTAssertTrue(model.areFailuresCollapsed)
+        await model.perform {}
+        XCTAssertEqual(model.failureCount, 1)
+        XCTAssertTrue(model.areFailuresCollapsed, "Resolving one issue keeps the remaining notification collapsed")
+    }
+
     func testMaintenanceFailureKeepsExistingAndNewNotesVisibleAndPlayable() async throws {
         let harness = try WhimFacadeHarness()
         defer { harness.remove() }

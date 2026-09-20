@@ -117,23 +117,39 @@ import WhimCore
     }
 
     public let client: any WhimClient
-    public private(set) var startupState: StartupProjection?
-    public private(set) var historyError: IPhoneError?
-    public private(set) var settingsError: IPhoneError?
-    public private(set) var maintenanceError: IPhoneError?
+    public private(set) var startupState: StartupProjection? { didSet { reconcileCollapsedFailures() } }
+    public private(set) var historyError: IPhoneError? { didSet { reconcileCollapsedFailures() } }
+    public private(set) var settingsError: IPhoneError? { didSet { reconcileCollapsedFailures() } }
+    public private(set) var maintenanceError: IPhoneError? { didSet { reconcileCollapsedFailures() } }
     @ObservationIgnored private var maintenanceTask: Task<Void, Never>?
     @ObservationIgnored private var failedPlaybackNoteID: NoteID?
     public var captureReady: Bool { startupState != nil }
     public private(set) var isResolvingError = false
     @ObservationIgnored private var lastCaptureCommand = CaptureCommand.start
     private enum CaptureCommand { case start, stop, discard }
-    public var visibleFailure: ActionableFailure? {
-        if let value = error?.recovery, value.blocksCapture { return value }
-        if let microphone = startupState?.microphone, microphone == .denied || microphone == .restricted {
-            return ActionableFailure(WhimServiceError.permissionDenied, operation: .capture)
+    // Keep resolved issues collapsed, but surface any newly appearing failure.
+    private var collapsedFailures: [ActionableFailure] = []
+    private var activeFailures: [ActionableFailure] {
+        var failures: [ActionableFailure] = []
+        if let value = error?.recovery, value.blocksCapture { failures.append(value) }
+        if let microphone = startupState?.microphone, microphone == .denied || microphone == .restricted,
+           !failures.contains(where: { $0.action == .microphoneSettings }) {
+            failures.append(ActionableFailure(WhimServiceError.permissionDenied, operation: .capture))
         }
-        return error?.recovery ?? historyError?.recovery ?? settingsError?.recovery ?? maintenanceError?.recovery
+        if let value = error?.recovery, !value.blocksCapture { failures.append(value) }
+        failures.append(contentsOf: [historyError, settingsError, maintenanceError].compactMap { $0?.recovery })
+        return failures
     }
+    public var failureCount: Int { activeFailures.count }
+    public var areFailuresCollapsed: Bool { !collapsedFailures.isEmpty && collapsedFailures == activeFailures }
+    public func collapseFailures() { collapsedFailures = activeFailures }
+    public func expandFailures() { collapsedFailures = [] }
+    private func reconcileCollapsedFailures() {
+        guard !collapsedFailures.isEmpty else { return }
+        let current = activeFailures
+        collapsedFailures = current.allSatisfy { collapsedFailures.contains($0) } ? current : []
+    }
+    public var visibleFailure: ActionableFailure? { activeFailures.first }
     public func dismissAuxiliaryError() {
         if historyError != nil { historyError = nil } else if settingsError != nil { settingsError = nil } else { maintenanceError = nil }
     }
@@ -172,7 +188,7 @@ import WhimCore
     public private(set) var recording: RecordingProjection?
     public private(set) var notes: [NoteProjection] = []
     public private(set) var playback: PlaybackProjection?
-    public private(set) var error: IPhoneError?
+    public private(set) var error: IPhoneError? { didSet { reconcileCollapsedFailures() } }
     public private(set) var isRefreshing = false
     public private(set) var isPending = false
     public private(set) var isRecordingPending = false

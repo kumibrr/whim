@@ -13,9 +13,13 @@ struct CaptureHomeView: View {
                     .position(x: geometry.size.width / 2, y: geometry.size.height * 0.45)
                 VStack {
                     HStack {
-                        Text("whim").font(.system(size: 22, weight: .medium, design: .rounded))
-                            .tracking(-1).foregroundStyle(.white.opacity(0.45)).accessibilityHidden(
-                                true)
+                        if model.areFailuresCollapsed {
+                            ErrorNotificationsButton(model: model)
+                        } else {
+                            Text("whim").font(.system(size: 22, weight: .medium, design: .rounded))
+                                .tracking(-1).foregroundStyle(.white.opacity(0.45)).accessibilityHidden(
+                                    true)
+                        }
                         Spacer()
                         Button(action: settings) {
                             Image(systemName: "gearshape").font(.system(size: 20, weight: .regular))
@@ -117,6 +121,10 @@ struct RecorderView: View {
                             .padding(.bottom, 12)
                     }.frame(maxWidth: .infinity)
                 }
+            }.overlay(alignment: .topLeading) {
+                if model.areFailuresCollapsed {
+                    ErrorNotificationsButton(model: model).padding(.leading, 24).padding(.top, 12)
+                }
             }.disabled(model.isRecordingPending).accessibilityElement(children: .contain)
                 .accessibilityIdentifier("recorder-panel")
         }
@@ -168,5 +176,24 @@ private struct ReactiveLine: Shape {
                 if step == 0 { path.move(to: point) } else { path.addLine(to: point) }
             }
         }
+    }
+}
+
+private struct ErrorNotificationsButton: View {
+    var model: IPhoneModel
+    var body: some View {
+        Button { model.expandFailures() } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle")
+                Text("\(model.failureCount)").monospacedDigit()
+            }
+            .font(.body.weight(.medium))
+            .padding(.horizontal, 14).frame(minHeight: 48)
+            .whimGlass(in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(model.failureCount == 1 ? "1 notification" : "\(model.failureCount) notifications")
+        .accessibilityHint("Show error details")
+        .accessibilityIdentifier("error-notifications")
     }
 }

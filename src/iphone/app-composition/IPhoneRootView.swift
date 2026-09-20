@@ -21,7 +21,7 @@ struct IPhoneRootView: View {
                 }
             }.toolbar(.hidden, for: .navigationBar)
         }
-        .modifier(IPhoneFailurePresentation(model: model, enabled: !model.isHistoryPresented, configureWebhook: openWebhookSettings))
+        .modifier(IPhoneFailurePresentation(model: model, enabled: !model.isHistoryPresented, allowsCollapse: model.onboardingCompleted && path.isEmpty, configureWebhook: openWebhookSettings))
         .sheet(isPresented: Binding(
             get: { model.isHistoryPresented },
             set: { presented in if !presented { Task { await model.closeHistory() } } }
@@ -103,15 +103,17 @@ struct IPhoneRootView: View {
 struct IPhoneFailurePresentation: ViewModifier {
     var model: IPhoneModel
     var enabled = true
+    var allowsCollapse = false
     var configureWebhook: () -> Void
     @State private var showsStorageInstructions = false
     func body(content: Content) -> some View {
         content.safeAreaInset(edge: .top) {
-            if enabled, let failure = model.visibleFailure {
+            if enabled, !(allowsCollapse && model.areFailuresCollapsed), let failure = model.visibleFailure {
                 WhimErrorContainer(message: failure.message, actionLabel: failure.actionLabel,
                     busy: model.isResolvingError || model.isPending || model.isRecordingPending,
                     action: { resolve(failure) },
-                    dismiss: [.history, .settings, .maintenance].contains(failure.operation) ? { model.dismissAuxiliaryError() } : nil)
+                    dismiss: [.history, .settings, .maintenance].contains(failure.operation) ? { model.dismissAuxiliaryError() } : nil,
+                    collapse: allowsCollapse ? { model.collapseFailures() } : nil)
                     .padding(.horizontal, 20).padding(.top, 8)
             }
         }

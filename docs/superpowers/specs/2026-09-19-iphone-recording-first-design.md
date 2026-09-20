@@ -66,6 +66,16 @@ return to idle with the plain line. Do not automatically open history.
 Discard immediately ends and removes the Recording Session without confirmation. The red button has a minimum 120 × 56 point tappable area. On iOS 26 and later, its glass capsule morphs out of the Record/Stop glass control using a shared Liquid Glass container and namespace. Reduce Motion disables the morph; older systems retain the plain red button.
 No pause/resume recording is introduced.
 
+Recording-screen errors initially appear as full glass cards. An upward swipe
+collapses the card without clearing its failure or opening history. A glass
+warning-triangle button at the top left shows the number of active errors;
+tapping it restores the highest-priority error and its recovery action. The
+button is also available during an active Recording Session. Resolved errors
+leave the count, and the button disappears when none remain. A new issue
+reopens the card. VoiceOver offers a Collapse notifications action. History
+and settings retain their expanded recovery presentation.
+
+
 Pending commands prevent duplicate actions. A failed command preserves the
 actual Recording Session state and exposes a readable error. Interruptions,
 automatic duration-limit finalization, and recovery retain v1 behavior.

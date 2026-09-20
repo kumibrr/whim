@@ -96,6 +96,7 @@ struct WhimErrorContainer: View {
     var busy = false
     let action: () -> Void
     var dismiss: (() -> Void)? = nil
+    var collapse: (() -> Void)? = nil
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
@@ -120,9 +121,12 @@ struct WhimErrorContainer: View {
         .accessibilityIdentifier("startup-error")
         .accessibilityActions {
             if let dismiss { Button("Dismiss error", action: dismiss) }
+            if let collapse { Button("Collapse notifications", action: collapse) }
         }
-        .simultaneousGesture(DragGesture(minimumDistance: 30).onEnded { value in
-            if !busy, abs(value.translation.width) > 60, abs(value.translation.width) > abs(value.translation.height) * 2 {
+        .highPriorityGesture(DragGesture(minimumDistance: 30).onEnded { value in
+            if value.translation.height < -40, abs(value.translation.height) > abs(value.translation.width) {
+                collapse?()
+            } else if !busy, abs(value.translation.width) > 60, abs(value.translation.width) > abs(value.translation.height) * 2 {
                 dismiss?()
             }
         })

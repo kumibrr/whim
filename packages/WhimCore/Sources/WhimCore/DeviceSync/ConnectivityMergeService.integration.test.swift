@@ -4,6 +4,33 @@ import GRDB
 @testable import WhimCore
 
 final class ConnectivityMergeTests: XCTestCase {
+    func testActivatedSessionWithoutCompanionDefersSyncUntilCompanionIsAvailable() async throws {
+        let h = try SyncHarness(); defer { h.remove() }
+        let credentials = SyncCredentials()
+        let configuration = WebhookConfigurationService(store: h.store, credentials: credentials)
+        _ = try await configuration.save(.init(endpoint: "https://example.com/whim"))
+        let transport = SyncTransport(); transport.active = true; transport.available = false
+        func merge() throws -> ConnectivityMergeService {
+            try .init(store: h.store, files: h.files, databaseURL: h.root.appendingPathComponent("whim.sqlite"),
+                root: h.root.appendingPathComponent("Peer"), device: .iphone,
+                credentials: credentials, transport: transport)
+        }
+        let first = try merge()
+        let id = NoteID()
+        try await h.store.delete(noteID: id)
+        try await first.queueDeletion(id)
+        try await first.flush()
+        XCTAssertTrue(transport.sent.isEmpty)
+        XCTAssertTrue(transport.contexts.isEmpty)
+
+        // Deferred work survives process exit and resumes when installation is observed.
+        let restarted = try merge()
+        transport.available = true
+        try await restarted.activated()
+        XCTAssertTrue(transport.sent.contains { $0.payload == .deletion(id) })
+        XCTAssertEqual(transport.contexts.count, 1)
+    }
+
     func testDestructiveRequestReplaysUntilAppliedAcknowledgementSurvivesCapture() async throws {
         for isReset in [false, true] {
             let source = try SyncHarness(); defer { source.remove() }
@@ -401,13 +428,18 @@ private actor SyncCredentials: CredentialStore {
 
 private final class SyncTransport: PeerTransport, @unchecked Sendable {
     var active = false
+    var available = true
+    var contexts: [ConnectivityEnvelope] = []
     var sent: [ConnectivityEnvelope] = []
     var files: [URL] = []
     var fileEnvelopes: [ConnectivityEnvelope] = []
-    var isAvailable: Bool { true }
+    var isAvailable: Bool { available }
     var isActivated: Bool { active }
     func activate(receive: @escaping @Sendable (PeerEvent) -> Void) {}
     func transfer(_ envelope: ConnectivityEnvelope) throws { sent.append(envelope) }
     func transferFile(at url: URL, metadata: ConnectivityEnvelope) throws { files.append(url); fileEnvelopes.append(metadata) }
-    func updateContext(_ envelope: ConnectivityEnvelope, credentials: StoredWebhookCredentials?) throws {}
+    func updateContext(_ envelope: ConnectivityEnvelope, credentials: StoredWebhookCredentials?) throws {
+        guard available else { throw NSError(domain: "WCErrorDomain", code: 7006) }
+        contexts.append(envelope)
+    }
 }
