@@ -4,9 +4,9 @@
       "color": {
         "components": {
           "alpha": "1.000",
-          "blue": "0.937254901960784",
-          "green": "0.541176470588235",
-          "red": "0.125490196078431"
+          "blue": "0",
+          "green": "0",
+          "red": "0"
         },
         "color-space": "srgb"
       },
@@ -15,6 +15,6 @@
   ],
   "info": {
     "version": 1,
-    "author": "expo"
+    "author": "xcode"
   }
 }

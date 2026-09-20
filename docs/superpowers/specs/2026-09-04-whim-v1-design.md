@@ -259,7 +259,7 @@ Deleting delivered Notes is immediate. Deleting queued, sending, failed, or reco
 
 ## iPhone experience
 
-Whim opens to a recording-first black home screen, as updated by the approved [2026-09-19 iPhone design](2026-09-19-iphone-recording-first-design.md). A plain white line sits in the center, with a glass Record button at bottom center and an icon-only glass settings button at top right. The hint “scroll to see previous notes.” opens history by upward drag or tap. The sheet follows the drag and provides one soft haptic when opening commits.
+Whim opens to a recording-first black home screen, as updated by the approved [2026-09-19 iPhone design](2026-09-19-iphone-recording-first-design.md). A plain white line sits in the center, with a glass Record button at bottom center and an icon-only glass settings button at top right. The hint “scroll to see previous notes.” opens history by upward drag or tap. History uses a native sheet with its own navigation toolbar and provides one soft haptic when opening commits.
 
 History contains newest-first glass Note cards with a single-line title and date/time on the left, an inline waveform player alongside, and duration, source device, and delivery/review status. Accessibility text sizes stack the layout and allow title wrapping. Failed Notes remain in chronological position with prominent text and symbol treatment plus a Retry action. Filters offer All, Queued, Failed, and Sent. Only one Note plays at a time; leaving history or opening detail stops inline playback.
 

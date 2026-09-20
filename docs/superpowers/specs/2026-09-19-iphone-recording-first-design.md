@@ -72,16 +72,17 @@ automatic duration-limit finalization, and recovery retain v1 behavior.
 
 ## History sheet
 
-An upward drag from idle progressively reveals a bottom sheet that follows
-the finger. Releasing beyond its opening threshold settles it into the open
-position; otherwise it returns to idle. Use one soft haptic when the sheet
-commits to opening, not on every drag update or a canceled drag. Tapping the
-hint opens the same sheet and supplies an accessible alternative gesture.
+Updated 2026-09-20: an upward drag from idle past the opening threshold or
+an accessible tap on the hint presents a native SwiftUI sheet. Use one soft
+haptic when opening commits. iOS owns presentation, interactive downward
+dismissal, cancellation, safe areas, and Reduce Motion transitions. Do not
+simulate a sheet with offsets, conditional removal, or a second drag animation.
 
-The sheet can expand for browsing and dismiss downward. Once open, its list
-scrolls normally; dragging a scrolled list must not unexpectedly dismiss it.
-Respect safe areas and system accessibility navigation. Reduced Motion uses
-restrained transitions while retaining direct manipulation.
+History has its own NavigationStack inside the sheet. Put its title and Close
+button in that stack's native navigation toolbar; Note detail pushes within
+the same sheet. The history list scrolls normally. Closing the sheet by toolbar
+or gesture stops inline playback. Keep the underlying capture surface stable
+through the entire transition, including contextual permission prompts.
 
 Keep newest-first order and All, Queued, Failed, and Sent filters. Preserve
 empty, loading, and error states. Failed Notes remain chronological and
@@ -118,7 +119,7 @@ the real playback control. Do not fabricate an audio waveform.
 
 Keep WhimCore authoritative for Recording Sessions, Notes, delivery, and
 playback. The native iPhone presentation model owns observable UI state;
-SwiftUI owns layout and transient sheet drag geometry.
+SwiftUI owns layout and the native sheet transition.
 
 - Refactor `IPhoneRootView` to compose an idle/active capture surface and the
   history presentation, retaining onboarding, links, permissions, and errors.
