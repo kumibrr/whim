@@ -63,3 +63,47 @@ The aggregate log is `/tmp/whim-swiftui-verified.log`; installed-app results are
 Clean unsigned Release builds succeeded for both `Whim` with `generic/platform=iOS` and `WhimWatch` with `generic/platform=watchOS`, using a fresh `ios/build/ReleaseVerification` directory. `otool -L`/`strings` audits of the iPhone and embedded Watch binaries found no Expo, React Native, Hermes or Pods dependencies and no debug fixture switches. The project generator was run twice with identical resulting project files. `git diff --check` passed; active source/build references to the retired runtime were absent.
 
 Native onboarding screenshots were inspected in Light Mode, Dark Mode and the largest accessibility text size. Text reflows in the scroll view. This was a limited visual sanity check, not the unavailable old/new screenshot comparison or complete accessibility acceptance.
+
+## Native history regression acceptance (2026-09-20)
+
+Automated history coverage checks the close action inside the native navigation
+bar, upward/tap entry, list scrolling, downward dismissal, and reopening. The
+record-and-review journey covers playback, detail navigation, nested deletion
+confirmation, returning to history, and toolbar dismissal. Presentation-model
+integration coverage checks that closing history stops playback and external
+recording closes history.
+
+On a physical iPhone (iOS 18 and the current iOS release), with contextual
+permission prompts still pending behind history:
+
+- Slowly drag down, pause, then release beyond the dismissal threshold. The
+  sheet must continue downward without jumping upward, fading in place, or
+  flashing the underlying permission prompt over its content.
+- Make a short downward drag and cancel it. The sheet must settle smoothly;
+  the selected filter, list position, and active player must remain unchanged.
+- Repeat opening and closing by gesture and toolbar; verify one opening haptic,
+  no hidden playback after dismissal, and no duplicate modal presentation.
+- Repeat with Reduce Motion and Reduce Transparency, VoiceOver, and the largest
+  accessibility text size. Close remains reachable inside the modal toolbar.
+
+Frame-level animation quality and physical haptics remain manual acceptance;
+Maestro checks accessibility-visible outcomes rather than every rendered frame.
+
+### Verification results
+
+Verified on 2026-09-20 using the iOS 27 and watchOS 27 simulators:
+
+- `npm run test:all` completed tooling/Swift unit tests and host/simulator
+  integration tests successfully. The first E2E attempt ran out of disk space
+  during app reinstallation; temporary simulator/build artifacts were removed.
+- The aggregate rerun passed eight iPhone journeys. The retry journey exposed
+  an obsolete `Back` text selector: native navigation now labels that button
+  `Previous notes`. Updating the test to the native `BackButton` identifier and
+  rerunning `failed-and-retry.e2e.test.yaml` passed, completing all nine journeys.
+- `npm run test:e2e:watch` passed separately after the iPhone reruns.
+- Before/after simulator recordings reproduced the old release jump and fade,
+  then showed continuous native downward dismissal. The native toolbar and
+  compiled waveform app icon were visually inspected. `git diff --check` passed.
+
+An additional iOS 18 simulator run was deferred due to disk pressure. Physical
+motion, haptics, and the accessibility acceptance cases above remain pending.

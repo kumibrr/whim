@@ -32,8 +32,9 @@ appId: app.whim.ios
     id: note-detail
 - assertVisible: '⚠ Failed · HTTP 400'
 - assertVisible: The destination rejected this Attempt.
+# The native back button takes its label from the history navigation title.
 - tapOn:
-    text: Back
+    id: BackButton
 - tapOn: Close history
 - tapOn: Settings
 - tapOn:

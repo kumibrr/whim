@@ -13,29 +13,41 @@ struct CaptureHomeView: View {
                 VStack {
                     HStack {
                         Text("whim").font(.system(size: 22, weight: .medium, design: .rounded))
-                            .tracking(-1).foregroundStyle(.white.opacity(0.45)).accessibilityHidden(true)
+                            .tracking(-1).foregroundStyle(.white.opacity(0.45)).accessibilityHidden(
+                                true)
                         Spacer()
                         Button(action: settings) {
                             Image(systemName: "gearshape").font(.system(size: 20, weight: .regular))
                                 .frame(width: 48, height: 48).whimGlass(in: Circle())
-                        }.buttonStyle(.plain).accessibilityLabel("Settings").accessibilityIdentifier("settings-button")
+                        }.buttonStyle(.plain).accessibilityLabel("Settings")
+                            .accessibilityIdentifier("settings-button")
                     }.padding(.horizontal, 24).padding(.top, 12)
                     Spacer()
                     if !model.feedback.isEmpty {
-                        Text(model.feedback).font(.footnote).foregroundStyle(.secondary).padding(.bottom, 20)
+                        Text(model.feedback).font(.footnote).foregroundStyle(.secondary).padding(
+                            .bottom, 20)
                     }
-                    Button { Task { await model.startRecording() } } label: {
+                    Button {
+                        Task { await model.startRecording() }
+                    } label: {
                         Circle().fill(.white).frame(width: 26, height: 26)
                             .frame(width: 80, height: 80).whimGlass(in: Circle())
-                    }.buttonStyle(.plain).accessibilityLabel("Record a Whim").accessibilityIdentifier("record-button")
+                    }.buttonStyle(.plain).accessibilityLabel("Record a Whim")
+                        .accessibilityIdentifier("record-button")
                         .disabled(model.isRecordingPending)
-                    Button { model.openHistory() } label: {
+                    Button {
+                        model.openHistory()
+                    } label: {
                         VStack(spacing: 10) {
                             Text("scroll to see previous notes.").font(.system(size: 12))
-                            Image(systemName: "chevron.up").font(.system(size: 9, weight: .semibold))
-                        }.foregroundStyle(.white.opacity(0.5)).padding(.top, 22).padding(.bottom, 12)
-                            .frame(minHeight: 48)
-                    }.buttonStyle(.plain).accessibilityLabel("Show previous Notes").accessibilityIdentifier("history-hint")
+                            Image(systemName: "chevron.up").font(
+                                .system(size: 9, weight: .semibold))
+                        }.foregroundStyle(.white.opacity(0.5)).padding(.top, 22).padding(
+                            .bottom, 12
+                        )
+                        .frame(minHeight: 48)
+                    }.buttonStyle(.plain).accessibilityLabel("Show previous Notes")
+                        .accessibilityIdentifier("history-hint")
                 }
             }
         }.accessibilityElement(children: .contain).accessibilityIdentifier("whim-home")
@@ -51,37 +63,66 @@ struct RecorderView: View {
             GeometryReader { geometry in
                 ZStack {
                     Color.black.ignoresSafeArea()
-                    LiveWaveformView(power: model.peakPowerDBFS, tone: model.recordingTone).frame(height: 180)
-                        .position(x: geometry.size.width / 2, y: geometry.size.height * 0.45)
+                    LiveWaveformView(power: model.peakPowerDBFS, tone: model.recordingTone).frame(
+                        height: 180
+                    )
+                    .position(x: geometry.size.width / 2, y: geometry.size.height * 0.45)
                     VStack(spacing: 12) {
                         Text("RECORDING").font(.system(size: 11, weight: .medium)).tracking(3)
                             .foregroundStyle(.secondary).padding(.top, 32)
                         Text(TimelineFormat.duration(seconds: model.elapsedSeconds))
-                            .font(.system(size: 32, weight: .light, design: .monospaced)).monospacedDigit()
-                        ProgressView(value: min(model.elapsedSeconds, recording.maximumDurationSeconds), total: recording.maximumDurationSeconds)
-                            .tint(.white).frame(width: 100)
-                            .accessibilityLabel("Recording progress")
-                            .accessibilityValue("\(TimelineFormat.duration(seconds: model.elapsedSeconds)) of \(TimelineFormat.duration(seconds: recording.maximumDurationSeconds))")
+                            .font(.system(size: 32, weight: .light, design: .monospaced))
+                            .monospacedDigit()
+                        ProgressView(
+                            value: min(model.elapsedSeconds, recording.maximumDurationSeconds),
+                            total: recording.maximumDurationSeconds
+                        )
+                        .tint(.white).frame(width: 100)
+                        .accessibilityLabel("Recording progress")
+                        .accessibilityValue(
+                            "\(TimelineFormat.duration(seconds: model.elapsedSeconds)) of \(TimelineFormat.duration(seconds: recording.maximumDurationSeconds))"
+                        )
                         if remaining <= recording.warningLeadSeconds {
                             Text("\(Int(remaining)) seconds remaining").font(.footnote)
                         }
                         Spacer()
-                        Text("Stop saves your Note and starts delivery.").font(.caption).foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center).padding(.horizontal, 24).padding(.bottom, 8)
-                        Button { Task { await model.stopRecording() } } label: {
-                            RoundedRectangle(cornerRadius: 5).fill(.white).frame(width: 24, height: 24)
-                                .frame(width: 80, height: 80).whimGlass(in: Circle())
-                        }.buttonStyle(.plain).accessibilityLabel("Stop recording").accessibilityIdentifier("stop-recording")
+                        Text("Stop saves your Note and starts delivery.").font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center).padding(.horizontal, 24).padding(
+                                .bottom, 8)
+                        Button {
+                            Task { await model.stopRecording() }
+                        } label: {
+                            RoundedRectangle(cornerRadius: 5).fill(.white).frame(
+                                width: 24, height: 24
+                            )
+                            .frame(width: 80, height: 80).whimGlass(in: Circle())
+                        }.buttonStyle(.plain).accessibilityLabel("Stop recording")
+                            .accessibilityIdentifier("stop-recording")
                         Button("Discard", role: .destructive) { confirm = true }
                             .font(.footnote).foregroundStyle(.secondary).buttonStyle(.plain)
-                            .frame(minWidth: 80, minHeight: 48).accessibilityLabel("Discard recording")
+                            .frame(minWidth: 80, minHeight: 48).accessibilityLabel(
+                                "Discard recording"
+                            )
                             .padding(.bottom, 12)
                     }.frame(maxWidth: .infinity)
                 }
-            }.disabled(model.isRecordingPending).accessibilityElement(children: .contain).accessibilityIdentifier("recorder-panel")
+            }.disabled(model.isRecordingPending).accessibilityElement(children: .contain)
+                .accessibilityIdentifier("recorder-panel")
                 .sheet(isPresented: $confirm) {
-                    ConfirmationView(title: "Discard this Recording Session?", message: "This recording has not been saved. Discarding permanently removes it.", confirm: "Confirm discard", cancel: "Keep recording", error: model.error?.message, onCancel: { confirm = false }, onConfirm: { await model.discardRecording(); if model.error == nil { confirm = false } })
-                        .presentationDetents([.medium, .large]).interactiveDismissDisabled(model.isRecordingPending)
+                    ConfirmationView(
+                        title: "Discard this Recording Session?",
+                        message:
+                            "This recording has not been saved. Discarding permanently removes it.",
+                        confirm: "Confirm discard", cancel: "Keep recording",
+                        error: model.error?.message, onCancel: { confirm = false },
+                        onConfirm: {
+                            await model.discardRecording()
+                            if model.error == nil { confirm = false }
+                        }
+                    )
+                    .presentationDetents([.medium, .large]).interactiveDismissDisabled(
+                        model.isRecordingPending)
                 }
         }
     }
@@ -97,7 +138,9 @@ struct LiveWaveformView: View {
             .stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
             .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: level)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: tone)
-            .accessibilityLabel("Microphone level").accessibilityValue("\(Int(level * 100)) percent")
+            .accessibilityLabel("Microphone level").accessibilityValue(
+                "\(Int(level * 100)) percent"
+            )
             .accessibilityIdentifier("live-waveform")
     }
 }
@@ -107,13 +150,19 @@ private struct ReactiveLine: Shape {
     var tone: Double
     var animatableData: AnimatablePair<Double, Double> {
         get { AnimatablePair(level, tone) }
-        set { level = newValue.first; tone = newValue.second }
+        set {
+            level = newValue.first
+            tone = newValue.second
+        }
     }
     func path(in rect: CGRect) -> Path {
         Path { path in
             for step in 0...240 {
                 let x = Double(step) / 240
-                let point = CGPoint(x: rect.width * x, y: rect.midY + rect.height * LiveWaveform.displacement(at: x, level: level, tone: tone))
+                let point = CGPoint(
+                    x: rect.width * x,
+                    y: rect.midY + rect.height
+                        * LiveWaveform.displacement(at: x, level: level, tone: tone))
                 if step == 0 { path.move(to: point) } else { path.addLine(to: point) }
             }
         }

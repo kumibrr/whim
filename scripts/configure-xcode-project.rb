@@ -25,6 +25,8 @@ end
 def configure_target(target, bundle_identifier, deployment_target)
   target.build_configurations.each do |configuration|
     settings = configuration.build_settings
+    settings['OTHER_SWIFT_FLAGS'] = settings['OTHER_SWIFT_FLAGS'].to_s.gsub(/\s*-D\s+EXPO_CONFIGURATION_(DEBUG|RELEASE)\b/, '').strip
+    settings.delete('OTHER_SWIFT_FLAGS') if ['', '$(inherited)'].include?(settings['OTHER_SWIFT_FLAGS'])
     settings['CODE_SIGN_STYLE'] = 'Automatic'
     settings['GENERATE_INFOPLIST_FILE'] = 'YES'
     settings['PRODUCT_BUNDLE_IDENTIFIER'] = bundle_identifier
@@ -169,7 +171,7 @@ app_target.build_configurations.each do |configuration|
 end
 
 project.build_configurations.each do |configuration|
-  %w[OTHER_CFLAGS OTHER_CPLUSPLUSFLAGS].each { |key| configuration.build_settings.delete(key) }
+  %w[OTHER_CFLAGS OTHER_CPLUSPLUSFLAGS OTHER_SWIFT_FLAGS].each { |key| configuration.build_settings.delete(key) }
 end
 # Remove unreachable project objects after source membership changes.
 reachable = {}

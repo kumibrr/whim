@@ -29,6 +29,21 @@ appId: app.whim.ios
     duration: 600
 - assertVisible:
     id: history-sheet
+- assertVisible:
+    id: history-close
+    childOf:
+      id: Previous notes
+# A canceled dismissal preserves the modal's filter and content.
+- tapOn: Failed filter
+- assertVisible: No Notes here yet. Capture a thought.
+- swipe:
+    start: 50%, 10%
+    end: 50%, 12%
+    duration: 1000
+- assertVisible:
+    id: history-sheet
+- assertVisible: No Notes here yet. Capture a thought.
+- tapOn: All filter
 - swipe:
     start: 50%, 80%
     end: 50%, 45%
@@ -36,9 +51,12 @@ appId: app.whim.ios
 - assertVisible:
     id: history-sheet
 - swipe:
-    start: 50%, 18%
-    end: 50%, 80%
+    from:
+      text: Previous notes
+    direction: DOWN
     duration: 600
+- assertNotVisible:
+    id: history-sheet
 - assertVisible:
     id: history-hint
 - tapOn:
@@ -46,5 +64,7 @@ appId: app.whim.ios
 - assertVisible:
     id: history-sheet
 - tapOn: Close history
+- assertNotVisible:
+    id: history-sheet
 - assertVisible:
     id: history-hint

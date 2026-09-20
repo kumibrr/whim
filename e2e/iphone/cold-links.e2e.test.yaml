@@ -26,3 +26,21 @@ appId: app.whim.ios
 - tapOn: Return to timeline
 - assertVisible:
     id: whim-home
+# A warm link must dismiss history before routing in the underlying stack.
+- tapOn:
+    id: history-hint
+- assertVisible:
+    id: history-sheet
+- openLink: whim://settings
+- runFlow:
+    when:
+      visible: Open
+    commands:
+      - tapOn: Open
+- extendedWaitUntil:
+    visible:
+      id: preferences
+    timeout: 10000
+- assertNotVisible:
+    id: history-sheet
+- assertVisible: Webhook
