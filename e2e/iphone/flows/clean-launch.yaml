@@ -37,7 +37,12 @@ appId: app.whim.ios
             visible: OK
           commands:
             - tapOn: OK
-- tapOn: Start using Whim
+# Granting permission also completes onboarding; pre-granted launches need this button.
+- runFlow:
+    when:
+      visible: Start using Whim
+    commands:
+      - tapOn: Start using Whim
 - extendedWaitUntil:
     visible:
       id: whim-home

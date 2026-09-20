@@ -20,8 +20,19 @@ appId: app.whim.ios
     direction: DOWN
     centerElement: true
 - tapOn: Skip webhook setup
+# Some simulator launches leave permission undecided despite the launch override.
+- runFlow:
+    when:
+      visible: Allow microphone
+    commands:
+      - tapOn: Allow microphone
+      - tapOn: Don't Allow
+- runFlow:
+    when:
+      visible: Continue without microphone
+    commands:
+      - tapOn: Continue without microphone
 - assertVisible: .*Microphone access is required.*
-- tapOn: Continue without microphone
 - assertVisible:
     id: whim-home
 - assertVisible:
