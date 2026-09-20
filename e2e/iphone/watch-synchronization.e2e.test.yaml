@@ -14,10 +14,14 @@ appId: app.whim.ios
     timeout: 30000
 - tapOn:
     id: note-row-09000000-0000-0000-0000-000000000001
-- assertVisible: Play Note
-- tapOn: Play Note
-- assertVisible: Playing
-- tapOn: Delete Note
+- assertVisible:
+    id: note-play-.*
+- tapOn:
+    id: note-play-.*
+- assertVisible:
+    id: note-stop-.*
+- tapOn:
+    id: note-delete
 - assertVisible: No Notes here yet. Capture a thought.
 - stopApp
 - launchApp:

@@ -33,19 +33,24 @@ appId: app.whim.ios
     timeout: 60000
 - tapOn:
     id: note-row-.*
-- assertVisible: Review required
+- assertVisible: '⚠ Review required'
 - assertVisible: No Attempts yet.
 - assertTrue:
     condition: ${json(http.get(WHIM_WEBHOOK_TEST_URL.replace('/receive', '/state')).body).received.length === 0}
     label: Recovery does not deliver the Note to the configured destination
-- tapOn: Review recording
-- assertVisible: Playing
-- tapOn: Stop playback
+- tapOn:
+    id: note-play-.*
+- assertVisible:
+    id: note-stop-.*
+- tapOn:
+    id: note-stop-.*
 - extendedWaitUntil:
-    notVisible: Playing
+    notVisible:
+      id: note-stop-.*
     timeout: 10000
-- assertVisible: Review recording
-- assertVisible: Review required
+- assertVisible:
+    id: note-play-.*
+- assertVisible: '⚠ Review required'
 - assertTrue:
     condition: ${json(http.get(WHIM_WEBHOOK_TEST_URL.replace('/receive', '/state')).body).received.length === 0}
     label: Reviewing audio does not authorize Delivery
@@ -57,7 +62,7 @@ appId: app.whim.ios
 - extendedWaitUntil:
     visible: '✓ Sent'
     timeout: 60000
-- assertNotVisible: Review required
+- assertNotVisible: '⚠ Review required'
 - assertTrue:
     condition: ${json(http.get(WHIM_WEBHOOK_TEST_URL.replace('/receive', '/state')).body).received.length === 1}
     label: Explicit Send delivers the recovered Note once

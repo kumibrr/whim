@@ -29,10 +29,35 @@ appId: app.whim.ios
     id: note-stop-.*
 - tapOn:
     id: note-row-.*
-- tapOn: Play Note
-- assertVisible: Playing
-- tapOn: Stop playback
-- tapOn: Delete Note
+- assertNotVisible:
+    text: Whim
+    childOf:
+      id: history-sheet
+- assertVisible:
+    id: note-delete
+    rightOf:
+      id: BackButton
+    above:
+      id: note-play-.*
+- assertVisible:
+    text: Delivery details
+    below:
+      id: note-play-.*
+- tapOn:
+    id: note-play-.*
+- assertVisible:
+    id: note-stop-.*
+- tapOn:
+    id: note-stop-.*
+- takeScreenshot: ios/build/screenshots/note-detail
+- tapOn:
+    id: note-delete
+- assertVisible: .*only local copy.*
+- tapOn: Cancel
+- assertVisible:
+    id: note-play-.*
+- tapOn:
+    id: note-delete
 - assertVisible: .*only local copy.*
 - tapOn: Confirm delete
 - assertVisible: No Notes here yet. Capture a thought.

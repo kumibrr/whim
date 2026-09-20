@@ -12,16 +12,13 @@ struct NoteDetailView: View {
     var body: some View {
         WhimContent {
             if let note = model.note {
-                Text(note.title).whimTitle()
-                Text(TimelineFormat.date(note.createdAt)).foregroundStyle(.secondary)
-                Text("\(TimelineFormat.source(note.source)) · \(TimelineFormat.duration(seconds: note.durationSeconds))")
-                Text(note.requiresReview ? "Review required" : TimelineFormat.status(note.status)).whimHeading().foregroundStyle(note.status == .failed ? Color.red : .primary)
-                if note.hasLocalAudio {
-                    Button(model.isPlaying ? "Stop playback" : note.requiresReview ? "Review recording" : "Play Note") {
+                NoteRowView(
+                    note: note, waveform: model.waveform, playback: model.playback,
+                    open: nil, retry: nil,
+                    togglePlayback: {
                         Task { if model.isPlaying { await model.stopPlayback() } else { await model.play() } }
                     }
-                } else { Text(note.localError == nil ? "Audio expired" : "Audio unavailable").foregroundStyle(.secondary) }
-                if model.isPlaying { Text("Playing") }
+                )
                 if let error = note.localError { Text("Local audio error: \(error.rawValue)").foregroundStyle(.red) }
                 if note.workflowError != nil { Text("Delivery could not continue. Your Note is preserved.").foregroundStyle(.red) }
                 if note.requiresReview {
@@ -41,20 +38,34 @@ struct NoteDetailView: View {
                         Text("Configuration Revision: \(attempt.configurationRevisionID)").foregroundStyle(.secondary).textSelection(.enabled)
                     }
                 }
-                Button("Delete Note") {
-                    if note.status == .sent && !note.requiresReview { Task { await delete() } }
-                    else { confirm = true }
-                }
             } else {
                 Text("This Note is unavailable.")
                 Button("Return to timeline") { dismiss() }
             }
             if let error = model.error { WhimErrorText(message: error.message) }
-        }.accessibilityIdentifier("note-detail").disabled(model.isPending).navigationTitle("Whim").toolbar(.visible, for: .navigationBar)
+        }.accessibilityIdentifier("note-detail").disabled(model.isPending).navigationTitle("").navigationBarTitleDisplayMode(.inline).toolbar(.visible, for: .navigationBar)
+            .toolbar {
+                if let note = model.note {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            if note.status == .sent && !note.requiresReview { Task { await delete() } }
+                            else { confirm = true }
+                        } label: {
+                            Image(systemName: "trash").foregroundStyle(.red)
+                        }
+                        .buttonStyle(.automatic)
+                        .tint(.red)
+                        .accessibilityLabel("Delete Note")
+                        .accessibilityIdentifier("note-delete")
+                        .disabled(model.isPending)
+                    }
+                }
+            }
             .sheet(isPresented: $confirm) {
                 ConfirmationView(title: "Delete this Note?", message: "This may be the only local copy. Deleting cannot revoke delivery already accepted by your server.", confirm: "Confirm delete", error: model.error?.message, onCancel: { confirm = false }, onConfirm: delete)
                     .presentationDetents([.medium, .large]).interactiveDismissDisabled(model.isPending)
             }
+            .task(id: model.note?.hasLocalAudio) { await model.loadWaveform() }
             .task(id: root.revision) { await model.refresh() }
             .task {
                 while !Task.isCancelled {
