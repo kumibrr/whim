@@ -102,17 +102,27 @@ extension WatchRecordingUITests {
         XCTAssertFalse(app.buttons["watch-stop"].exists)
     }
 
-    func testDiscardRequiresConfirmationAndLeavesNoNote() {
+    func testDiscardImmediatelyLeavesNoNote() {
         let app = XCUIApplication()
         app.launchArguments = WatchUITestConfiguration.arguments
         app.launch()
         XCTAssertTrue(app.buttons["watch-discard"].waitForExistence(timeout: 10))
-        app.buttons["watch-discard"].tap()
-        XCTAssertTrue(app.buttons["AX_ActionContentControllerCancelButton"].firstMatch.waitForExistence(timeout: 5))
-        app.buttons["AX_ActionContentControllerCancelButton"].firstMatch.tap()
-        XCTAssertTrue(app.buttons["watch-stop"].exists)
-        app.buttons["watch-discard"].tap()
-        app.buttons["Discard Recording"].tap()
+        let discard = app.buttons["watch-discard"]
+        XCTAssertGreaterThanOrEqual(discard.frame.width, 100)
+        XCTAssertGreaterThanOrEqual(discard.frame.height, 44)
+        // The controls must remain adjacent so Discard can morph from the capture button.
+        if #available(watchOS 26, *) {
+            XCTAssertLessThanOrEqual(discard.frame.minY - app.buttons["watch-stop"].frame.maxY, 12)
+        }
+        discard.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)).tap()
+        XCTAssertTrue(app.buttons["watch-record"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Discard Recording"].exists)
+        app.buttons["watch-record"].tap()
+        XCTAssertTrue(discard.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["watch-record"].exists)
+        discard.tap()
+        XCTAssertTrue(app.buttons["watch-record"].waitForExistence(timeout: 5))
+        XCTAssertFalse(discard.exists)
         app.swipeUp()
         XCTAssertTrue(app.staticTexts["No Notes yet"].waitForExistence(timeout: 5))
     }

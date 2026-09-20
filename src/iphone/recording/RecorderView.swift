@@ -3,6 +3,7 @@ import WhimIPhone
 
 struct CaptureHomeView: View {
     var model: IPhoneModel
+    var glassNamespace: Namespace.ID
     var settings: () -> Void
     var body: some View {
         GeometryReader { geometry in
@@ -32,6 +33,7 @@ struct CaptureHomeView: View {
                     } label: {
                         Circle().fill(.white).frame(width: 26, height: 26)
                             .frame(width: 80, height: 80).whimGlass(in: Circle())
+                            .captureGlassIdentity("capture", in: glassNamespace)
                     }.buttonStyle(.plain).accessibilityLabel("Record a Whim")
                         .accessibilityIdentifier("record-button")
                         .disabled(model.isRecordingPending)
@@ -56,7 +58,7 @@ struct CaptureHomeView: View {
 
 struct RecorderView: View {
     var model: IPhoneModel
-    @State private var confirm = false
+    var glassNamespace: Namespace.ID
     var body: some View {
         if let recording = model.recording {
             let remaining = max(0, recording.maximumDurationSeconds - floor(model.elapsedSeconds))
@@ -97,34 +99,33 @@ struct RecorderView: View {
                                 width: 24, height: 24
                             )
                             .frame(width: 80, height: 80).whimGlass(in: Circle())
+                            .captureGlassIdentity("capture", in: glassNamespace)
                         }.buttonStyle(.plain).accessibilityLabel("Stop recording")
                             .accessibilityIdentifier("stop-recording")
-                        Button("Discard", role: .destructive) { confirm = true }
-                            .font(.footnote).foregroundStyle(.secondary).buttonStyle(.plain)
-                            .frame(minWidth: 80, minHeight: 48).accessibilityLabel(
-                                "Discard recording"
-                            )
+                        Button(role: .destructive) {
+                            Task { await model.discardRecording() }
+                        } label: {
+                            if #available(iOS 26, *) {
+                                discardLabel.whimGlass(in: Capsule())
+                                    .captureGlassIdentity("discard", in: glassNamespace)
+                            } else {
+                                discardLabel
+                            }
+                        }.buttonStyle(.plain).accessibilityLabel("Discard recording")
+                            .accessibilityIdentifier("discard-recording")
                             .padding(.bottom, 12)
                     }.frame(maxWidth: .infinity)
                 }
             }.disabled(model.isRecordingPending).accessibilityElement(children: .contain)
                 .accessibilityIdentifier("recorder-panel")
-                .sheet(isPresented: $confirm) {
-                    ConfirmationView(
-                        title: "Discard this Recording Session?",
-                        message:
-                            "This recording has not been saved. Discarding permanently removes it.",
-                        confirm: "Confirm discard", cancel: "Keep recording",
-                        error: model.error?.message, onCancel: { confirm = false },
-                        onConfirm: {
-                            await model.discardRecording()
-                            if model.error == nil { confirm = false }
-                        }
-                    )
-                    .presentationDetents([.medium, .large]).interactiveDismissDisabled(
-                        model.isRecordingPending)
-                }
         }
+    }
+    private var discardLabel: some View {
+        Text("Discard")
+            .font(.body.weight(.semibold))
+            .foregroundStyle(.red)
+            .frame(minWidth: 120, minHeight: 56)
+            .contentShape(Rectangle())
     }
 }
 

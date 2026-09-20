@@ -75,7 +75,7 @@ Status: pending physical-device execution. Simulator checks do not prove haptics
 
 1. Launch after onboarding. Expect a black screen, a still white horizontal line, glass Record at bottom center, icon-only Settings at top right, and the exact hint "scroll to see previous notes.".
 2. Start capture. Sustain a steady vowel: after settling, the curve should hold its shape. Change only loudness: its height should change. Change pitch or vowel at similar loudness: its middle should reshape. Remain silent: it should settle flat. Both edges taper almost to zero. No motion should occur merely because time passes. Expect the full-width line to react to input and settle toward a line during silence, without growing from left to right. Only Stop and Discard are reachable, including with VoiceOver and an attempted history swipe.
-3. Open Discard, choose Keep recording, then Stop. Expect uninterrupted capture after canceling Discard and a saved Note after Stop. History must remain closed. Repeat with interruption and the five-minute limit; playable audio remains recoverable and the home returns to idle.
+3. Verify Discard is red and its full 120 × 56 point area responds, including beside the text. Tap it once: expect immediate return to idle, no confirmation, and no saved Note. Start again and Stop; expect a saved Note. History must remain closed. Repeat with interruption and the five-minute limit; playable audio remains recoverable and the home returns to idle.
 4. Slowly drag upward from the hint. Expect the sheet to track the finger. Cancel a short drag: no opening haptic. Complete a drag: one soft opening haptic. Scroll the open list: no dismissal or repeated opening haptic. Drag the handle downward or use Close history to dismiss.
 5. Open history by tapping the hint and with VoiceOver. Play a Note, then another: only the second plays. Close history: audio stops. Open a Note's details: the inline player stops. Start capture after playback: capture takes audio-session ownership.
 6. Inspect long titles, failed and recovered Notes, and expired local audio. Expect readable title/date/time, duration/source/status, reachable Retry/review/detail actions, and disabled playback when audio is unavailable. Playback or review alone must never send a recovered Note.
@@ -124,3 +124,11 @@ Status: pending physical iPhone execution.
 Closest deterministic coverage: NoteDetailModel integration tests cover waveform
 loading, playback and audio disappearance; record-and-review, recovered-review and
 Watch synchronization iPhone journeys cover the shared player and deletion paths.
+
+## Liquid Glass capture transition (OS 26 and later)
+
+1. From idle, tap Record. Expect the capture glass to remain visually continuous as its symbol becomes Stop, while a red Discard glass pill emerges directly below it. It must not fade in as an unrelated control or merge with Settings.
+2. Tap Discard once. Expect capture to end immediately and the pill to merge back into the capture control. Repeat rapidly, then Stop; no leftover or duplicate controls may intercept taps.
+3. Enable Reduce Motion. Repeat: controls change without the morph animation. Enable Reduce Transparency: controls remain legible with opaque surfaces.
+4. Verify the existing large hit targets and VoiceOver labels. On pre-26 systems, retain the existing material capture button and plain red Discard without morphing.
+5. Record a slow-motion screen capture on physical OS 26 hardware for the visual transition; automated journeys cover the resulting state and operable controls.

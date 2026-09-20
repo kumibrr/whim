@@ -7,6 +7,7 @@ struct IPhoneRootView: View {
     @Bindable var model: IPhoneModel
     var pendingLink: PendingIPhoneLink?
     @Environment(\.scenePhase) private var phase
+    @Namespace private var captureGlassNamespace
     @State private var path: [IPhoneRoute] = []
     var body: some View {
         NavigationStack(path: $path) {
@@ -57,11 +58,15 @@ struct IPhoneRootView: View {
     private func home(_ settings: SettingsProjection) -> some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            if model.recording != nil {
-                RecorderView(model: model)
-            } else {
-                CaptureHomeView(model: model) {
-                    Task { if await model.prepareForNavigation() { path.append(.settings) } }
+            CaptureGlassContainer(isRecording: model.recording != nil) {
+                if model.recording != nil {
+                    RecorderView(model: model, glassNamespace: captureGlassNamespace)
+                        .transition(.identity)
+                } else {
+                    CaptureHomeView(model: model, glassNamespace: captureGlassNamespace) {
+                        Task { if await model.prepareForNavigation() { path.append(.settings) } }
+                    }
+                    .transition(.identity)
                 }
             }
         }.simultaneousGesture(DragGesture(minimumDistance: 18)

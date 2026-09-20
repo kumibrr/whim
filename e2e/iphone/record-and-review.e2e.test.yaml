@@ -10,8 +10,18 @@ appId: app.whim.ios
 - assertNotVisible:
     id: history-hint
 - tapOn: Discard recording
-- assertNotVisible: Stop recording
-- tapOn: Keep recording
+- assertVisible: Recording discarded
+- assertNotVisible:
+    id: discard-recording
+- assertNotVisible:
+    id: recorder-panel
+- assertNotVisible: Confirm discard
+- tapOn:
+    id: history-hint
+- assertVisible: No Notes here yet. Capture a thought.
+- tapOn: Close history
+- tapOn:
+    id: record-button
 - assertVisible: Stop recording
 - tapOn:
     id: stop-recording
@@ -65,5 +75,4 @@ appId: app.whim.ios
 - tapOn:
     id: record-button
 - tapOn: Discard recording
-- tapOn: Confirm discard
 - assertVisible: Recording discarded
