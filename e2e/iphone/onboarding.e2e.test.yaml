@@ -20,8 +20,13 @@ appId: app.whim.ios
     direction: DOWN
     centerElement: true
 - tapOn: Skip webhook setup
-- assertVisible: .*Microphone access is denied.*
+- assertVisible: .*Microphone access is required.*
 - tapOn: Continue without microphone
 - assertVisible:
     id: whim-home
-- assertVisible: Microphone settings
+- assertVisible:
+    id: startup-error
+- tapOn:
+    id: startup-error
+# Simulator Settings may open its root while the app entry is still registering.
+- assertVisible: Whim|Settings

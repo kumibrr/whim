@@ -88,3 +88,62 @@ extension View {
         modifier(CaptureGlassIdentity(id: id, namespace: namespace))
     }
 }
+
+/// Error content occupies the upper safe area; the recorder retains the remaining space.
+struct WhimErrorContainer: View {
+    let message: String
+    let actionLabel: String
+    var busy = false
+    let action: () -> Void
+    var dismiss: (() -> Void)? = nil
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Text(message)
+                    .font(.footnote)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                if busy { ProgressView() }
+                else { Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.secondary) }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .frame(minHeight: 44)
+            .contentShape(RoundedRectangle(cornerRadius: 18))
+            .whimGlass(in: RoundedRectangle(cornerRadius: 18))
+        }
+        .buttonStyle(.plain).disabled(busy)
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(message)
+        .accessibilityHint(actionLabel)
+        .accessibilityValue(busy ? "Working" : "")
+        .accessibilityIdentifier("startup-error")
+        .accessibilityActions {
+            if let dismiss { Button("Dismiss error", action: dismiss) }
+        }
+        .simultaneousGesture(DragGesture(minimumDistance: 30).onEnded { value in
+            if !busy, abs(value.translation.width) > 60, abs(value.translation.width) > abs(value.translation.height) * 2 {
+                dismiss?()
+            }
+        })
+    }
+}
+
+struct IPhoneStartupShell: View {
+    let onboardingCompleted: Bool
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if onboardingCompleted {
+                Rectangle().fill(.white).frame(height: 1).padding(.horizontal, 24)
+                VStack { Spacer(); ProgressView("Preparing recording…").padding(.bottom, 48) }
+            } else {
+                WhimContent {
+                    Text("A place for your thoughts").whimTitle()
+                    Text("Whim stores voice Notes locally on your iPhone and Apple Watch and delivers them directly to your webhook. No account, cloud storage, or analytics.")
+                    ProgressView("Preparing Whim…")
+                }
+            }
+        }.accessibilityIdentifier(onboardingCompleted ? "whim-home" : "onboarding")
+    }
+}

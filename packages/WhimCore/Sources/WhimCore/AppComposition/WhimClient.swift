@@ -1,6 +1,17 @@
 import Foundation
 
+public struct StartupProjection: Equatable, Sendable {
+    public let onboardingCompleted: Bool
+    public let microphone: PermissionStatus
+    public let recording: RecordingProjection?
+    public init(onboardingCompleted: Bool, microphone: PermissionStatus, recording: RecordingProjection?) {
+        self.onboardingCompleted = onboardingCompleted; self.microphone = microphone; self.recording = recording
+    }
+}
+
 public protocol WhimClient: Sendable {
+    func startup() async throws -> StartupProjection
+    func maintain() async throws
     func startRecording(source: CaptureSource) async throws -> RecordingProjection
     func activeRecording() async throws -> RecordingProjection?
     func stopRecording() async throws -> NoteProjection?
@@ -28,6 +39,12 @@ public protocol WhimClient: Sendable {
 }
 
 public extension WhimClient {
+    func maintain() async throws {}
+    func startup() async throws -> StartupProjection {
+        let settings = try await settings()
+        return try await StartupProjection(onboardingCompleted: settings.onboardingCompleted,
+            microphone: settings.permissions.microphone, recording: activeRecording())
+    }
     func waveform(noteID: NoteID) async throws -> AudioWaveform { .unavailable }
     func playNote(_ id: NoteID) async throws -> PlaybackProjection { throw WhimServiceError.audioUnavailable }
     func stopPlayback() async {}

@@ -3,6 +3,199 @@ import WhimCore
 @testable import WhimIPhone
 
 @MainActor final class IPhoneModelIntegrationTests: XCTestCase {
+    func testMaintenanceFailureKeepsExistingAndNewNotesVisibleAndPlayable() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let id = NoteID()
+        let url = harness.files.audioURL(for: id)
+        try writeAudioFixture(to: url)
+        _ = try await harness.store.saveFinalized(FinalizedRecording(id: id, recordingSessionID: RecordingSessionID(),
+            title: "Saved Note", titleSource: .timestamp, createdAt: Date(), duration: 1, source: .iphone,
+            captureOutcome: .completed, requiresReview: false, audioURL: url))
+        let model = IPhoneModel(client: harness.makeService(playback: FacadePlayback(), permissions: GrantedPermissions(),
+            recoveryFiles: FailingRecoveryOwnership(base: harness.files)))
+        await model.start()
+        for _ in 0..<100 where model.maintenanceError == nil { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertNotNil(model.maintenanceError)
+        XCTAssertNil(model.historyError)
+        XCTAssertTrue(model.notes.contains { $0.id == id })
+        model.openHistory()
+        await model.playInline(id)
+        XCTAssertEqual(model.playback?.noteID, id.rawValue.uuidString.lowercased())
+        await model.closeHistory()
+        await model.startRecording()
+        await model.stopRecording()
+        let newest = try XCTUnwrap(model.notes.first { $0.id != id }).id
+        model.openHistory()
+        await model.playInline(newest)
+        XCTAssertEqual(model.playback?.noteID, newest.rawValue.uuidString.lowercased())
+        XCTAssertNil(model.error)
+        XCTAssertEqual(model.notes.count, 2)
+        model.stop()
+    }
+
+    func testDeletingDuringMaintenanceRestartsRemainingRecovery() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let id = NoteID()
+        let url = harness.files.audioURL(for: id)
+        try writeAudioFixture(to: url)
+        _ = try await harness.store.saveFinalized(FinalizedRecording(id: id, recordingSessionID: RecordingSessionID(),
+            title: "Delete me", titleSource: .timestamp, createdAt: Date(), duration: 1, source: .iphone,
+            captureOutcome: .completed, requiresReview: false, audioURL: url))
+        let orphan = RecordingSession(id: RecordingSessionID(), noteID: NoteID(), createdAt: Date(), source: .iphone)
+        try await harness.store.saveRecordingSession(orphan)
+        try writeAudioFixture(to: harness.files.temporaryURL(for: orphan.id))
+        let entered = expectation(description: "Recovery entered")
+        let cancelled = expectation(description: "Delete cancelled recovery")
+        let gate = RecoveryClaimGate(entered: entered, cancelled: cancelled)
+        let client = harness.makeService(permissions: GrantedPermissions(),
+            recoveryFiles: FailingRecoveryOwnership(base: harness.files, beforeClaim: { try gate.wait() }))
+        let model = IPhoneModel(client: client)
+        await model.start()
+        await fulfillment(of: [entered], timeout: 1)
+        let deletion = Task { try await client.delete(noteID: id) }
+        await fulfillment(of: [cancelled], timeout: 1)
+        gate.release()
+        try await deletion.value
+        for _ in 0..<100 where !model.notes.contains(where: { $0.id == orphan.noteID }) {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertTrue(model.notes.contains { $0.id == orphan.noteID && $0.requiresReview })
+        XCTAssertFalse(model.notes.contains { $0.id == id })
+        model.stop()
+    }
+
+    func testClosingHistoryClearsItsPlaybackFailure() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let model = IPhoneModel(client: harness.makeService(playback: FailsFirstPlayback(), permissions: GrantedPermissions()))
+        await model.start()
+        await model.startRecording(); await model.stopRecording()
+        model.openHistory()
+        await model.playInline(try XCTUnwrap(model.notes.first).id)
+        XCTAssertEqual(model.error?.recovery.operation, .playback)
+        await model.closeHistory()
+        XCTAssertNil(model.error)
+        model.stop()
+    }
+
+    func testPlaybackFailureRetriesTheSameNoteInsideHistory() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let model = IPhoneModel(client: harness.makeService(playback: FailsFirstPlayback(), permissions: GrantedPermissions()))
+        await model.start()
+        await model.startRecording()
+        await model.stopRecording()
+        let id = try XCTUnwrap(model.notes.first).id
+        model.openHistory()
+        await model.playInline(id)
+        XCTAssertEqual(model.visibleFailure?.operation, .playback)
+        XCTAssertTrue(model.isHistoryPresented)
+        await model.retryVisibleFailure()
+        XCTAssertEqual(model.playback?.noteID, id.rawValue.uuidString.lowercased())
+        XCTAssertNil(model.error)
+        XCTAssertTrue(model.isHistoryPresented)
+        model.stop()
+    }
+
+    func testRecordingEventDuringStartupDoesNotWithholdCaptureReadiness() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let permissions = SlowPresentationPermissions(blockFirstMicrophone: true)
+        let client = harness.makeService(permissions: permissions)
+        let model = IPhoneModel(client: client)
+        let starting = Task { await model.start() }
+        await permissions.waitUntilMicrophoneBlocked()
+        _ = try await client.startRecording(source: .iphone)
+        for _ in 0..<100 where model.recording == nil { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertNotNil(model.recording)
+        await permissions.releaseMicrophone()
+        await permissions.waitUntilBlocked()
+        XCTAssertTrue(model.captureReady, "A newer recording event must not discard readiness or permission")
+        XCTAssertEqual(model.startupState?.microphone, .granted)
+        await permissions.release()
+        await starting.value
+        await model.discardRecording()
+        model.stop()
+    }
+
+    func testCompletingOnboardingDoesNotJoinSlowSettingsRefresh() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let permissions = SlowPresentationPermissions()
+        let model = IPhoneModel(client: harness.makeService(permissions: permissions))
+        let starting = Task { await model.start() }
+        await permissions.waitUntilBlocked()
+        let completed = expectation(description: "Onboarding routes before optional settings finish")
+        let completion = Task { @MainActor in
+            await model.perform { try await model.client.completeOnboarding() }
+            XCTAssertTrue(model.onboardingCompleted)
+            XCTAssertFalse(model.isPending)
+            completed.fulfill()
+        }
+        await fulfillment(of: [completed], timeout: 1)
+        await permissions.release()
+        await completion.value; await starting.value
+        model.stop()
+    }
+
+    func testRetryingUnrelatedFailureNeverStartsRecording() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let model = IPhoneModel(client: harness.makeService(permissions: GrantedPermissions()))
+        await model.start()
+        await model.perform { throw WhimStoreError.missingNote }
+        await model.retryVisibleFailure()
+        XCTAssertNil(model.recording)
+        let starts = await harness.recorder.startCount
+        XCTAssertEqual(starts, 0)
+        model.stop()
+    }
+
+    func testRetryingInlinePlaybackFailureNeverStartsRecording() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let client = harness.makeService(playback: FacadePlayback(), permissions: GrantedPermissions())
+        _ = try await client.startRecording(source: .iphone)
+        _ = try await client.stopRecording()
+        let model = IPhoneModel(client: client)
+        await model.start()
+        let id = try XCTUnwrap(model.notes.first).id
+        try harness.files.delete(noteID: id)
+        model.openHistory()
+        await model.playInline(id)
+        XCTAssertNotNil(model.error)
+        await model.retryVisibleFailure()
+        XCTAssertNil(model.recording)
+        let starts = await harness.recorder.startCount
+        XCTAssertEqual(starts, 1)
+        model.stop()
+    }
+
+    func testCapturePresentationDoesNotWaitForOptionalSettings() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let permissions = SlowPresentationPermissions()
+        let model = IPhoneModel(client: harness.makeService(permissions: permissions))
+        let starting = Task { await model.start() }
+        await permissions.waitUntilBlocked()
+        let captured = expectation(description: "Capture UI ready while optional settings are suspended")
+        let capture = Task { @MainActor in
+            await model.startRecording()
+            XCTAssertNotNil(model.recording)
+            XCTAssertFalse(model.isRecordingPending)
+            await model.stopRecording()
+            XCTAssertNil(model.recording)
+            captured.fulfill()
+        }
+        await fulfillment(of: [captured], timeout: 1)
+        await permissions.release()
+        await starting.value
+        await capture.value
+        model.stop()
+    }
+
     func testMeasuredToneReachesRecordingPresentationAndResetsForNextSession() async throws {
         let harness = try WhimFacadeHarness()
         defer { harness.remove() }
@@ -442,4 +635,77 @@ actor GrantedPermissions: PermissionAdapter {
             await model.client.stopPlayback()
         }
     }
+}
+
+private actor SlowPresentationPermissions: PermissionAdapter {
+    private let blockFirstMicrophone: Bool
+    private var microphoneReads = 0
+    private var microphoneContinuation: CheckedContinuation<Void, Never>?
+    private var microphoneWaiters: [CheckedContinuation<Void, Never>] = []
+    init(blockFirstMicrophone: Bool = false) { self.blockFirstMicrophone = blockFirstMicrophone }
+    func waitUntilMicrophoneBlocked() async {
+        if microphoneContinuation != nil { return }
+        await withCheckedContinuation { microphoneWaiters.append($0) }
+    }
+    func releaseMicrophone() { microphoneContinuation?.resume(); microphoneContinuation = nil }
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var released = false
+    func status(_ kind: PermissionKind) async -> PermissionStatus {
+        if kind == .microphone {
+            microphoneReads += 1
+            if blockFirstMicrophone, microphoneReads == 1 {
+                await withCheckedContinuation {
+                    microphoneContinuation = $0
+                    microphoneWaiters.forEach { $0.resume() }; microphoneWaiters = []
+                }
+            }
+        }
+        if kind == .notifications, !released {
+            await withCheckedContinuation { continuation = $0; waiters.forEach { $0.resume() }; waiters = [] }
+        }
+        return .granted
+    }
+    func waitUntilBlocked() async {
+        if continuation != nil { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+    func release() { released = true; continuation?.resume(); continuation = nil }
+    func request(_ kind: PermissionKind) async throws -> PermissionStatus { .granted }
+    func openSettings() {}
+}
+
+private actor FailsFirstPlayback: PlaybackAdapter {
+    private var failed = false
+    private var value: PlaybackProjection?
+    func play(noteID: NoteID, url: URL) throws -> PlaybackProjection {
+        if !failed { failed = true; throw NSError(domain: "AudioPlayer", code: 1) }
+        let next = PlaybackProjection(noteID: noteID, isPlaying: true, elapsedSeconds: 0, durationSeconds: 2)
+        value = next; return next
+    }
+    func stop() { value = nil }
+    func snapshot() -> PlaybackProjection? { value }
+}
+
+private final class RecoveryClaimGate: @unchecked Sendable {
+    let entered: XCTestExpectation
+    let cancelled: XCTestExpectation
+    private let condition = NSCondition()
+    private var released = false
+    private var started = false
+    init(entered: XCTestExpectation, cancelled: XCTestExpectation) { self.entered = entered; self.cancelled = cancelled }
+    func wait() throws {
+        condition.lock()
+        defer { condition.unlock() }
+        if started { return }
+        started = true
+        entered.fulfill()
+        var reported = false
+        while !released {
+            if Task.isCancelled, !reported { cancelled.fulfill(); reported = true }
+            _ = condition.wait(until: Date().addingTimeInterval(0.01))
+        }
+        try Task.checkCancellation()
+    }
+    func release() { condition.lock(); released = true; condition.broadcast(); condition.unlock() }
 }

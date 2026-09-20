@@ -1,10 +1,12 @@
 import SwiftUI
+import WhimCore
 
 struct WatchCaptureView: View {
     @Bindable var model: WatchModel
     @Namespace private var glassNamespace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    private var controlDiameter: CGFloat { model.visibleFailure == nil ? 72 : 48 }
 
     var body: some View {
         if #available(watchOS 26, *) {
@@ -22,13 +24,15 @@ struct WatchCaptureView: View {
             WatchWaveformView(power: model.recording == nil ? -160 : model.peakPowerDBFS)
                 .frame(height: 110)
 
-            VStack(spacing: 8) {
+            VStack(spacing: model.visibleFailure == nil ? 8 : 4) {
                 if model.recording != nil {
+                    if model.visibleFailure == nil {
                     Text("RECORDING")
                         .font(.system(size: 9, weight: .medium))
                         .tracking(2)
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("watch-recorder")
+                    }
                     Text(Duration.seconds(model.elapsed).formatted(.time(pattern: .minuteSecond)))
                         .font(.system(size: 18, weight: .light, design: .monospaced))
                         .monospacedDigit()
@@ -77,6 +81,15 @@ struct WatchCaptureView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
         }
+        .safeAreaInset(edge: .top, spacing: 4) {
+            if let failure = model.visibleFailure {
+                WatchErrorContainer(failure: failure,
+                    busy: model.isResolvingError || model.captureBusy,
+                    retry: { Task { await model.retryVisibleFailure() } },
+                    dismiss: [.history, .settings, .maintenance].contains(failure.operation) ? { model.dismissAuxiliaryError() } : nil)
+                    .padding(.horizontal, 8).padding(.top, 30)
+            }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("watch-capture")
     }
@@ -90,25 +103,26 @@ struct WatchCaptureView: View {
     }
 
     @ViewBuilder private var captureControl: some View {
-        if model.permission != .granted {
+        if !model.captureReady {
+            ProgressView("Preparing…")
+        } else if model.permission == .notDetermined {
             VStack(spacing: 8) {
                 Text("Microphone access is required to capture a Note.")
                     .font(.caption)
                     .multilineTextAlignment(.center)
                 if model.permission == .notDetermined {
                     Button("Allow microphone") { Task { await model.requestPermission() } }
-                } else {
-                    Text("On Apple Watch, open Settings > Privacy & Security > Microphone and allow Whim.")
-                        .font(.caption2)
-                        .multilineTextAlignment(.center)
+
                 }
             }
+        } else if model.permission != .granted {
+            EmptyView()
         } else if model.recording != nil {
             Button { Task { await model.stop() } } label: {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(.red)
                     .frame(width: 22, height: 22)
-                    .frame(width: 72, height: 72)
+                    .frame(width: controlDiameter, height: controlDiameter)
                     .watchGlass(in: Circle())
                     .modifier(WatchCaptureGlassIdentity(id: "capture", namespace: glassNamespace))
             }
@@ -122,7 +136,7 @@ struct WatchCaptureView: View {
                 Circle()
                     .fill(.white)
                     .frame(width: 24, height: 24)
-                    .frame(width: 72, height: 72)
+                    .frame(width: controlDiameter, height: controlDiameter)
                     .watchGlass(in: Circle())
                     .modifier(WatchCaptureGlassIdentity(id: "capture", namespace: glassNamespace))
             }
@@ -202,5 +216,75 @@ private struct WatchCaptureGlassIdentity: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+struct WatchErrorContainer: View {
+    let failure: ActionableFailure
+    var busy = false
+    let retry: () -> Void
+    var dismiss: (() -> Void)? = nil
+    @State private var instructions = false
+    private var needsInstructions: Bool { failure.action != .retry }
+    private var message: String {
+        failure.action == .microphoneSettings ? "Allow microphone access to record." : failure.message
+    }
+    var body: some View {
+        Button {
+            if needsInstructions { instructions = true } else { retry() }
+        } label: {
+            HStack(spacing: 6) {
+                Text(message).font(.caption2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                if busy { ProgressView() }
+                else { Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary) }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            .frame(minHeight: 44)
+            .contentShape(RoundedRectangle(cornerRadius: 16))
+            .watchGlass(in: RoundedRectangle(cornerRadius: 16))
+        }
+        .buttonStyle(.plain).disabled(busy)
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(message)
+        .accessibilityHint(needsInstructions ? "Show instructions" : failure.actionLabel)
+        .accessibilityValue(busy ? "Working" : "")
+        .accessibilityIdentifier("startup-error")
+        .accessibilityActions {
+            if let dismiss { Button("Dismiss error", action: dismiss) }
+        }
+        .simultaneousGesture(DragGesture(minimumDistance: 30).onEnded { value in
+            if !busy, abs(value.translation.width) > 40, abs(value.translation.width) > abs(value.translation.height) * 2 {
+                dismiss?()
+            }
+        })
+            .sheet(isPresented: $instructions) {
+                ScrollView {
+                    VStack(spacing: 12) {
+                        Text(failure.action == .microphoneSettings ? "On Apple Watch, open Settings > Privacy & Security > Microphone and allow Whim." : failure.action == .configureWebhook ? "Open Whim on your iPhone, then Settings, to configure and test your webhook." : "Open the Watch app on iPhone, then General > Storage. Remove items you no longer need, then return to Whim.")
+                        Button("Check again") { instructions = false; retry() }
+                        Button("Close") { instructions = false }
+                    }.padding()
+                }
+            }
+    }
+}
+
+struct WatchStartupShell: View {
+    var failure: ActionableFailure?
+    var busy = false
+    let retry: () -> Void
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            Rectangle().fill(.white).frame(height: 1)
+            VStack {
+                if let failure { WatchErrorContainer(failure: failure, busy: busy, retry: retry).padding(.top, 30) }
+                Spacer()
+                if failure == nil { ProgressView("Preparing…") }
+            }.padding(8)
+        }.accessibilityElement(children: .contain).accessibilityIdentifier("watch-capture")
     }
 }

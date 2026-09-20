@@ -3,6 +3,7 @@
 import PackageDescription
 
 let productionSources = [
+    "AppComposition/ActionableFailure.swift",
     "Recording/PCMRecorderHardware.swift",
     "Recording/RecordingSignal.swift",
     "DeviceSync/ConnectivityEnvelope.swift",
@@ -63,6 +64,7 @@ let productionSources = [
     "WebhookConfiguration/WebhookRequestBuilder.swift",
 ]
 let unitTestSources = [
+    "AppComposition/ActionableFailure.test.swift",
     "Recording/RecordingSignal.test.swift",
     "DeviceSync/ConnectivityMergeService.test.swift",
     "DeviceSync/WatchBackgroundTaskCoordinator.test.swift",

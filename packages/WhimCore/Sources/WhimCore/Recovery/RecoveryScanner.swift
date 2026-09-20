@@ -12,21 +12,48 @@ public struct RecoveryScanner: Sendable {
         self.source = source
     }
 
-    public func scan() async throws {
-        for deletion in try await store.deletions() {
+    public struct Inventory: Sendable {
+        let deletions: [DeletionTombstone]
+        let notes: [NoteID]
+        let durable: [NoteID]
+        let sessions: [RecordingSession]
+    }
+
+    /// Metadata only. Freeze the candidate set before admitting new capture.
+    public func inventory() async throws -> Inventory {
+        let deletions = try await store.deletions()
+        let sessions = try await store.recordingSessions()
+        let notes = try await store.listNotes(filter: .all).map(\.id)
+        return try Inventory(deletions: deletions, notes: notes,
+            durable: files.durableNoteIDs(), sessions: sessions)
+    }
+
+    public func scan() async throws { try await scan(inventory()) }
+
+    public func scan(_ inventory: Inventory) async throws {
+        for deletion in inventory.deletions {
+            try Task.checkCancellation()
+            guard let ownership = try files.claimOwnership(noteID: deletion.noteID) else { continue }
+            defer { withExtendedLifetime(ownership) {} }
             try files.delete(noteID: deletion.noteID)
             if let sessionID = deletion.recordingSessionID { try files.deleteTemporary(sessionID: sessionID) }
         }
-        for row in try await store.listNotes(filter: .all) {
-            guard let note = try await store.note(id: row.id), note.localError == nil else { continue }
+        for id in inventory.notes {
+            try Task.checkCancellation()
+            guard let ownership = try files.claimOwnership(noteID: id) else { continue }
+            defer { withExtendedLifetime(ownership) {} }
+            guard let note = try await store.note(id: id), note.localError == nil else { continue }
             if let error = files.audioError(at: note.audioURL) {
                 try await store.recordLocalError(error, noteID: note.id)
             }
         }
-        let sessions = try await store.recordingSessions()
-        for noteID in try files.durableNoteIDs() {
+        let deleted = Set(try await store.deletions().map(\.noteID))
+        for noteID in inventory.durable where !deleted.contains(noteID) {
+            try Task.checkCancellation()
+            guard let ownership = try files.claimOwnership(noteID: noteID) else { continue }
+            defer { withExtendedLifetime(ownership) {} }
             guard try await store.note(id: noteID) == nil else { continue }
-            let existingSession = sessions.first { $0.noteID == noteID }
+            let existingSession = inventory.sessions.first { $0.noteID == noteID }
             let audio: FinalizedAudio
             do {
                 guard let durableAudio = try files.durableAudio(noteID: noteID) else {
@@ -44,7 +71,13 @@ public struct RecoveryScanner: Sendable {
                 title: "Recovered recording", titleSource: .recovered, createdAt: session.createdAt,
                 duration: audio.duration, source: session.source, captureOutcome: .recovered, requiresReview: true, audioURL: audio.url))
         }
-        for session in try await store.recordingSessions() {
+        for session in inventory.sessions where !deleted.contains(session.noteID) {
+            try Task.checkCancellation()
+            guard let ownership = try files.claimOwnership(noteID: session.noteID) else { continue }
+            defer { withExtendedLifetime(ownership) {} }
+            // Another recovery or a live writer may have finalized since inventory creation.
+            guard try await store.note(id: session.noteID) == nil,
+                  try await store.recordingSessions().contains(where: { $0.id == session.id }) else { continue }
             do {
                 guard try files.playablePartial(sessionID: session.id) != nil else {
                     let url = try files.temporaryURL(for: session.id)

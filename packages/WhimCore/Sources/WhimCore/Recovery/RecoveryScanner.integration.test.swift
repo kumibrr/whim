@@ -3,6 +3,26 @@ import XCTest
 @testable import WhimCore
 
 final class RecoveryTests: XCTestCase {
+    func testFrozenInventoryDoesNotRecoverLaterSessionsOrDiscardedCandidates() async throws {
+        let h = try PersistenceHarness()
+        defer { h.remove() }
+        let files = try AudioFileStore(root: h.root, closeWriter: { _ in })
+        let discarded = RecordingSession(id: RecordingSessionID(), noteID: NoteID(), createdAt: Date(), source: .iphone)
+        try await h.store.saveRecordingSession(discarded)
+        try writeAudioFixture(to: files.temporaryURL(for: discarded.id))
+        let scanner = RecoveryScanner(store: h.store, files: files)
+        let inventory = try await scanner.inventory()
+        try files.deleteTemporary(sessionID: discarded.id)
+        try await h.store.discardRecordingSession(sessionID: discarded.id)
+        let later = RecordingSession(id: RecordingSessionID(), noteID: NoteID(), createdAt: Date(), source: .iphone)
+        try await h.store.saveRecordingSession(later)
+        try writeAudioFixture(to: files.temporaryURL(for: later.id))
+        try await scanner.scan(inventory)
+        let notes = try await h.store.listNotes(filter: .all)
+        XCTAssertTrue(notes.isEmpty, "Neither a discarded candidate nor a later live session is recovery work")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try files.temporaryURL(for: later.id).path))
+    }
+
     // Break: one corrupt durable orphan aborts startup and prevents other sessions from recovering.
     func testCorruptDurableOrphanBecomesVisibleAndDoesNotAbortRecovery() async throws {
         let h = try PersistenceHarness()

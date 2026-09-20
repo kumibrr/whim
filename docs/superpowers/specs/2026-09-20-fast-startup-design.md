@@ -1,6 +1,6 @@
 # Fast startup on iPhone and Apple Watch
 
-**Status:** Proposed; approach approved, written specification awaiting review.
+**Status:** Implemented. See [startup flow](../../startup-flow.md) for the resulting timeline and measurement limitations.
 
 ## Intent and success criteria
 
@@ -8,7 +8,7 @@ Show onboarding or the capture screen as early as possible, and make capture usa
 
 Success has two separate milestones: destination visible and capture ready. An early screen with an indefinitely disabled Record button is insufficient. Tests must demonstrate that deliberately suspended maintenance cannot prevent a new Recording Session from starting and stopping after essential initialization.
 
-This specification changes startup scheduling and the WhimClient projection used to open the interface. It does not change Note/Delivery semantics or introduce analytics. The existing [startup trace](../../startup-flow.md) describes the baseline; update it after implementation.
+This specification changes startup scheduling and the WhimClient projection used to open the interface. It does not change Note/Delivery semantics or introduce analytics. The [startup trace](../../startup-flow.md) describes the implemented flow.
 
 ## Evidence and chosen approach
 
@@ -79,9 +79,9 @@ Lazy initialization is appropriate for configuration-test fixture loading and no
 
 ## Failure and lifecycle behavior
 
-On both iPhone and Watch, startup and capture-related error states appear in a rounded Liquid Glass container in the upper half of the mounted screen, within its safe area. Each container includes a concise, human-readable explanation and a clearly labeled, tappable action that helps resolve that specific problem. Do not expose raw exceptions or show a generic Retry action for a problem that requires changing permissions or configuration.
+On both iPhone and Watch, startup and capture-related error states appear in a rounded Liquid Glass container in the upper half of the mounted screen, within its safe area. Each compact container includes a concise, human-readable explanation and a subtle chevron. The entire glass surface triggers the recovery action; there is no separate visible action button. VoiceOver announces the message and action hint. Do not expose raw exceptions or show a generic Retry action for a problem that requires changing permissions or configuration.
 
-Use the existing appearance conventions: native Liquid Glass on iOS/watchOS 26+, a translucent material fallback on earlier supported versions, and an opaque, high-contrast background when Reduce Transparency is enabled. Error text and actions support Dynamic Type and VoiceOver. The container must not obscure Stop, Discard, elapsed time, or essential onboarding controls; reflow the upper content when necessary. At large accessibility text sizes, allow the message area to scroll while keeping its action and capture controls reachable.
+Use the existing appearance conventions: native Liquid Glass on iOS/watchOS 26+, a translucent material fallback on earlier supported versions, and an opaque, high-contrast background when Reduce Transparency is enabled. Error text and actions support Dynamic Type and VoiceOver. The container must not obscure Stop, Discard, elapsed time, or essential onboarding controls; reflow the upper content when necessary. Use content-sized wrapping text without a reserved scrolling region or action row. At large accessibility text sizes, grow the message naturally and keep capture controls reachable.
 
 | Error | Message intent | Action |
 | --- | --- | --- |
@@ -91,7 +91,7 @@ Use the existing appearance conventions: native Liquid Glass on iOS/watchOS 26+,
 | History, settings, recovery, or synchronization failed | Name the affected operation and, when true, explain that recording remains available. | A specific retry label, such as **Retry history** or **Retry sync**. |
 | Webhook configuration prevents Delivery | Explain that saved Notes need a working destination. | **Configure webhook** on iPhone; **Show instructions** on Watch, explaining how to configure it on iPhone. |
 
-Show one error container at a time: capture-blocking errors take precedence over auxiliary failures. Retain other failures in model state and surface the next relevant one after resolution. Auxiliary errors may be dismissed; capture-blocking errors persist until resolved. Actions show in-flight feedback and reject duplicate taps. A failed action leaves a useful message and action available; successful resolution removes the corresponding error. Automatic state refresh also removes errors that have been resolved outside the app.
+Show one error container at a time: capture-blocking errors take precedence over auxiliary failures. Retain other failures in model state and surface the next relevant one after resolution. Auxiliary errors may be dismissed by horizontal swipe or VoiceOver action; capture-blocking errors persist until resolved. Actions show in-flight feedback and reject duplicate taps. A failed action leaves a useful message and action available; successful resolution removes the corresponding error. Automatic state refresh also removes errors that have been resolved outside the app.
 
 Do not publish capture ready after a failed critical step. Permission denial uses this same actionable container rather than a disconnected text-only warning. Unknown permission status remains a loading state, not an error.
 

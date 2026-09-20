@@ -132,3 +132,11 @@ Watch synchronization iPhone journeys cover the shared player and deletion paths
 3. Enable Reduce Motion. Repeat: controls change without the morph animation. Enable Reduce Transparency: controls remain legible with opaque surfaces.
 4. Verify the existing large hit targets and VoiceOver labels. On pre-26 systems, retain the existing material capture button and plain red Discard without morphing.
 5. Record a slow-motion screen capture on physical OS 26 hardware for the visual transition; automated journeys cover the resulting state and operable controls.
+
+## Capture-first startup and actionable failures
+
+Compare cold and warm launches with empty storage and a populated history, including playable crash remnants. Record time to the first onboarding/capture frame separately from time to microphone onset; do not infer capture readiness from the shell alone. Verify Record and Stop remain responsive while old Notes recover or synchronization is offline. Speak immediately after the recording indication and confirm the beginning is preserved.
+
+Deny microphone permission: verify the upper-half glass container explains the issue and Open Settings reaches Whim's permissions. Grant permission and return: the error clears and Record works. Repeat with Reduce Transparency, an earlier supported OS material fallback, VoiceOver, and the largest text sizes; verify the message can scroll and actions/Stop/Discard remain reachable. For storage exhaustion, verify storage guidance and Check again after freeing space. Record physical-device timing evidence; simulator fixtures do not measure real microphone onset.
+
+Compact errors: verify the glass card fits its message without an empty scrolling area or a separate action row. Tapping anywhere on the card runs its recovery action; repeated taps during work are disabled.

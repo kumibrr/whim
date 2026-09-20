@@ -4,6 +4,131 @@ import XCTest
 @testable import WhimCore
 
 final class WhimServiceIntegrationTests: XCTestCase {
+    func testMaintenanceFailureDoesNotHideSavedNotesOrBlockLocalPlayback() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"))
+        let original = harness.makeService(playback: FacadePlayback())
+        _ = try await original.startRecording(source: .iphone)
+        let stopped = try await original.stopRecording()
+        let saved = try XCTUnwrap(stopped)
+        _ = try await waitForNote(client: original, status: .sent)
+        let orphan = RecordingSession(id: RecordingSessionID(), noteID: NoteID(), createdAt: Date(), source: .iphone)
+        try await harness.store.saveRecordingSession(orphan)
+        try writeAudioFixture(to: harness.files.temporaryURL(for: orphan.id))
+        let entered = expectation(description: "Recovery fails")
+        entered.assertForOverFulfill = false
+        let files = SuspendedRecoveryFiles(base: harness.files, entered: entered, failFinalization: true)
+        files.release()
+        let reopened = harness.makeService(playback: FacadePlayback(), recoveryFiles: files, recorder: FacadeRecorder())
+        do { try await reopened.launch(); XCTFail("Expected injected maintenance failure") } catch { }
+        await fulfillment(of: [entered], timeout: 1)
+        let stored = try await harness.store.note(id: saved.id)
+        XCTAssertNotNil(stored, "Saved metadata remains on device")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: harness.files.audioURL(for: saved.id).path))
+        do {
+            let history = try await reopened.listNotes(filter: .all)
+            XCTAssertTrue(history.contains { $0.id == saved.id && $0.status == .sent })
+        } catch { XCTFail("Maintenance failure hid saved Notes: \(error)") }
+        _ = try await reopened.startRecording(source: .iphone)
+        let latest = try await reopened.stopRecording()
+        let newest = try XCTUnwrap(latest)
+        for id in [saved.id, newest.id] {
+            do {
+                let playing = try await reopened.playNote(id)
+                XCTAssertEqual(playing.noteID, id.rawValue.uuidString.lowercased())
+                let detail = try await reopened.note(id: id)
+                XCTAssertEqual(detail?.hasLocalAudio, true)
+            } catch { XCTFail("Maintenance failure blocked local playback: \(error)") }
+        }
+    }
+
+    func testResetRemainsAvailableAfterRecoveryFailure() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let old = RecordingSession(id: RecordingSessionID(), noteID: NoteID(), createdAt: Date(), source: .iphone)
+        try await harness.store.saveRecordingSession(old)
+        try writeAudioFixture(to: harness.files.temporaryURL(for: old.id))
+        let entered = expectation(description: "Recovery attempted")
+        entered.assertForOverFulfill = false
+        let files = SuspendedRecoveryFiles(base: harness.files, entered: entered, failFinalization: true)
+        files.release()
+        let client = harness.makeService(recoveryFiles: files)
+        do { try await client.maintain(); XCTFail("Expected recovery failure") }
+        catch { }
+        await fulfillment(of: [entered], timeout: 1)
+        try await client.reset()
+        let notes = try await client.listNotes(filter: .all)
+        XCTAssertTrue(notes.isEmpty)
+        _ = try await client.startRecording(source: .iphone)
+        let saved = try await client.stopRecording()
+        XCTAssertNotNil(saved)
+    }
+
+    func testWebhookTestDoesNotHoldCaptureQueueDuringHTTP() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        try writeAudioFixture(to: harness.root.appendingPathComponent("test.m4a"))
+        _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"))
+        let client = harness.makeService()
+        _ = try await client.startRecording(source: .iphone)
+        await harness.transport.suspendResponses()
+        let test = Task { try await client.testWebhook() }
+        await harness.transport.waitForRequestCount(1)
+        let stopped = expectation(description: "Stop does not wait for webhook test HTTP")
+        let stop = Task { _ = try await client.stopRecording(); stopped.fulfill() }
+        await fulfillment(of: [stopped], timeout: 1)
+        await harness.transport.resumeResponses()
+        _ = try await test.value
+        try await stop.value
+    }
+
+    func testSlowOptionalPermissionsDoNotBlockCapture() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let permissions = SuspendedOptionalPermissions()
+        let client = harness.makeService(permissions: permissions)
+        let settings = Task { try await client.settings() }
+        await permissions.waitUntilBlocked()
+        let captured = expectation(description: "Record and Stop do not wait for notification settings")
+        let capture = Task {
+            _ = try await client.startRecording(source: .iphone)
+            let note = try await client.stopRecording()
+            XCTAssertNotNil(note)
+            captured.fulfill()
+        }
+        await fulfillment(of: [captured], timeout: 1)
+        await permissions.release()
+        _ = try await settings.value
+        try await capture.value
+    }
+
+    func testCaptureFinishesWhileOldRecoveryIsSuspended() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let old = RecordingSession(id: RecordingSessionID(), noteID: NoteID(), createdAt: Date(), source: .iphone)
+        try await harness.store.saveRecordingSession(old)
+        try writeAudioFixture(to: harness.files.temporaryURL(for: old.id))
+        let entered = expectation(description: "Old audio inspection entered")
+        let files = SuspendedRecoveryFiles(base: harness.files, entered: entered)
+        let client = harness.makeService(recoveryFiles: files)
+        let history = Task { try await client.maintain() }
+        await fulfillment(of: [entered], timeout: 2)
+        let captured = expectation(description: "Capture finishes before old audio inspection")
+        let capture = Task {
+            _ = try await client.startRecording(source: .iphone)
+            let note = try await client.stopRecording()
+            XCTAssertEqual(note?.requiresReview, false)
+            captured.fulfill()
+        }
+        await fulfillment(of: [captured], timeout: 1)
+        files.release()
+        try await capture.value
+        _ = try await history.value
+        let recovered = try await client.note(id: old.noteID)
+        XCTAssertEqual(recovered?.requiresReview, true)
+    }
+
     func testSlowManualRetryDoesNotBlockStoppingAnActiveRecording() async throws {
         let harness = try WhimFacadeHarness(responses: [.init(statusCode: 400), .init(statusCode: 204)])
         defer { harness.remove() }
@@ -228,6 +353,7 @@ final class WhimServiceIntegrationTests: XCTestCase {
             now: Date(timeIntervalSince1970: 1_000))
         let client: any WhimClient = harness.makeService()
 
+        try await client.maintain()
         let recovered = try await client.listNotes(filter: .all)
         let requestsBeforeReview = await harness.transport.requestCount
         try await client.sendRecovered(noteID: session.noteID)
@@ -553,7 +679,9 @@ private final class WhimFacadeHarness: @unchecked Sendable {
                      preferences: (any PreferenceStoring)? = nil,
                      store selectedStore: (any WhimStore)? = nil,
                      requestBuilder: WebhookRequestBuilder = WebhookRequestBuilder(),
-                     peer: ConnectivityMergeService? = nil) -> WhimService {
+                     peer: ConnectivityMergeService? = nil,
+                     recoveryFiles: (any AudioFileManaging)? = nil,
+                     recorder selectedRecorder: (any AudioRecorder)? = nil) -> WhimService {
         let selectedStore = selectedStore ?? store
         let title = TitleService(transcriber: transcriber, store: selectedStore)
         let delivery = DeliveryService(store: selectedStore, credentials: credentials, transport: transport,
@@ -561,12 +689,12 @@ private final class WhimFacadeHarness: @unchecked Sendable {
             requestBuilder: requestBuilder,
             titleSnapshot: { await title.enrich($0) }, scheduledFailure: { _, _ in },
             appVersion: "1.0.0", appBuild: "1")
-        let recording = RecordingService(recorder: recorder, store: selectedStore, files: files)
+        let recording = RecordingService(recorder: selectedRecorder ?? recorder, store: selectedStore, files: files)
         let configurationTest = ConfigurationTestService(credentials: credentials, transport: transport,
             fixtureAudioURL: root.appendingPathComponent("test.m4a"), appVersion: "1.0.0", appBuild: "1")
         return WhimService(recording: recording, store: selectedStore, files: files, title: title,
             delivery: delivery, configuration: configuration, configurationTest: configurationTest,
-            recovery: RecoveryScanner(store: selectedStore, files: files), preferences: preferences ?? self.preferences,
+            recovery: RecoveryScanner(store: selectedStore, files: recoveryFiles ?? files), preferences: preferences ?? self.preferences,
             credentials: credentials, scheduler: scheduler, permissions: permissions, playback: playback, peer: peer)
     }
 
@@ -901,4 +1029,55 @@ final class CrossDeviceRaceTests: XCTestCase {
 
 private struct PeerTitleTranscriber: Transcriber {
     func transcribe(audioAt url: URL, locale: Locale) async throws -> String { "An imported idea." }
+}
+
+private actor SuspendedOptionalPermissions: PermissionAdapter {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var released = false
+    func status(_ kind: PermissionKind) async -> PermissionStatus {
+        if kind == .notifications, !released {
+            await withCheckedContinuation { continuation = $0; waiters.forEach { $0.resume() }; waiters = [] }
+        }
+        return .granted
+    }
+    func waitUntilBlocked() async {
+        if continuation != nil { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+    func release() { released = true; continuation?.resume(); continuation = nil }
+    func request(_ kind: PermissionKind) async throws -> PermissionStatus { .granted }
+    func openSettings() {}
+}
+
+private final class SuspendedRecoveryFiles: AudioFileManaging, @unchecked Sendable {
+    let base: AudioFileStore
+    let entered: XCTestExpectation
+    private let condition = NSCondition()
+    private var released = false
+    let failFinalization: Bool
+    init(base: AudioFileStore, entered: XCTestExpectation, failFinalization: Bool = false) {
+        self.base = base; self.entered = entered; self.failFinalization = failFinalization
+    }
+    func release() { condition.lock(); released = true; condition.broadcast(); condition.unlock() }
+    func playablePartial(sessionID: RecordingSessionID) throws -> PartialAudio? {
+        condition.lock()
+        entered.fulfill()
+        while !released { condition.wait() }
+        condition.unlock()
+        return try base.playablePartial(sessionID: sessionID)
+    }
+    func claimOwnership(noteID: NoteID) throws -> AudioFileOwnership? { try base.claimOwnership(noteID: noteID) }
+    func deleteTemporary(sessionID: RecordingSessionID) throws { try base.deleteTemporary(sessionID: sessionID) }
+    func audioError(at url: URL) -> LocalAudioError? { base.audioError(at: url) }
+    func durableNoteIDs() throws -> [NoteID] { try base.durableNoteIDs() }
+    func durableAudio(noteID: NoteID) throws -> FinalizedAudio? { try base.durableAudio(noteID: noteID) }
+    func audioURL(for id: NoteID) -> URL { base.audioURL(for: id) }
+    func temporaryURL(for id: RecordingSessionID) throws -> URL { try base.temporaryURL(for: id) }
+    func finalize(sessionID: RecordingSessionID, noteID: NoteID) throws -> FinalizedAudio {
+        if failFinalization { throw POSIXError(.EIO) }
+        return try base.finalize(sessionID: sessionID, noteID: noteID)
+    }
+    func makeDeliveredProtectionStrict(noteID: NoteID) throws { try base.makeDeliveredProtectionStrict(noteID: noteID) }
+    func delete(noteID: NoteID) throws { try base.delete(noteID: noteID) }
 }

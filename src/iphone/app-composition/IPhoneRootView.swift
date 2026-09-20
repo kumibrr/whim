@@ -12,12 +12,8 @@ struct IPhoneRootView: View {
     var body: some View {
         NavigationStack(path: $path) {
             Group {
-                if let settings = model.settings {
-                    if settings.onboardingCompleted { home(settings) }
-                    else { OnboardingView(model: model, settings: settings) }
-                } else {
-                    VStack { Text(model.error?.message ?? "Loading Whim…"); Button("Refresh") { Task { await model.refresh() } } }
-                }
+                if model.onboardingCompleted { home(model.settings) }
+                else { OnboardingView(model: model, settings: model.settings) }
             }.navigationDestination(for: IPhoneRoute.self) { route in
                 switch route {
                 case .settings: if let settings = model.settings { PreferencesView(model: model, settings: settings) }
@@ -25,11 +21,13 @@ struct IPhoneRootView: View {
                 }
             }.toolbar(.hidden, for: .navigationBar)
         }
+        .modifier(IPhoneFailurePresentation(model: model, enabled: !model.isHistoryPresented, configureWebhook: openWebhookSettings))
         .sheet(isPresented: Binding(
             get: { model.isHistoryPresented },
             set: { presented in if !presented { Task { await model.closeHistory() } } }
         )) {
             HistorySheet(model: model)
+                .modifier(IPhoneFailurePresentation(model: model, configureWebhook: openWebhookSettings))
         }
         .onChange(of: model.isHistoryPresented) { old, new in
             if !old && new { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
@@ -55,7 +53,7 @@ struct IPhoneRootView: View {
                 else { path = [] }
             }
     }
-    private func home(_ settings: SettingsProjection) -> some View {
+    private func home(_ settings: SettingsProjection?) -> some View {
         ZStack {
             Color.black.ignoresSafeArea()
             CaptureGlassContainer(isRecording: model.recording != nil) {
@@ -78,9 +76,8 @@ struct IPhoneRootView: View {
             })
         .overlay(alignment: .top) {
             VStack(spacing: 8) {
-                if let error = model.error { WhimErrorText(message: error.message) }
                 if model.recording == nil {
-                    if model.offersContextualPermissions && (settings.permissions.speech == .notDetermined || settings.permissions.notifications == .notDetermined) {
+                    if let settings, model.offersContextualPermissions && (settings.permissions.speech == .notDetermined || settings.permissions.notifications == .notDetermined) {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Your Note is saved. Optional permissions help with titles and delivery alerts.").font(.footnote)
                             if settings.permissions.speech == .notDetermined { Button("Enable on-device titles") { permission(.speech) } }
@@ -88,12 +85,49 @@ struct IPhoneRootView: View {
                             Button("Later") { model.dismissContextualPermissions() }
                         }.padding(16).background(.black, in: RoundedRectangle(cornerRadius: 20))
                     }
-                    if settings.permissions.microphone != .granted {
-                        Button("Microphone settings") { Task { await model.perform { try await model.client.openSystemSettings() } } }
-                    }
+
                 }
             }.padding(.horizontal, 24).padding(.top, 80)
         }
     }
+    private func openWebhookSettings() {
+        Task {
+            await model.closeHistory()
+            if await model.prepareForNavigation() { path.append(.settings) }
+        }
+    }
     private func permission(_ kind: PermissionKind) { Task { await model.perform { _ = try await model.client.requestPermission(kind) } } }
+}
+
+/// Attach to the visible presentation surface so sheets cannot cover recovery actions.
+struct IPhoneFailurePresentation: ViewModifier {
+    var model: IPhoneModel
+    var enabled = true
+    var configureWebhook: () -> Void
+    @State private var showsStorageInstructions = false
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .top) {
+            if enabled, let failure = model.visibleFailure {
+                WhimErrorContainer(message: failure.message, actionLabel: failure.actionLabel,
+                    busy: model.isResolvingError || model.isPending || model.isRecordingPending,
+                    action: { resolve(failure) },
+                    dismiss: [.history, .settings, .maintenance].contains(failure.operation) ? { model.dismissAuxiliaryError() } : nil)
+                    .padding(.horizontal, 20).padding(.top, 8)
+            }
+        }
+        .alert("Free up storage", isPresented: $showsStorageInstructions) {
+            Button("Check again") { Task { await model.retryVisibleFailure() } }
+            Button("Close", role: .cancel) {}
+        } message: {
+            Text("Open iPhone Settings > General > iPhone Storage and remove items you no longer need. Then return to Whim and check again.")
+        }
+    }
+    private func resolve(_ failure: ActionableFailure) {
+        switch failure.action {
+        case .retry: Task { await model.retryVisibleFailure() }
+        case .microphoneSettings: Task { await model.perform { try await model.client.openSystemSettings() } }
+        case .storageInstructions: showsStorageInstructions = true
+        case .configureWebhook: configureWebhook()
+        }
+    }
 }

@@ -36,7 +36,8 @@ struct CaptureHomeView: View {
                             .captureGlassIdentity("capture", in: glassNamespace)
                     }.buttonStyle(.plain).accessibilityLabel("Record a Whim")
                         .accessibilityIdentifier("record-button")
-                        .disabled(model.isRecordingPending)
+                        .disabled(model.isRecordingPending || !model.captureReady)
+                    if !model.captureReady { ProgressView("Preparing recording…") }
                     Button {
                         model.openHistory()
                     } label: {
