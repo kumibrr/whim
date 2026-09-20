@@ -80,7 +80,7 @@ Status: pending physical-device execution. Simulator checks do not prove haptics
 5. Open history by tapping the hint and with VoiceOver. Play a Note, then another: only the second plays. Close history: audio stops. Open a Note's details: the inline player stops. Start capture after playback: capture takes audio-session ownership.
 6. Inspect long titles, failed and recovered Notes, and expired local audio. Expect readable title/date/time, duration/source/status, reachable Retry/review/detail actions, and disabled playback when audio is unavailable. Playback or review alone must never send a recovered Note.
 7. Enable the largest accessibility text size. Expect stacked card metadata and player, full spoken titles, readable status, and usable controls. Enable Reduce Motion: no decorative continuous motion. Enable Reduce Transparency: opaque dark surfaces with readable boundaries and text.
-8. On iOS 18 inspect the material fallback; on a system with native Liquid Glass inspect the native controls and cards. Both retain the same actions and monochrome appearance. Record OS/device versions and visual evidence with acceptance results.
+8. On iOS 18 inspect the material fallback; on a system with native Liquid Glass inspect the native controls and cards. Both retain the same actions and monochrome appearance, except for the red Delete icon in Note detail. Record OS/device versions and visual evidence with acceptance results.
 
 ## Input-driven waveform capture regression
 
@@ -102,3 +102,25 @@ Closest deterministic coverage: RecordingSignal tests use known frequencies,
 gains and buffer phases; PCMRecorderHardware integration tests feed raw PCM through
 production analysis/conversion/AAC writing and test cleanup/interruption; native
 IPhoneModel integration tests verify progress propagation and session reset.
+
+## Note detail card and toolbar
+
+Status: pending physical iPhone execution.
+
+1. Open a Note from history. Compare its card with history: the glass surface,
+   title, date, source, duration, status and waveform player match. Detail metadata
+   does not act as an Open button. Delivery information and recovery instructions
+   appear below the card.
+2. Verify the toolbar has Back on the left, no Whim heading in the center, and a
+   red trash icon on the right with the same native glass treatment as Back.
+   VoiceOver announces “Delete Note”. Check both native Liquid Glass and an
+   iOS 18 device, and repeat with Reduce Transparency and accessibility text sizes.
+3. Play and stop audio from the detail card, then leave while playing. Playback
+   stops. Expired or unavailable audio cannot play; the card explains why.
+4. Cancel deletion of an unsent Note and verify it remains playable. Confirm
+   deletion and verify return to history. Delete a sent Note and verify immediate
+   removal. Review a recovered Note and verify Send remains an explicit action.
+
+Closest deterministic coverage: NoteDetailModel integration tests cover waveform
+loading, playback and audio disappearance; record-and-review, recovered-review and
+Watch synchronization iPhone journeys cover the shared player and deletion paths.

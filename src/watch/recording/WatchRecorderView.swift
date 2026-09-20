@@ -84,7 +84,7 @@ struct WatchCaptureView: View {
         } else if model.recording != nil {
             Button { Task { await model.stop() } } label: {
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(.white)
+                    .fill(.red)
                     .frame(width: 22, height: 22)
                     .frame(width: 72, height: 72)
                     .watchGlass(in: Circle())

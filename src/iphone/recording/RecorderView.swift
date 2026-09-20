@@ -93,7 +93,7 @@ struct RecorderView: View {
                         Button {
                             Task { await model.stopRecording() }
                         } label: {
-                            RoundedRectangle(cornerRadius: 5).fill(.white).frame(
+                            RoundedRectangle(cornerRadius: 5).fill(.red).frame(
                                 width: 24, height: 24
                             )
                             .frame(width: 80, height: 80).whimGlass(in: Circle())
