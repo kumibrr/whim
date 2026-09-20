@@ -2,6 +2,37 @@ import XCTest
 
 @MainActor
 final class WatchRecordingUITests: XCTestCase {
+    // Exercise the controls targeted by the primary hand gesture. Actual finger
+    // recognition is covered in physical/watch-capture.e2e.test.md: watchOS 27
+    // simulator gesture injection also fails for a plain primary-action Button.
+    func testCaptureControlStopsStartsAndSavesWithoutScrolling() {
+        let app = XCUIApplication()
+        app.launchArguments = WatchUITestConfiguration.arguments
+        app.launch()
+        XCTAssertTrue(app.buttons["watch-stop"].waitForExistence(timeout: 15))
+
+        app.buttons["watch-stop"].tap()
+        let record = app.buttons["watch-record"]
+        XCTAssertTrue(record.waitForExistence(timeout: 10))
+        XCTAssertTrue(record.isHittable)
+
+        record.tap()
+        let stop = app.buttons["watch-stop"]
+        XCTAssertTrue(stop.waitForExistence(timeout: 10))
+        XCTAssertTrue(stop.isHittable)
+
+        stop.tap()
+        XCTAssertTrue(record.waitForExistence(timeout: 10))
+        XCTAssertTrue(record.isHittable)
+        app.swipeUp()
+        XCTAssertTrue(app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "watch-note-")
+        ).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "watch-note-")
+        ).count, 2)
+    }
+
     func testLaunchCapturesAndStopSavesLocallyWithoutConfiguration() {
         let app = XCUIApplication()
         app.launchArguments = WatchUITestConfiguration.arguments

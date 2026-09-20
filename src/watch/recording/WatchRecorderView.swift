@@ -115,6 +115,7 @@ struct WatchCaptureView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Stop recording")
             .accessibilityIdentifier("watch-stop")
+            .handGestureShortcut(.primaryAction)
             .disabled(model.captureBusy)
         } else {
             Button { Task { await model.record() } } label: {
@@ -128,6 +129,7 @@ struct WatchCaptureView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Record a Whim")
             .accessibilityIdentifier("watch-record")
+            .handGestureShortcut(.primaryAction)
             .disabled(model.captureBusy)
         }
     }

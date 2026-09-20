@@ -40,6 +40,26 @@ capture in this acceptance run.
 
 During capture, verify Discard is red with a minimum 100 × 44 point target. Tap beside the text within the button: capture ends immediately without confirmation, and recent Notes contains no new Note. Repeat with VoiceOver.
 
+## Double-tap recording control
+
+On a Watch that supports the system Double Tap gesture, enable Double Tap in Settings
+and grant Whim microphone access. With the capture screen visible and wrist raised:
+
+1. Launch Whim and double-tap thumb and index finger while recording. Expect Stop
+   to finalize one Note and show Record without scrolling to Previous Notes.
+2. Double-tap again while idle. Expect a new Recording Session, elapsed time, and
+   Stop without scrolling. Double-tap once more to save the second Note.
+3. Scroll manually to Previous Notes and verify both Notes are present and playable.
+4. Return to capture and repeat after wrist-down/wake. Verify the gesture stops the
+   existing Recording Session and never triggers Discard.
+
+Record device/watchOS version and a video showing the gesture and resulting state.
+The installed-app companion test exercises repeated start/stop through the targeted
+buttons and checks that two Notes are saved without leaving capture. Physical
+acceptance verifies the gesture binding and recognition: watchOS 27 simulator
+`XCUIDevice.perform(handGesture: .doubleTap)` did not activate even a minimal
+primary-action Button during verification.
+
 ## Liquid Glass capture transition (OS 26 and later)
 
 1. From idle, tap Record. Expect the capture glass to remain visually continuous as its symbol becomes Stop, while a red Discard glass pill emerges directly below it. It must not fade in as an unrelated control or merge with Settings.
