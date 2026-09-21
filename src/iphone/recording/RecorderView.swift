@@ -9,7 +9,7 @@ struct CaptureHomeView: View {
         GeometryReader { geometry in
             ZStack {
                 Color.black.ignoresSafeArea()
-                LiveWaveformView(power: -160).frame(height: 100)
+                LiveWaveformView(isResting: true).frame(height: 120)
                     .position(x: geometry.size.width / 2, y: geometry.size.height * 0.45)
                 VStack {
                     HStack {
@@ -138,26 +138,49 @@ struct RecorderView: View {
     }
 }
 
+/// The app's waveform: the logo curve at rest, flattening to a line while a
+/// Recording Session waits for a voice and reacting to it once it arrives.
 struct LiveWaveformView: View {
-    let power: Double
-    var tone: Double = 0
+    var power = -160.0
+    var tone = 0.0
+    var isResting = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var level: Double { LiveWaveform.level(power: power) }
+    private var level: Double { isResting ? 1 : LiveWaveform.level(power: power) }
     var body: some View {
-        ReactiveLine(level: level, tone: tone)
-            .stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+        GeometryReader { geometry in
+            let amplitude = WaveformLayout.amplitude(in: geometry.size)
+            let thickness = WaveformLayout.strokeWidth(amplitude: amplitude)
+            ZStack {
+                ReactiveLine(level: level, tone: tone, amplitude: amplitude)
+                    .stroke(.white, style: StrokeStyle(
+                        lineWidth: thickness, lineCap: .round, lineJoin: .round))
+                AccentDot(level: level, tone: tone, amplitude: amplitude, radius: thickness * 0.48)
+                    .fill(.white)
+            }
+            // One layer: where the dot meets the line they must read as one stroke.
+            .compositingGroup().opacity(0.9)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: level)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: tone)
-            .accessibilityLabel("Microphone level").accessibilityValue(
-                "\(Int(level * 100)) percent"
-            )
-            .accessibilityIdentifier("live-waveform")
+        }
+        .accessibilityElement()
+        .accessibilityLabel(isResting ? "Whim" : "Microphone level")
+        .accessibilityValue(isResting ? "" : "\(Int(level * 100)) percent")
+        .accessibilityIdentifier("live-waveform")
     }
+}
+
+/// The logo's proportions: height and stroke follow the width, bounded by the frame.
+private enum WaveformLayout {
+    static func amplitude(in size: CGSize) -> Double {
+        min(size.width * 0.14, size.height * 0.46)
+    }
+    static func strokeWidth(amplitude: Double) -> Double { max(2, amplitude * 0.18) }
 }
 
 private struct ReactiveLine: Shape {
     var level: Double
     var tone: Double
+    var amplitude: Double
     var animatableData: AnimatablePair<Double, Double> {
         get { AnimatablePair(level, tone) }
         set {
@@ -166,16 +189,41 @@ private struct ReactiveLine: Shape {
         }
     }
     func path(in rect: CGRect) -> Path {
-        Path { path in
-            for step in 0...240 {
-                let x = Double(step) / 240
-                let point = CGPoint(
-                    x: rect.width * x,
-                    y: rect.midY + rect.height
-                        * LiveWaveform.displacement(at: x, level: level, tone: tone))
-                if step == 0 { path.move(to: point) } else { path.addLine(to: point) }
+        let curve = LiveWaveform.curve(level: level, tone: tone)
+        return Path { path in
+            path.move(to: rect.place(curve.start, amplitude: amplitude))
+            for segment in curve.segments {
+                path.addCurve(to: rect.place(segment.end, amplitude: amplitude),
+                    control1: rect.place(segment.control1, amplitude: amplitude),
+                    control2: rect.place(segment.control2, amplitude: amplitude))
             }
         }
+    }
+}
+
+/// The logo's dot. Its radius stays inside the stroke, so a flat line absorbs it.
+private struct AccentDot: Shape {
+    var level: Double
+    var tone: Double
+    var amplitude: Double
+    var radius: Double
+    var animatableData: AnimatablePair<Double, Double> {
+        get { AnimatablePair(level, tone) }
+        set {
+            level = newValue.first
+            tone = newValue.second
+        }
+    }
+    func path(in rect: CGRect) -> Path {
+        let center = rect.place(LiveWaveform.curve(level: level, tone: tone).accent, amplitude: amplitude)
+        return Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius,
+                                      width: radius * 2, height: radius * 2))
+    }
+}
+
+private extension CGRect {
+    func place(_ point: WaveformPoint, amplitude: Double) -> CGPoint {
+        CGPoint(x: minX + width * point.x, y: midY - amplitude * point.y)
     }
 }
 
