@@ -138,29 +138,32 @@ struct RecorderView: View {
     }
 }
 
-/// The app's waveform: the logo curve at rest, flattening to a line while a
-/// Recording Session waits for a voice and reacting to it once it arrives.
+/// The app's waveform: the logo mark at rest, and while a Recording Session runs,
+/// a flat line that becomes a voice trace as soon as somebody speaks.
 struct LiveWaveformView: View {
     var power = -160.0
     var tone = 0.0
     var isResting = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var level: Double { isResting ? 1 : LiveWaveform.level(power: power) }
+    private var level: Double { LiveWaveform.level(power: power) }
     var body: some View {
         GeometryReader { geometry in
             let amplitude = WaveformLayout.amplitude(in: geometry.size)
             let thickness = WaveformLayout.strokeWidth(amplitude: amplitude)
+            let stroke = StrokeStyle(lineWidth: thickness, lineCap: .round, lineJoin: .round)
             ZStack {
-                ReactiveLine(level: level, tone: tone, amplitude: amplitude)
-                    .stroke(.white, style: StrokeStyle(
-                        lineWidth: thickness, lineCap: .round, lineJoin: .round))
-                AccentDot(level: level, tone: tone, amplitude: amplitude, radius: thickness * 0.48)
-                    .fill(.white)
+                if isResting {
+                    LogoCurve(amplitude: amplitude).stroke(.white, style: stroke)
+                    AccentDot(amplitude: amplitude, radius: thickness * 0.48).fill(.white)
+                } else {
+                    VoiceTrace(level: level, tone: tone, amplitude: amplitude)
+                        .stroke(.white, style: stroke)
+                        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: level)
+                        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: tone)
+                }
             }
             // One layer: where the dot meets the line they must read as one stroke.
             .compositingGroup().opacity(0.9)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: level)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: tone)
         }
         .accessibilityElement()
         .accessibilityLabel(isResting ? "Whim" : "Microphone level")
@@ -177,19 +180,10 @@ private enum WaveformLayout {
     static func strokeWidth(amplitude: Double) -> Double { max(2, amplitude * 0.18) }
 }
 
-private struct ReactiveLine: Shape {
-    var level: Double
-    var tone: Double
+private struct LogoCurve: Shape {
     var amplitude: Double
-    var animatableData: AnimatablePair<Double, Double> {
-        get { AnimatablePair(level, tone) }
-        set {
-            level = newValue.first
-            tone = newValue.second
-        }
-    }
     func path(in rect: CGRect) -> Path {
-        let curve = LiveWaveform.curve(level: level, tone: tone)
+        let curve = LiveWaveform.resting
         return Path { path in
             path.move(to: rect.place(curve.start, amplitude: amplitude))
             for segment in curve.segments {
@@ -201,12 +195,21 @@ private struct ReactiveLine: Shape {
     }
 }
 
-/// The logo's dot. Its radius stays inside the stroke, so a flat line absorbs it.
+/// The logo's dot, which belongs to the resting mark rather than to a voice.
 private struct AccentDot: Shape {
+    var amplitude: Double
+    var radius: Double
+    func path(in rect: CGRect) -> Path {
+        let center = rect.place(LiveWaveform.resting.accent, amplitude: amplitude)
+        return Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius,
+                                      width: radius * 2, height: radius * 2))
+    }
+}
+
+private struct VoiceTrace: Shape {
     var level: Double
     var tone: Double
     var amplitude: Double
-    var radius: Double
     var animatableData: AnimatablePair<Double, Double> {
         get { AnimatablePair(level, tone) }
         set {
@@ -215,9 +218,15 @@ private struct AccentDot: Shape {
         }
     }
     func path(in rect: CGRect) -> Path {
-        let center = rect.place(LiveWaveform.curve(level: level, tone: tone).accent, amplitude: amplitude)
-        return Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius,
-                                      width: radius * 2, height: radius * 2))
+        Path { path in
+            for step in 0...240 {
+                let x = Double(step) / 240
+                let point = rect.place(WaveformPoint(x: x,
+                    y: LiveWaveform.displacement(at: x, level: level, tone: tone)),
+                    amplitude: amplitude)
+                if step == 0 { path.move(to: point) } else { path.addLine(to: point) }
+            }
+        }
     }
 }
 

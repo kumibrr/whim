@@ -47,18 +47,17 @@ Below Record, a small tappable hint reads exactly:
 ### Active Recording Session
 
 Record starts capture through the existing command. Capture begins as a flat
-line and stays flat until somebody speaks. The same full-width logo curve then
-reacts to microphone input in real time. Speech increases its amplitude; silence
-settles it back to a plain line. Amplitude spans the loudness of a human voice
-near the device, so a quiet room reads as silence rather than as a moving line.
-It never progressively fills the screen and is not a left-to-right history of
-elapsed audio. Rendering may smooth between measured levels, but must not invent
-activity during silence. The line holds still for steady input. Volume scales
-amplitude; measured tonal brightness tightens the curve horizontally. Brightness
-is measured across the human voice band, so rumble below it and hiss above it do
-not steer the shape. Smooth only the transitions between changed measurements,
-with no clock-driven phase, perpetual animation, or random motion. Both edges
-taper toward almost zero. Silence settles to a flat line.
+line and stays flat until somebody speaks. Speech then draws a waveform trace of
+the voice, not the logo mark: the logo belongs to the idle state. Amplitude spans
+the loudness of a human voice near the device, so a quiet room reads as silence
+rather than as a moving line. The trace never progressively fills the screen and
+is not a left-to-right history of elapsed audio. Rendering may smooth between
+measured levels, but must not invent activity during silence. It holds still for
+steady input. Volume scales amplitude; measured tonal brightness tightens its
+cycles. Brightness is measured across the human voice band, so rumble below it
+and hiss above it do not steer the shape. Smooth only the transitions between
+changed measurements, with no clock-driven phase, perpetual animation, or random
+motion. Both edges taper toward almost zero. Silence settles to a flat line.
 Reduce Motion applies measurement changes without animated interpolation.
 
 Only Stop and Discard are available. Hide settings and the history hint,

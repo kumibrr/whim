@@ -24,10 +24,10 @@ public struct WaveformCurve: Equatable, Sendable {
     public let accent: WaveformPoint
 }
 
-/// Full-width voice meter drawn as the Whim logo curve; not PCM samples or a
-/// scrolling audio history. Loudness scales the curve, so silence is a flat line.
+/// Full-width voice meter: the Whim logo at rest, a voice trace while recording.
+/// Neither is PCM samples or a scrolling audio history.
 public enum LiveWaveform {
-    /// A quiet room must read as silence and ordinary speech must fill the curve,
+    /// A quiet room must read as silence and ordinary speech must fill the trace,
     /// so the meter spans the loudness of a human voice rather than the full scale.
     public static let voiceFloorDBFS = -48.0
     public static let voiceCeilingDBFS = -6.0
@@ -37,27 +37,22 @@ public enum LiveWaveform {
         return max(0, min(1, (power - voiceFloorDBFS) / (voiceCeilingDBFS - voiceFloorDBFS)))
     }
 
-    /// The app's default waveform: the logo curve at its natural size.
-    public static var resting: WaveformCurve { curve(level: 1, tone: 0) }
+    /// The app's default waveform: the logo curve, shown while nothing is recording.
+    public static let resting = WaveformCurve(start: WaveformPoint(x: 0, y: 0),
+                                              segments: logo, accent: accent)
 
-    /// Loudness scales the curve's height; tonal brightness tightens it horizontally.
-    /// Neither depends on a clock, so a steady voice draws a steady shape.
-    public static func curve(level: Double, tone: Double) -> WaveformCurve {
+    /// The voice itself, drawn as a waveform rather than as the logo. Loudness scales
+    /// its amplitude and measured tonal brightness tightens its cycles; silence is a
+    /// flat line. No clock, so a steady voice holds a steady trace.
+    public static func displacement(at x: Double, level: Double, tone: Double) -> Double {
         let amplitude = level.isFinite ? max(0, min(1, level)) : 0
         let brightness = tone.isFinite ? max(0, min(1, tone)) : 0
-        let squeeze = 1 - 0.3 * brightness
-        func place(_ point: WaveformPoint) -> WaveformPoint {
-            WaveformPoint(x: 0.5 + (point.x - 0.5) * squeeze, y: point.y * amplitude)
-        }
-        var segments = logo.map {
-            WaveformCurve.Segment(control1: place($0.control1), control2: place($0.control2), end: place($0.end))
-        }
-        // The flat tails always reach the edges, so tightening never leaves a gap.
-        if let last = segments.last {
-            segments[segments.count - 1] = .init(control1: last.control1, control2: last.control2,
-                                                 end: WaveformPoint(x: 1, y: last.end.y))
-        }
-        return WaveformCurve(start: WaveformPoint(x: 0, y: 0), segments: segments, accent: place(accent))
+        let position = max(0, min(1, x))
+        let envelope = pow(sin(.pi * position), 2)
+        let cycles = 2.5 + 2.5 * brightness
+        let wave = sin(2 * .pi * cycles * position) * 0.72
+            + sin(4 * .pi * cycles * position) * 0.28
+        return amplitude * envelope * wave
     }
 
     private static let accent = WaveformPoint(x: 0.57333, y: 0.38690)
