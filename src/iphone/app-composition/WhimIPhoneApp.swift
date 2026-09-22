@@ -3,6 +3,7 @@ import WhimCore
 import WhimIPhone
 struct PendingIPhoneLink { let id = UUID(); let url: URL }
 @main struct WhimIPhoneApp: App {
+    init() { BGTaskSchedulerAdapter.register() }
     @State private var model: IPhoneModel?
     @State private var failure: ActionableFailure?
     @State private var showsStorageInstructions = false
@@ -33,10 +34,13 @@ struct PendingIPhoneLink { let id = UUID(); let url: URL }
         }
     }
     @MainActor private func launch() async {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }
+        #endif
         guard !starting, model == nil else { return }; starting = true
         defer { starting = false }
         do {
-            model = IPhoneModel(client: try await WhimProductionComposition.make(), onboardingCompletedHint: onboarding.isComplete())
+            model = IPhoneModel(client: try await WhimRuntime.shared.service(), onboardingCompletedHint: onboarding.isComplete())
             failure = nil
         } catch { failure = ActionableFailure(error, operation: .preparation) }
     }

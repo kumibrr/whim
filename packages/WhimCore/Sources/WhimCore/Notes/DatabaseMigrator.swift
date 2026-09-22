@@ -60,6 +60,11 @@ enum WhimDatabaseMigrator {
                 table.add(column: "workflow_error", .text)
             }
         }
+        migrator.registerMigration("v4-audio-retention") { db in
+            try db.alter(table: "notes") { table in
+                table.add(column: "audio_expired_at", .double)
+            }
+        }
         try migrator.migrate(queue)
     }
 }

@@ -39,6 +39,9 @@ final class PCMRecorderHardware: AudioRecorderHardware, @unchecked Sendable {
         lock.withLock { active = true }
         do {
             try input.start(receive: { [weak self] in self?.receive($0) }, interruption: { [weak self] in self?.interrupted() })
+            #if DEBUG
+            CaptureLatencyProbe.shared.mark(.audioEngineStarted)
+            #endif
             return true
         } catch {
             lock.withLock { active = false; file = nil; converter = nil }
@@ -49,6 +52,10 @@ final class PCMRecorderHardware: AudioRecorderHardware, @unchecked Sendable {
     private func receive(_ buffer: AVAudioPCMBuffer) {
         let error = lock.withLock { () -> Bool in
             guard active, !failed, buffer.frameLength > 0 else { return false }
+            #if DEBUG
+            // Input can deliver its first buffer before start() returns.
+            CaptureLatencyProbe.shared.mark(.audioEngineStarted)
+            #endif
             do {
                 try convert(buffer)
                 duration += Double(buffer.frameLength) / buffer.format.sampleRate
@@ -88,6 +95,9 @@ final class PCMRecorderHardware: AudioRecorderHardware, @unchecked Sendable {
             if status == .error { throw AVAudioRecorderAdapterError.couldNotStart }
             if output.frameLength > 0 {
                 try file.write(from: output)
+                #if DEBUG
+                CaptureLatencyProbe.shared.mark(.firstEncodedBuffer)
+                #endif
                 if input != nil, let channel = output.floatChannelData?[0] {
                     latestSignal = RecordingSignal.measure(Array(UnsafeBufferPointer(start: channel, count: Int(output.frameLength))),
                                                            sampleRate: 16000)

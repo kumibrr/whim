@@ -1,0 +1,13 @@
+{
+  "name": "@whim/reference-webhook",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test:integration": "node --test src/**/*.integration.test.ts",
+    "start": "node src/note-created/serve.ts"
+  }
+}

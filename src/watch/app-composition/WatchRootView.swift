@@ -4,7 +4,10 @@ import WhimCore
 struct WatchRootView: View {
     @Bindable var model: WatchModel
     @Environment(\.scenePhase) private var scenePhase
-    @State private var visiblePage: String? = "capture"
+    private var visiblePage: Binding<String?> {
+        Binding(get: { model.showsRecent ? "previous-notes" : "capture" },
+                set: { model.showsRecent = $0 == "previous-notes" })
+    }
 
     var body: some View {
         NavigationStack {
@@ -29,19 +32,34 @@ struct WatchRootView: View {
                     .scrollTargetLayout()
                 }
                 .scrollTargetBehavior(.paging)
-                .scrollPosition(id: $visiblePage)
+                .scrollPosition(id: visiblePage)
                 .scrollBounceBehavior(.always)
                 .background(Color.black)
             }
             .ignoresSafeArea()
-            .navigationTitle(visiblePage == "previous-notes" ? "Previous Notes" : "")
+            .navigationTitle(model.showsRecent ? "Previous Notes" : "")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar(visiblePage == "previous-notes" ? .visible : .hidden,
+            .toolbar(model.showsRecent ? .visible : .hidden,
                 for: .navigationBar)
         }
         .tint(.white)
         .preferredColorScheme(.dark)
-        .task { await model.activate() }
+        .task {
+            #if DEBUG
+            let arguments = ProcessInfo.processInfo.arguments
+            if let index = arguments.firstIndex(of: "-WhimCaptureURL"), arguments.indices.contains(index + 1),
+               let url = URL(string: arguments[index + 1]) {
+                await model.activate(captureURL: url)
+                return
+            }
+            #endif
+            await model.activate()
+        }
+        .onOpenURL { url in
+            guard url.scheme == "whim", url.host == "record" else { return }
+            model.showsRecent = false
+            Task { await model.handleCaptureURL(url) }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await model.activate() } }
         }

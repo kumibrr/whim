@@ -7,11 +7,15 @@
     "test:unit:tooling": "node --test scripts/*.test.mjs packages/WhimCore/Sources/WhimCore/WebhookConfiguration/Fixtures/*.test.mjs",
     "test:unit:swift": "./scripts/test-swift.sh unit",
     "test:unit": "npm run test:unit:tooling && npm run test:unit:swift",
-    "test:integration": "./scripts/test-swift.sh integration",
+    "test:integration": "npm run test:integration:webhook && ./scripts/test-swift.sh integration",
     "test:e2e:iphone": "./scripts/test-iphone-e2e.sh",
     "test:e2e:watch": "./scripts/test-watch-e2e.sh",
     "test:e2e": "npm run test:e2e:iphone && npm run test:e2e:watch",
-    "test:all": "./scripts/test-all.sh"
+    "test:all": "./scripts/test-all.sh",
+    "test:integration:webhook": "npm run test:integration --workspace @whim/reference-webhook"
   },
-  "private": true
+  "private": true,
+  "workspaces": [
+    "packages/reference-webhook"
+  ]
 }

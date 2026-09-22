@@ -27,13 +27,15 @@ final class WebhookIntegrationTests: XCTestCase {
         }
     }
 
-    // Break: the bundled configuration test asset is absent, sensitive speech, or not playable AAC/M4A.
-    func testBundledConfigurationAudioFixtureIsPlayableDeterministicTone() throws {
+    // Break: the owner-approved configuration asset is missing or no longer playable AAC.
+    func testBundledConfigurationAudioUsesApprovedPlayableAACRecording() throws {
         let url = try XCTUnwrap(Bundle.module.url(forResource: "configuration-test-fixture", withExtension: "m4a",
             subdirectory: "Fixtures"))
         let audio = try AVAudioFile(forReading: url)
         XCTAssertGreaterThan(audio.length, 0)
-        XCTAssertLessThan(Double(audio.length) / audio.fileFormat.sampleRate, 1)
+        XCTAssertEqual(audio.fileFormat.streamDescription.pointee.mFormatID, kAudioFormatMPEG4AAC)
+        XCTAssertEqual(audio.fileFormat.channelCount, 1)
+        XCTAssertEqual(Double(audio.length) / audio.fileFormat.sampleRate, 2.890229, accuracy: 0.01)
     }
 #if os(macOS)
     func testURLSessionCancellationBeforeStartAndDuringUploadPreservesCancellation() async throws {

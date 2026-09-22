@@ -92,6 +92,9 @@ public actor RecordingService {
         if let active { return active }
         if let startTask { return try await startTask.value }
 
+        #if DEBUG
+        CaptureLatencyProbe.shared.begin()
+        #endif
         let snapshot = RecordingSnapshot(sessionID: RecordingSessionID(), noteID: NoteID(),
             source: source, createdAt: now())
         let task = Task { try await self.activate(snapshot) }
@@ -115,6 +118,9 @@ public actor RecordingService {
             }
             self.ownership = ownership
             try await store.saveRecordingSession(session)
+            #if DEBUG
+            CaptureLatencyProbe.shared.mark(.sessionPersisted)
+            #endif
             encoderCompletion = nil
             encoderFailure = nil
             encoderWaiter = nil

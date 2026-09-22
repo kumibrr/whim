@@ -43,6 +43,10 @@ public struct RecoveryScanner: Sendable {
             guard let ownership = try files.claimOwnership(noteID: id) else { continue }
             defer { withExtendedLifetime(ownership) {} }
             guard let note = try await store.note(id: id), note.localError == nil else { continue }
+            if note.audioExpiredAt != nil {
+                try files.delete(noteID: id)
+                continue
+            }
             if let error = files.audioError(at: note.audioURL) {
                 try await store.recordLocalError(error, noteID: note.id)
             }

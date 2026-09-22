@@ -74,6 +74,9 @@ function scalar(body, property) {
 }
 
 function intendedXcodeTarget(file) {
+  if ((file.startsWith('src/intents/') || file.startsWith('src/widgets/')) && file.endsWith('.test.swift')) {
+    return 'WhimSystemSurfaceTests';
+  }
   if (file.startsWith('src/watch/') && file.endsWith('.swift')) {
     return file.endsWith('.test.swift') ? 'WhimWatchTests' : 'WhimWatch';
   }

@@ -13,6 +13,7 @@ case "${1:-}" in
   integration)
     swift test --package-path "$whim_root/packages/WhimCore" --filter WhimCoreIntegrationTests
     swift test --package-path "$whim_root" --filter WhimIPhoneIntegrationTests
+    "$whim_root/scripts/test-system-surfaces.sh"
     : "${WHIM_IPHONE_SIMULATOR_UDID:?Run: eval \"$(./scripts/boot-apple-simulators.sh)\"}"
     # Package schemes expose their test action when opened from the package directory.
     # Exercise the actual iOS audio session; macOS excludes this platform boundary.

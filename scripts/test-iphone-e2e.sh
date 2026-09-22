@@ -92,8 +92,10 @@ whim_flows=(
   "$whim_root/e2e/iphone/failed-and-retry.e2e.test.yaml"
   "$whim_root/e2e/iphone/recovered-review.e2e.test.yaml"
   "$whim_root/e2e/iphone/settings-and-reset.e2e.test.yaml"
+  "$whim_root/e2e/iphone/retention.e2e.test.yaml"
   "$whim_root/e2e/iphone/watch-synchronization.e2e.test.yaml"
   "$whim_root/e2e/iphone/cold-links.e2e.test.yaml"
+  "$whim_root/e2e/iphone/shortcuts-and-live-activity.e2e.test.yaml"
 )
 if [[ -n "${WHIM_IPHONE_E2E_FLOW:-}" ]]; then
   whim_flows=("$whim_root/e2e/iphone/$WHIM_IPHONE_E2E_FLOW")

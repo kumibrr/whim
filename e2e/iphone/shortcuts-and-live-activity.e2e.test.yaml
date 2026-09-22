@@ -1,0 +1,38 @@
+appId: app.whim.ios
+---
+# The installed Live Activity must stop the app's recorder while the app is backgrounded.
+# System shortcut discovery/dispatch is covered by WhimSystemSurfaceTests and built metadata;
+# physical Lock Screen/Action-button acceptance is versioned alongside this flow.
+- runFlow: flows/clean-launch.yaml
+- tapOn:
+    id: record-button
+- assertVisible:
+    id: recorder-panel
+- pressKey: Home
+- swipe:
+    start: 50%, 0%
+    end: 50%, 80%
+    duration: 500
+- extendedWaitUntil:
+    visible: Stop Whim Recording
+    timeout: 10000
+- runFlow:
+    when:
+      visible: Allow
+    commands:
+      - tapOn: Allow
+# iOS 27 reports widget-local accessibility bounds (16,44), not screen bounds.
+# The dedicated CI iPhone renders this button at the bottom of Notification Center.
+- tapOn:
+    point: 18%, 81%
+- extendedWaitUntil:
+    notVisible: Stop Whim Recording
+    timeout: 10000
+- launchApp:
+    clearState: false
+    stopApp: false
+- assertNotVisible:
+    id: recorder-panel
+- tapOn:
+    id: history-hint
+- assertVisible: 'Open .*Setup required.*'

@@ -385,13 +385,17 @@ import WhimCore
         guard event.sequence > lastSequence else { return }
         let gap = event.sequence != lastSequence + 1
         lastSequence = event.sequence
+        let previousSessionID = recording?.sessionID
         let finishingID = recording?.noteID
         if isRefreshing { eventsDuringRefresh.append(event) }
         fold(event)
         switch event.type {
         case .recordingStarted:
             completionGeneration += 1; offersContextualPermissions = false
-            elapsedSeconds = 0; peakPowerDBFS = -160; recordingTone = 0; feedback = "Recording started"
+            if previousSessionID != event.recording?.sessionID {
+                elapsedSeconds = 0; peakPowerDBFS = -160; recordingTone = 0
+            }
+            feedback = "Recording started"
         case .recordingStopped:
             feedback = "Recording stopped"
             completionGeneration += 1

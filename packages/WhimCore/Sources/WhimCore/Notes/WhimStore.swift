@@ -6,6 +6,8 @@ public enum LeaseKind: String, Codable, Sendable {
 }
 
 public protocol WhimStore: Sendable {
+    /// Persist intentional expiry before unlinking audio; never expires an unsent Note.
+    func markAudioExpired(noteID: NoteID, at date: Date) async throws -> Bool
     func latestConfigurationRevision() async throws -> ConfigurationRevision?
     func reset() async throws
     func recordLocalError(_ error: LocalAudioError, noteID: NoteID) async throws
@@ -39,6 +41,7 @@ public protocol WhimStore: Sendable {
 }
 
 public extension WhimStore {
+    func markAudioExpired(noteID: NoteID, at date: Date) async throws -> Bool { throw WhimStoreError.unsupportedOperation }
     func latestConfigurationRevision() async throws -> ConfigurationRevision? { nil }
     func reset() async throws { throw WhimStoreError.unsupportedOperation }
     func deliveryAttempts(noteID: NoteID) async throws -> [Attempt] {

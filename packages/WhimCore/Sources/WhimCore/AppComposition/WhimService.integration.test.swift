@@ -4,6 +4,240 @@ import XCTest
 @testable import WhimCore
 
 final class WhimServiceIntegrationTests: XCTestCase {
+    func testConfigurationAndDeletionRefreshBackgroundEligibility() async throws {
+        let harness = try WhimFacadeHarness(responses: [HTTPResponse(statusCode: 500)])
+        defer { harness.remove() }
+        _ = try await harness.configuration.save(.init(endpoint: "https://example.com/old"))
+        let background = FacadeBackgroundScheduler()
+        let client = harness.makeService(background: background)
+        _ = try await client.startRecording(source: .iphone)
+        let stopped = try await client.stopRecording()
+        let saved = try XCTUnwrap(stopped)
+        await harness.scheduler.waitForCount(1)
+        try await client.performBackgroundMaintenance()
+        let original = await background.request
+        XCTAssertEqual(original?.earliest, harness.clock.now.addingTimeInterval(60))
+        _ = try await client.updateWebhook(.init(endpoint: "https://example.com/new"))
+        let updated = await background.request
+        XCTAssertEqual(updated?.earliest, harness.clock.now)
+        try await client.delete(noteID: saved.id)
+        let deleted = await background.request
+        XCTAssertNil(deleted)
+    }
+
+    func testBackgroundExpirationReleasesDeliveryLeaseAndPreservesRetryEligibility() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"))
+        let connected = FacadeConnectivity()
+        let background = FacadeBackgroundScheduler()
+        let client = harness.makeService(isConnected: { await connected.read() }, background: background)
+        _ = try await client.startRecording(source: .iphone)
+        let stopped = try await client.stopRecording()
+        let note = try XCTUnwrap(stopped)
+        await connected.waitUntilRead()
+        await harness.transport.suspendResponses()
+        await connected.connect()
+        let task = Task { try await client.performBackgroundMaintenance() }
+        _ = try await waitForNote(client: client, status: .sending)
+        task.cancel()
+        _ = try? await task.value
+        let owner = UUID()
+        let acquired = try await harness.store.acquireLease(.delivery, noteID: note.id, owner: owner,
+            until: harness.clock.now.addingTimeInterval(135))
+        XCTAssertTrue(acquired, "Expiration must join delivery and release its lease")
+        if acquired { try await harness.store.releaseLease(.delivery, noteID: note.id, owner: owner) }
+        let pending = await background.request
+        XCTAssertEqual(pending, BackgroundWork(earliest: harness.clock.now.addingTimeInterval(135), requiresNetwork: true))
+        await harness.transport.resumeResponses()
+        try await client.reset()
+    }
+
+    func testMaintenanceSchedulesOfflineDeliveryAndResetCancelsIt() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"))
+        let background = FacadeBackgroundScheduler()
+        let notifications = FacadeNotificationProbe()
+        let client = harness.makeService(isConnected: { false }, background: background, notifications: notifications)
+        _ = try await client.startRecording(source: .iphone)
+        _ = try await client.stopRecording()
+        try await client.maintain()
+        let scheduled = await background.request
+        XCTAssertEqual(scheduled, BackgroundWork(earliest: harness.clock.now, requiresNetwork: true))
+        try await client.reset()
+        let cancelled = await background.request
+        XCTAssertNil(cancelled)
+        let cancellations = await notifications.cancellations
+        XCTAssertEqual(cancellations, 1)
+    }
+
+    // Break: cached startup maintenance never reevaluates retention on foreground.
+    func testForegroundMaintenanceExpiresAudioWhenReceiptDeadlinePasses() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"))
+        let client = harness.makeService()
+        try await client.updatePreferences(.init(retentionPolicy: .oneDay,
+            transcriptionEnabled: false, transcriptionLocaleIdentifier: nil))
+        _ = try await client.startRecording(source: .iphone)
+        let stopped = try await client.stopRecording()
+        let saved = try XCTUnwrap(stopped)
+        _ = try await waitForNote(client: client, status: .sent)
+        try await client.maintain()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: harness.files.audioURL(for: saved.id).path))
+        let stream = client.events()
+        let expiryPublished = expectation(description: "Expiry updates the visible Note")
+        let observation = Task {
+            for await event in stream where event.note?.id == saved.id && event.note?.hasLocalAudio == false {
+                expiryPublished.fulfill()
+                break
+            }
+        }
+        defer { observation.cancel() }
+        harness.clock.advance(by: 86_400)
+        try await client.maintain()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.files.audioURL(for: saved.id).path))
+        await fulfillment(of: [expiryPublished], timeout: 1)
+    }
+
+    // Break: retention only runs when settings are edited, never after delivery.
+    func testImmediateRetentionAppliesAfterDeliveryWithoutOpeningSettingsAgain() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"))
+        let client = harness.makeService()
+        try await client.updatePreferences(.init(retentionPolicy: .immediately,
+            transcriptionEnabled: false, transcriptionLocaleIdentifier: nil))
+        _ = try await client.startRecording(source: .iphone)
+        let stopped = try await client.stopRecording()
+        let saved = try XCTUnwrap(stopped)
+        _ = try await waitForNote(client: client, status: .sent)
+        for _ in 0..<100 {
+            if !FileManager.default.fileExists(atPath: harness.files.audioURL(for: saved.id).path) { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.files.audioURL(for: saved.id).path))
+    }
+
+    // Break: changing retention to Immediately leaves delivered audio on disk,
+    // or recovery mistakes intentionally expired audio for corruption.
+    func testImmediateRetentionRemovesDeliveredAudioAndPreservesHistoryAcrossRestart() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"))
+        let client = harness.makeService()
+        _ = try await client.startRecording(source: .iphone)
+        let stopped = try await client.stopRecording()
+        let saved = try XCTUnwrap(stopped)
+        _ = try await waitForNote(client: client, status: .sent)
+
+        try await client.updatePreferences(.init(retentionPolicy: .immediately,
+            transcriptionEnabled: false, transcriptionLocaleIdentifier: nil))
+
+        // Sent can be published before the title step releases the audio.
+        // Retention intentionally waits for that owned workflow to finish.
+        for _ in 0..<1000 {
+            if !FileManager.default.fileExists(atPath: harness.files.audioURL(for: saved.id).path) { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.files.audioURL(for: saved.id).path))
+        let reopened = try SQLiteWhimStore.open(at: harness.databaseURL)
+        let restarted = harness.makeService(store: reopened)
+        try await restarted.maintain()
+        let notes = try await restarted.listNotes(filter: .all)
+        XCTAssertEqual(notes.count, 1)
+        XCTAssertEqual(notes.first?.id, saved.id)
+        XCTAssertEqual(notes.first?.status, .sent)
+        XCTAssertEqual(notes.first?.hasLocalAudio, false)
+        XCTAssertNil(notes.first?.localError)
+    }
+
+    func testConcurrentSystemEntriesShareOneRecorderAndSession() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let client = harness.makeService()
+        let runtime = WhimRuntime(make: { client })
+        async let firstClient = runtime.service()
+        async let secondClient = runtime.service()
+        let (first, second) = try await (firstClient, secondClient)
+        XCTAssertTrue(first === second)
+        async let control = CaptureEntryService(client: first, source: .iphone).record()
+        async let shortcut = CaptureEntryService(client: second, source: .iphone).record()
+        let results = try await (control, shortcut)
+        XCTAssertEqual(results.0, results.1)
+        let starts = await harness.recorder.startCount
+        XCTAssertEqual(starts, 1)
+        try await client.discardRecording()
+    }
+
+    func testComplicationAttentionClearsWhenFailedNoteIsDeleted() async throws {
+        let harness = try WhimFacadeHarness(responses: [HTTPResponse(statusCode: 403)])
+        defer { harness.remove() }
+        _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"))
+        let client = harness.makeService()
+        let store = ComplicationStore(url: harness.root.appendingPathComponent("complication.json"))
+        let publisher = ComplicationPublisher(client: client, store: store)
+        _ = try await client.startRecording(source: .appleWatch)
+        _ = try await client.stopRecording()
+        let failed = try await waitForNote(client: client, status: .failed)
+        try await publisher.refresh()
+        XCTAssertTrue(try store.load().hasFailedNotes)
+        try await client.delete(noteID: NoteID(rawValue: try XCTUnwrap(UUID(uuidString: try XCTUnwrap(failed).id))))
+        try await publisher.refresh()
+        XCTAssertFalse(try store.load().hasFailedNotes)
+        XCTAssertFalse(try store.save(.idle), "Unchanged state must not request another widget reload")
+    }
+
+    // Break: complication state never reaches a separately opened extension store.
+    func testComplicationPublishesCaptureAndClearsItAfterStop() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let client = harness.makeService()
+        let url = harness.root.appendingPathComponent("complication.json")
+        let publisher = ComplicationPublisher(client: client, store: ComplicationStore(url: url))
+        let started = try await client.startRecording(source: .appleWatch)
+        try await publisher.refresh()
+        XCTAssertEqual(try ComplicationStore(url: url).load().recording, started)
+        _ = try await client.stopRecording()
+        try await publisher.refresh()
+        XCTAssertNil(try ComplicationStore(url: url).load().recording)
+        XCTAssertFalse(try ComplicationStore(url: url).load().hasFailedNotes)
+    }
+
+    // Break: a system Record invocation toggles or creates another session; Stop starts capture.
+    func testSystemEntryReusesCaptureAndStopIsIdempotent() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let client = harness.makeService()
+        let entry = CaptureEntryService(client: client, source: .iphone)
+        let first = try await entry.record()
+        guard case .recording(let recording) = first else { return XCTFail("Expected capture") }
+        let second = try await entry.record()
+        XCTAssertEqual(second, .recording(recording))
+        _ = try await entry.stop()
+        let repeatedStop = try await entry.stop()
+        let active = try await client.activeRecording()
+        XCTAssertNil(repeatedStop)
+        XCTAssertNil(active)
+        let notes = try await client.listNotes(filter: .all)
+        XCTAssertEqual(notes.count, 1)
+    }
+
+    // Break: system invocation prompts for permission without presenting the app.
+    func testSystemEntryRoutesMissingMicrophonePermissionToApp() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let permissions = DeniedFacadePermissions()
+        let client = harness.makeService(permissions: permissions)
+        let result = try await CaptureEntryService(client: client, source: .iphone).record()
+        XCTAssertEqual(result, .openAppForMicrophonePermission)
+        let active = try await client.activeRecording()
+        let requests = await permissions.requests
+        XCTAssertNil(active)
+        XCTAssertEqual(requests, 0)
+    }
+
     func testMaintenanceFailureDoesNotHideSavedNotesOrBlockLocalPlayback() async throws {
         let harness = try WhimFacadeHarness()
         defer { harness.remove() }
@@ -432,12 +666,14 @@ final class WhimServiceIntegrationTests: XCTestCase {
         ])
         defer { harness.remove() }
         _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"))
+        await harness.transport.suspendResponses()
         let client: any WhimClient = harness.makeService()
         let events = FacadeEventProbe(stream: client.events())
         _ = try await client.startRecording(source: .iphone)
         _ = try await client.stopRecording()
-        await harness.scheduler.waitForCount(1)
         await events.waitForStatus(.sending, count: 1)
+        await harness.transport.resumeResponses()
+        await harness.scheduler.waitForCount(1)
 
         harness.clock.advance(by: 61)
         await harness.transport.suspendResponses()
@@ -477,7 +713,9 @@ final class WhimServiceIntegrationTests: XCTestCase {
             let harness = try WhimFacadeHarness(responses: [HTTPResponse(statusCode: statusCode)])
             defer { harness.remove() }
             _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim"))
-            let injector = try DatabaseQueue(path: harness.databaseURL.path)
+            var injectionConfiguration = Configuration()
+            injectionConfiguration.busyMode = .timeout(5)
+            let injector = try DatabaseQueue(path: harness.databaseURL.path, configuration: injectionConfiguration)
             let trigger = statusCode == 204 ? "fail_receipt_outcome" : "fail_failure_outcome"
             let target = statusCode == 204
                 ? "BEFORE INSERT ON receipts"
@@ -513,6 +751,7 @@ final class WhimServiceIntegrationTests: XCTestCase {
             XCTAssertEqual(recovered?.attempts.first?.responseStatusCode, statusCode, "HTTP \(statusCode)")
             let requestCountAfterRecovery = await harness.transport.requestCount
             XCTAssertEqual(requestCountAfterRecovery, 1, "HTTP \(statusCode)")
+            try await client.reset()
         }
     }
 
@@ -681,11 +920,13 @@ private final class WhimFacadeHarness: @unchecked Sendable {
                      requestBuilder: WebhookRequestBuilder = WebhookRequestBuilder(),
                      peer: ConnectivityMergeService? = nil,
                      recoveryFiles: (any AudioFileManaging)? = nil,
-                     recorder selectedRecorder: (any AudioRecorder)? = nil) -> WhimService {
+                     recorder selectedRecorder: (any AudioRecorder)? = nil,
+                     background: any BackgroundScheduling = NoBackgroundScheduler(),
+                     notifications: any DeliveryNotificationAdapter = FacadeNotifications()) -> WhimService {
         let selectedStore = selectedStore ?? store
         let title = TitleService(transcriber: transcriber, store: selectedStore)
         let delivery = DeliveryService(store: selectedStore, credentials: credentials, transport: transport,
-            notifications: FacadeNotifications(), clock: clock, scheduler: scheduler, isConnected: isConnected,
+            notifications: notifications, clock: clock, scheduler: scheduler, isConnected: isConnected,
             requestBuilder: requestBuilder,
             titleSnapshot: { await title.enrich($0) }, scheduledFailure: { _, _ in },
             appVersion: "1.0.0", appBuild: "1")
@@ -695,7 +936,8 @@ private final class WhimFacadeHarness: @unchecked Sendable {
         return WhimService(recording: recording, store: selectedStore, files: files, title: title,
             delivery: delivery, configuration: configuration, configurationTest: configurationTest,
             recovery: RecoveryScanner(store: selectedStore, files: recoveryFiles ?? files), preferences: preferences ?? self.preferences,
-            credentials: credentials, scheduler: scheduler, permissions: permissions, playback: playback, peer: peer)
+            credentials: credentials, scheduler: scheduler, permissions: permissions, playback: playback, peer: peer, clock: clock,
+            background: background)
     }
 
     func remove() { try? FileManager.default.removeItem(at: root) }
@@ -860,7 +1102,6 @@ private final class FacadeEventProbe: @unchecked Sendable {
     private let lock = NSLock()
     private var statuses: [DeliveryStatus] = []
     private var workflowErrors: [DeliveryWorkflowError] = []
-    private var statusWaiters: [(DeliveryStatus, Int, CheckedContinuation<Void, Never>)] = []
     private var errorWaiters: [(DeliveryWorkflowError, CheckedContinuation<Void, Never>)] = []
     private var task: Task<Void, Never>?
 
@@ -875,15 +1116,13 @@ private final class FacadeEventProbe: @unchecked Sendable {
 
     deinit { task?.cancel() }
 
-    func waitForStatus(_ status: DeliveryStatus, count: Int) async {
-        await withCheckedContinuation { continuation in
-            let alreadyObserved = lock.withLock { () -> Bool in
-                guard statuses.count(where: { $0 == status }) < count else { return true }
-                statusWaiters.append((status, count, continuation))
-                return false
-            }
-            if alreadyObserved { continuation.resume() }
+    func waitForStatus(_ status: DeliveryStatus, count: Int,
+                       file: StaticString = #filePath, line: UInt = #line) async {
+        for _ in 0..<1_000 {
+            if lock.withLock({ statuses.count(where: { $0 == status }) >= count }) { return }
+            try? await Task.sleep(for: .milliseconds(5))
         }
+        XCTFail("Did not observe \(count) \(status) events", file: file, line: line)
     }
 
     func waitForWorkflowError(_ error: DeliveryWorkflowError) async {
@@ -898,20 +1137,14 @@ private final class FacadeEventProbe: @unchecked Sendable {
     }
 
     private func record(status: DeliveryStatus, workflowError: DeliveryWorkflowError?) {
-        let ready = lock.withLock { () -> ([CheckedContinuation<Void, Never>], [CheckedContinuation<Void, Never>]) in
+        let ready = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
             statuses.append(status)
             if let workflowError { workflowErrors.append(workflowError) }
-            let readyStatuses = statusWaiters.filter { waiter in
-                statuses.count(where: { value in value == waiter.0 }) >= waiter.1
-            }
-            statusWaiters.removeAll { waiter in
-                statuses.count(where: { $0 == waiter.0 }) >= waiter.1
-            }
             let readyErrors = errorWaiters.filter { workflowErrors.contains($0.0) }
             errorWaiters.removeAll { workflowErrors.contains($0.0) }
-            return (readyStatuses.map(\.2), readyErrors.map(\.1))
+            return readyErrors.map(\.1)
         }
-        (ready.0 + ready.1).forEach { $0.resume() }
+        ready.forEach { $0.resume() }
     }
 }
 
@@ -943,6 +1176,84 @@ private actor BlockingFacadePreferences: PreferenceStoring {
 }
 
 final class CrossDeviceRaceTests: XCTestCase {
+    func testRetentionPreservesPendingWatchHandoffUntilDurableAcknowledgement() async throws {
+        let h = try WhimFacadeHarness(); defer { h.remove() }
+        let transport = RetentionPeerTransport()
+        let merge = try ConnectivityMergeService(store: h.store, files: h.files, databaseURL: h.databaseURL,
+            root: h.root.appendingPathComponent("Peer"), device: .appleWatch, credentials: h.credentials, transport: transport)
+        let client = h.makeService(peer: merge)
+        try await client.updatePreferences(.init(retentionPolicy: .immediately,
+            transcriptionEnabled: false, transcriptionLocaleIdentifier: nil))
+        let session = RecordingSession(id: RecordingSessionID(), noteID: NoteID(), createdAt: h.clock.now, source: .appleWatch)
+        try await h.store.saveRecordingSession(session)
+        try writeAudioFixture(to: h.files.temporaryURL(for: session.id))
+        let audio = try h.files.finalize(sessionID: session.id, noteID: session.noteID)
+        _ = try await h.store.saveFinalized(.init(id: session.noteID, recordingSessionID: session.id,
+            title: "Watch Note", titleSource: .timestamp, createdAt: session.createdAt, duration: 1,
+            source: .appleWatch, captureOutcome: .completed, requiresReview: false, audioURL: audio.url))
+        _ = try await h.store.apply(.receipt(.init(attemptID: AttemptID(), noteID: session.noteID,
+            receivedAt: h.clock.now, statusCode: 204)), to: session.noteID)
+        try await merge.queueNote(session.noteID)
+        try await client.maintain()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: audio.url.path), "Pending handoff must remain recoverable")
+        transport.connect()
+        try await merge.flush()
+        let transfers = transport.files
+        XCTAssertEqual(transfers.count, 1)
+        for envelope in transfers {
+            try await client.receivePeer(.message(.init(payload: .acknowledgement(.durable(envelope.messageID)))))
+        }
+        try await client.maintain()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: audio.url.path))
+    }
+
+    func testPeerReceiptAppliesImmediateRetentionToExistingLocalAudio() async throws {
+        let h = try WhimFacadeHarness(); defer { h.remove() }
+        let merge = try ConnectivityMergeService(store: h.store, files: h.files, databaseURL: h.databaseURL,
+            root: h.root.appendingPathComponent("Peer"), device: .iphone, credentials: h.credentials)
+        let client = h.makeService(peer: merge)
+        try await client.updatePreferences(.init(retentionPolicy: .immediately,
+            transcriptionEnabled: false, transcriptionLocaleIdentifier: nil))
+        let session = RecordingSession(id: RecordingSessionID(), noteID: NoteID(), createdAt: h.clock.now, source: .appleWatch)
+        try await h.store.saveRecordingSession(session)
+        try writeAudioFixture(to: h.files.temporaryURL(for: session.id))
+        let audio = try h.files.finalize(sessionID: session.id, noteID: session.noteID)
+        _ = try await h.store.saveFinalized(.init(id: session.noteID, recordingSessionID: session.id,
+            title: "Watch Note", titleSource: .timestamp, createdAt: session.createdAt, duration: 1,
+            source: .appleWatch, captureOutcome: .completed, requiresReview: false, audioURL: audio.url))
+        try await client.receivePeer(.message(.init(payload: .receipt(.init(attemptID: AttemptID(),
+            noteID: session.noteID, receivedAt: h.clock.now, statusCode: 204)))))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: audio.url.path))
+        let history = try await client.listNotes(filter: .sent)
+        XCTAssertEqual(history.first?.hasLocalAudio, false)
+    }
+
+    func testImmediateRetentionWaitsForImportedWatchTitle() async throws {
+        let h = try WhimFacadeHarness(); defer { h.remove() }
+        let merge = try ConnectivityMergeService(store: h.store, files: h.files, databaseURL: h.databaseURL,
+            root: h.root.appendingPathComponent("Peer"), device: .iphone, credentials: h.credentials)
+        let client = h.makeService(transcriber: AudioReadingPeerTranscriber(), peer: merge)
+        try await client.updatePreferences(.init(retentionPolicy: .immediately,
+            transcriptionEnabled: true, transcriptionLocaleIdentifier: nil))
+        let id = NoteID()
+        let metadata = ConnectivityEnvelope(payload: .noteMetadata(.init(id: id, recordingSessionID: RecordingSessionID(),
+            title: "Watch timestamp", titleSource: .timestamp, createdAt: h.clock.now, duration: 1,
+            source: .appleWatch, captureOutcome: .completed, requiresReview: false)))
+        try await client.receivePeer(.message(.init(payload: .receipt(.init(attemptID: AttemptID(), noteID: id,
+            receivedAt: h.clock.now, statusCode: 204)))))
+        try await client.receivePeer(.message(metadata))
+        let fixture = Bundle.module.url(forResource: "configuration-test-fixture", withExtension: "m4a", subdirectory: "Fixtures")!
+        try await client.receivePeer(.file(fixture, metadata))
+        for _ in 0..<100 {
+            let value = try await client.note(id: id)
+            if value?.title == "An imported idea.", value?.hasLocalAudio == false { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let note = try await client.note(id: id)
+        XCTAssertEqual(note?.title, "An imported idea.")
+        XCTAssertEqual(note?.hasLocalAudio, false)
+    }
+
     func testAlreadySentWatchImportStillGetsIPhoneTitleWithoutAnotherRequest() async throws {
         let h = try WhimFacadeHarness(); defer { h.remove() }
         let merge = try ConnectivityMergeService(store: h.store, files: h.files, databaseURL: h.databaseURL,
@@ -981,9 +1292,16 @@ final class CrossDeviceRaceTests: XCTestCase {
         let h = try WhimFacadeHarness(); defer { h.remove() }
         let merge = try ConnectivityMergeService(store: h.store, files: h.files, databaseURL: h.databaseURL,
             root: h.root.appendingPathComponent("Peer"), device: .iphone, credentials: h.credentials)
-        let client = h.makeService(peer: merge)
+        let notifications = FacadeNotificationProbe()
+        let background = FacadeBackgroundScheduler()
+        await background.replace(with: BackgroundWork(earliest: h.clock.now, requiresNetwork: true))
+        let client = h.makeService(peer: merge, background: background, notifications: notifications)
         let reset = ConnectivityEnvelope(generation: .init(counter: 100, origin: UUID()), payload: .reset)
         try await client.receivePeer(.message(reset))
+        let pending = await background.request
+        let cancellations = await notifications.cancellations
+        XCTAssertNil(pending)
+        XCTAssertEqual(cancellations, 1)
         _ = try await client.startRecording(source: .iphone)
         let events = client.events()
         try await client.receivePeer(.message(reset))
@@ -991,6 +1309,8 @@ final class CrossDeviceRaceTests: XCTestCase {
         XCTAssertFalse(received.contains { $0.type == .notesReset })
         let active = try await client.activeRecording()
         XCTAssertNotNil(active)
+        let repeatedCancellations = await notifications.cancellations
+        XCTAssertEqual(repeatedCancellations, 1)
         try await client.discardRecording()
     }
 
@@ -1080,4 +1400,39 @@ private final class SuspendedRecoveryFiles: AudioFileManaging, @unchecked Sendab
     }
     func makeDeliveredProtectionStrict(noteID: NoteID) throws { try base.makeDeliveredProtectionStrict(noteID: noteID) }
     func delete(noteID: NoteID) throws { try base.delete(noteID: noteID) }
+}
+
+private struct AudioReadingPeerTranscriber: Transcriber {
+    func transcribe(audioAt url: URL, locale: Locale) async throws -> String {
+        guard !(try Data(contentsOf: url)).isEmpty else { throw WhimServiceError.audioUnavailable }
+        return "An imported idea."
+    }
+}
+
+private final class RetentionPeerTransport: PeerTransport, @unchecked Sendable {
+    private let lock = NSLock()
+    private var available = false
+    private var transferred: [ConnectivityEnvelope] = []
+    var isAvailable: Bool { lock.withLock { available } }
+    var isActivated: Bool { true }
+    var files: [ConnectivityEnvelope] { lock.withLock { transferred } }
+    func connect() { lock.withLock { available = true } }
+    func activate(receive: @escaping @Sendable (PeerEvent) -> Void) {}
+    func transfer(_ envelope: ConnectivityEnvelope) throws {}
+    func transferFile(at url: URL, metadata: ConnectivityEnvelope) throws {
+        _ = try Data(contentsOf: url)
+        lock.withLock { transferred.append(metadata) }
+    }
+    func updateContext(_ envelope: ConnectivityEnvelope, credentials: StoredWebhookCredentials?) throws {}
+}
+
+private actor FacadeBackgroundScheduler: BackgroundScheduling {
+    private(set) var request: BackgroundWork?
+    func replace(with work: BackgroundWork?) { request = work }
+}
+
+private actor FacadeNotificationProbe: DeliveryNotificationAdapter {
+    private(set) var cancellations = 0
+    func notifyFailure(title: String, reason: String, noteID: NoteID) {}
+    func cancelAll() { cancellations += 1 }
 }

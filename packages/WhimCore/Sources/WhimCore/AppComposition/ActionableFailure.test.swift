@@ -3,6 +3,13 @@ import XCTest
 @testable import WhimCore
 
 final class ActionableFailureTests: XCTestCase {
+    func testUnavailableLiveActivityExplainsSettingsRecovery() {
+        let failure = ActionableFailure(RecordingActivityError.unavailable, operation: .capture)
+        XCTAssertEqual(failure.message, "Enable Live Activities for Whim in Settings to record, then try again.")
+        XCTAssertEqual(failure.actionLabel, "Open Settings")
+        XCTAssertTrue(failure.blocksCapture)
+    }
+
     func testPlaybackFailureExplainsLocalAudioAndOffersPlaybackRetry() {
         let missing = ActionableFailure(WhimServiceError.audioUnavailable, operation: .playback)
         XCTAssertTrue(missing.message.contains("audio file"))

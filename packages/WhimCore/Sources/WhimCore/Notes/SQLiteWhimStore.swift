@@ -54,7 +54,18 @@ public actor SQLiteWhimStore: WhimStore {
             title: recording.title, titleSource: recording.titleSource, createdAt: recording.createdAt,
             duration: recording.duration, source: recording.source, captureOutcome: recording.captureOutcome,
             requiresReview: recording.requiresReview, audioURL: recording.audioURL, delivery: delivery,
-            localError: try String.fetchOne(db, sql: "SELECT local_error FROM notes WHERE id = ?", arguments: [id.rawValue.uuidString]).flatMap(LocalAudioError.init(rawValue:)))
+            localError: try String.fetchOne(db, sql: "SELECT local_error FROM notes WHERE id = ?", arguments: [id.rawValue.uuidString]).flatMap(LocalAudioError.init(rawValue:)),
+            audioExpiredAt: try Double.fetchOne(db, sql: "SELECT audio_expired_at FROM notes WHERE id = ?", arguments: [id.rawValue.uuidString]).map(Date.init(timeIntervalSince1970:)))
+    }
+
+    public func markAudioExpired(noteID: NoteID, at date: Date) async throws -> Bool {
+        try await database.write { db in
+            guard let note = try Self.readNote(id: noteID, db: db),
+                  note.delivery.receipt != nil, !note.requiresReview else { return false }
+            try db.execute(sql: "UPDATE notes SET audio_expired_at = COALESCE(audio_expired_at, ?) WHERE id = ?",
+                arguments: [date.timeIntervalSince1970, noteID.rawValue.uuidString])
+            return true
+        }
     }
 
     public func saveFinalized(_ finalized: FinalizedRecording) async throws -> Note {

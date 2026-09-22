@@ -3,7 +3,7 @@ import Foundation
 /// User-facing failure without raw system errors, secrets, or Note content.
 public struct ActionableFailure: Equatable, Sendable {
     public enum Operation: Sendable { case preparation, capture, history, settings, synchronization, request, playback, maintenance }
-    public enum Action: Sendable { case retry, microphoneSettings, storageInstructions, configureWebhook }
+    public enum Action: Sendable { case retry, microphoneSettings, liveActivitySettings, storageInstructions, configureWebhook }
     public let message: String
     public let action: Action
     public let operation: Operation
@@ -24,6 +24,9 @@ public struct ActionableFailure: Equatable, Sendable {
         } else if (error as? POSIXError)?.code == .ENOSPC || (nsError.domain == NSCocoaErrorDomain && nsError.code == NSFileWriteOutOfSpaceError) {
             message = "Your device needs more free storage to save audio."
             action = .storageInstructions; blocksCapture = true
+        } else if error is RecordingActivityError {
+            message = "Enable Live Activities for Whim in Settings to record, then try again."
+            action = .liveActivitySettings; blocksCapture = true
         } else if (error as? WhimServiceError) == .permissionDenied {
             message = "Microphone access is required to capture a Note. Allow Whim access in Settings."
             action = .microphoneSettings; blocksCapture = true
@@ -48,7 +51,7 @@ public struct ActionableFailure: Equatable, Sendable {
 
     public var actionLabel: String {
         switch action {
-        case .microphoneSettings: return "Open Settings"
+        case .microphoneSettings, .liveActivitySettings: return "Open Settings"
         case .storageInstructions: return "Show instructions"
         case .configureWebhook: return "Configure webhook"
         case .retry:

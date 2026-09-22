@@ -31,17 +31,19 @@ public final class DebugPeerTransport: PeerTransport, @unchecked Sendable {
         lock.withLock { receiver = receive }
         receive(.activated)
         guard scenario == "file-first" || scenario == "state-first" else { return }
+        // This journey exercises delivery ordering and playback, not expired retention.
+        let receivedAt = Date()
         let id = NoteID(rawValue: UUID(uuidString: "09000000-0000-0000-0000-000000000001")!)
         let metadata = ConnectivityEnvelope(payload: .noteMetadata(.init(id: id,
             recordingSessionID: .init(rawValue: UUID(uuidString: "09000000-0000-0000-0000-000000000002")!),
-            title: "Peer recording", titleSource: .timestamp, createdAt: Date(timeIntervalSince1970: 1_000),
+            title: "Peer recording", titleSource: .timestamp, createdAt: receivedAt.addingTimeInterval(-2),
             duration: 1, source: .appleWatch, captureOutcome: .completed, requiresReview: false)))
         let attempt = Attempt(noteID: id, configurationRevisionID: ConfigurationRevisionID(), device: .appleWatch,
-            endpoint: .init(scheme: "https", host: "whim-fixture.invalid", path: "/receive"), startedAt: Date(timeIntervalSince1970: 1_000))
+            endpoint: .init(scheme: "https", host: "whim-fixture.invalid", path: "/receive"), startedAt: receivedAt.addingTimeInterval(-2))
         let failure = ConnectivityEnvelope(payload: .attempt(.failed(.init(attempt: attempt,
-            failedAt: Date(timeIntervalSince1970: 1_001), reason: .network))))
+            failedAt: receivedAt.addingTimeInterval(-1), reason: .network))))
         let receipt = ConnectivityEnvelope(payload: .receipt(.init(attemptID: AttemptID(), noteID: id,
-            receivedAt: Date(timeIntervalSince1970: 1_002), statusCode: 204)))
+            receivedAt: receivedAt, statusCode: 204)))
         let title = ConnectivityEnvelope(payload: .title(.init(noteID: id, title: "From paired Watch", source: .transcription)))
         let states: [PeerEvent] = [.message(receipt), .message(failure), .message(metadata), .message(title), .message(receipt)]
         if scenario == "file-first" { receive(.file(fixture, metadata)) }

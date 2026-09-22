@@ -1,4 +1,7 @@
 import Foundation
+#if os(watchOS)
+import WidgetKit
+#endif
 #if canImport(Network)
 import Network
 #endif
@@ -35,11 +38,16 @@ public actor WhimService: WhimClient {
     private let recovery: RecoveryScanner
     private let preferences: any PreferenceStoring
     private let onboarding: any OnboardingStoring
+    private var complicationObservation: Task<Void, Never>?
     private let permissions: any PermissionAdapter
     private let waveformAdapter: any AudioWaveformAdapter
     private let playback: any PlaybackAdapter
     private let credentials: any CredentialStore
     private let scheduler: any DeliveryScheduler
+    private let clock: any Clock
+    private let background: any BackgroundScheduling
+    private let device: AttemptDevice
+    private var retentionTask: Task<[NoteID], Error>?
     private nonisolated let eventBroadcaster = WhimEventBroadcaster()
     private var launchTask: Task<Void, Error>?
     private var maintenanceGeneration = 0
@@ -69,7 +77,10 @@ public actor WhimService: WhimClient {
                 permissions: any PermissionAdapter = SystemPermissionAdapter(),
                 playback: any PlaybackAdapter = SystemPlaybackAdapter(),
                 peer: ConnectivityMergeService? = nil,
-                waveform: any AudioWaveformAdapter = AVAudioWaveformAdapter()) {
+                waveform: any AudioWaveformAdapter = AVAudioWaveformAdapter(),
+                clock: any Clock = SystemClock(),
+                background: any BackgroundScheduling = NoBackgroundScheduler(),
+                device: AttemptDevice = .iphone) {
         self.recording = recording; self.store = store; self.files = files; self.title = title
         self.delivery = delivery; self.configuration = configuration
         self.configurationTest = configurationTest; self.recovery = recovery
@@ -79,9 +90,17 @@ public actor WhimService: WhimClient {
         self.playback = playback
         self.waveformAdapter = waveform
         self.peer = peer
+        self.clock = clock
+        self.background = background; self.device = device
     }
 
     public nonisolated func events() -> AsyncStream<WhimEvent> { eventBroadcaster.stream() }
+
+    /// Publish only meaningful recording and delivery transitions to the Watch extension.
+    public func observeComplication(store: ComplicationStore, reload: @escaping @Sendable () -> Void) {
+        complicationObservation?.cancel()
+        complicationObservation = ComplicationPublisher(client: self, store: store, reload: reload).observe()
+    }
 
     /// Only metadata enumeration and pending destructive reset precede capture.
     private func prepareCapture() async throws -> RecoveryScanner.Inventory {
@@ -91,6 +110,8 @@ public actor WhimService: WhimClient {
             await self.beginRecordingEventsIfNeeded()
             await self.beginDeliveryEventsIfNeeded()
             if try await self.peer?.recoverReset() == true {
+                try await self.background.replace(with: nil)
+                await self.delivery.cancelNotifications()
                 try await self.preferences.reset()
                 await self.onboarding.reset()
                 self.publish(.notesReset)
@@ -110,7 +131,59 @@ public actor WhimService: WhimClient {
         return await StartupProjection(onboardingCompleted: completed, microphone: microphone, recording: active)
     }
 
-    public func maintain() async throws { try await launch() }
+    public func maintain() async throws {
+        try await launch()
+        await beginCommand(); defer { endCommand() }
+        try await runRetention()
+    }
+
+    public func performBackgroundMaintenance() async throws {
+        do {
+            try await withTaskCancellationHandler {
+                try Task.checkCancellation()
+                try await resumeDelivery()
+                try Task.checkCancellation()
+                while true {
+                    let pending = workflows.values.map(\.task)
+                    for task in pending { await task.value }
+                    try Task.checkCancellation()
+                    if try await finishBackgroundPass() { break }
+                }
+                try Task.checkCancellation()
+                try await maintain()
+            } onCancel: {
+                Task { await self.expireBackgroundMaintenance() }
+            }
+        } catch {
+            if Task.isCancelled { await expireBackgroundMaintenance() }
+            throw error
+        }
+    }
+
+    private func finishBackgroundPass() async throws -> Bool {
+        await beginCommand(); defer { endCommand() }
+        try Task.checkCancellation()
+        let wakes = pendingDeliveryWakes
+        pendingDeliveryWakes.removeAll()
+        for id in wakes { try await resumeEligibleNotes(only: id) }
+        return workflows.isEmpty && pendingDeliveryWakes.isEmpty
+    }
+
+    private func expireBackgroundMaintenance() async {
+        await beginCommand()
+        maintenancePaused = true
+        defer { maintenancePaused = false; endCommand() }
+        await cancelMaintenance()
+        pendingDeliveryWakes.removeAll()
+        let pending = workflows
+        for workflow in pending.values { workflow.task.cancel() }
+        for note in (try? await store.listNotes(filter: .all)) ?? [] {
+            await title.cancel(noteID: note.id)
+            await scheduler.cancel(noteID: note.id)
+        }
+        for workflow in pending.values { await workflow.task.value }
+        try? await runRetention()
+    }
 
     /// Full maintenance is single-flight, but never holds the capture command queue.
     public func launch() async throws {
@@ -160,7 +233,7 @@ public actor WhimService: WhimClient {
             try await launch()
             await beginCommand()
         }
-        defer { if destructive { maintenancePaused = false }; endCommand() }
+        defer { if destructive { maintenancePaused = false; resetInProgress = false }; endCommand() }
         guard let peer else { return }
         let changed: NoteID?
         switch event {
@@ -185,9 +258,13 @@ public actor WhimService: WhimClient {
             case .reset:
                 // Higher-generation data cannot reach this destructive path.
                 if envelope.generation > previousGeneration {
+                    resetInProgress = true
                     await playback.stop()
                     try await recording.discard()
                     for note in try await store.listNotes(filter: .all) { await quiesce(noteID: note.id) }
+                    _ = try? await retentionTask?.value
+                    try await background.replace(with: nil)
+                    await delivery.cancelNotifications()
                     try await preferences.reset(); await onboarding.reset()
                 }
             default: break
@@ -200,20 +277,21 @@ public actor WhimService: WhimClient {
         }
         try await peer.flush()
         publish(.settingsChanged)
-        guard let id = changed else { return }
+        guard let id = changed else { try await runRetention(); return }
         guard let note = try await store.note(id: id) else {
             publish(.noteDeleted, noteID: id.rawValue.uuidString.lowercased()); return
         }
         publish(.noteChanged, note: .init(note: note))
         if case .message(let envelope) = event {
             if case .title = envelope.payload { return }
-            if case .receipt = envelope.payload { return }
+            if case .receipt = envelope.payload { try await runRetention(); return }
         }
         if (note.isDeliveryEligible || (!note.requiresReview && note.titleSource != .transcription)),
            !suppressedNoteIDs.contains(id), workflows[id] == nil,
            manualDeliveries[id] == nil {
             startWorkflow(note)
         }
+        try await runRetention()
     }
 
     public func resumeDelivery() async throws {
@@ -239,6 +317,7 @@ public actor WhimService: WhimClient {
 
     private func replayDeliveryWake(noteID: NoteID) async throws {
         await beginCommand(); defer { endCommand() }
+        guard pendingDeliveryWakes.remove(noteID) != nil else { return }
         try await resumeEligibleNotes(only: noteID)
     }
 
@@ -350,6 +429,7 @@ public actor WhimService: WhimClient {
         if existing != nil { try files.delete(noteID: noteID) }
         try await peer?.queueDeletion(noteID)
         publish(.noteDeleted, noteID: noteID.rawValue.uuidString.lowercased())
+        try await runRetention()
     }
 
     public func updateWebhook(_ input: WebhookConfigurationInput) async throws -> ConfigurationUpdateResult {
@@ -367,6 +447,7 @@ public actor WhimService: WhimClient {
         }
         for projection in try await store.listNotes(filter: .all) { publish(.noteChanged, note: projection) }
         try await peer?.flush()
+        try await runRetention()
         return ConfigurationUpdateResult(revisionID: revision.id, failedCount: counts.failed,
             setupRequiredCount: counts.awaitingSetup)
     }
@@ -382,6 +463,7 @@ public actor WhimService: WhimClient {
     public func updatePreferences(_ input: PreferenceInput) async throws {
         try await launch(); await beginCommand(); defer { endCommand() }
         try await preferences.save(input)
+        try await runRetention()
     }
 
     public func settings() async throws -> SettingsProjection {
@@ -471,6 +553,9 @@ public actor WhimService: WhimClient {
         let notes = try await store.listNotes(filter: .all)
         let sessions = try await store.recordingSessions()
         for note in notes { await quiesce(noteID: note.id) }
+        _ = try? await retentionTask?.value
+        try await background.replace(with: nil)
+        await delivery.cancelNotifications()
         let resetEnvelope = try await peer?.prepareReset()
         for note in notes {
             try await store.delete(noteID: note.id)
@@ -564,14 +649,32 @@ public actor WhimService: WhimClient {
     private func workerUpdated(noteID: NoteID, token: UUID?) async {
         guard !resetInProgress, !suppressedNoteIDs.contains(noteID) else { return }
         if let token, workflows[noteID]?.token != token { return }
-        try? await publishCurrent(noteID)
         try? await peer?.queueNote(noteID)
+        try? await runRetention()
+        try? await publishCurrent(noteID)
     }
 
-    private func workerFinished(noteID: NoteID, token: UUID) {
+    private func runRetention() async throws {
+        guard !resetInProgress else { return }
+        let previous = retentionTask
+        let activeNotes = Set(workflows.keys)
+        let task = Task {
+            _ = try? await previous?.value
+            let pendingHandoffs = try await peer?.pendingAudioNoteIDs() ?? []
+            return try await MaintenanceService(store: store, files: files, preferences: preferences,
+                background: background, device: device)
+                .run(now: clock.now, preserving: activeNotes.union(pendingHandoffs))
+        }
+        retentionTask = task
+        let expired = try await task.value
+        for id in expired { try await publishCurrent(id) }
+    }
+
+    private func workerFinished(noteID: NoteID, token: UUID) async {
         guard workflows[noteID]?.token == token else { return }
         workflows[noteID] = nil
-        if pendingDeliveryWakes.remove(noteID) != nil {
+        if !resetInProgress { try? await runRetention() }
+        if pendingDeliveryWakes.contains(noteID) {
             // Join the command queue after this workflow returns, so Reset/Delete can
             // await its completion without waiting on their own command lock.
             Task { [weak self] in try? await self?.replayDeliveryWake(noteID: noteID) }
@@ -706,7 +809,13 @@ public enum WhimProductionComposition {
         recorder = AVAudioRecorderAdapter()
         #endif
         let files = try AudioFileStore(root: root.appendingPathComponent("Audio"), closeWriter: { _ in })
+        #if canImport(ActivityKit) && os(iOS)
+        let activity = LiveActivityAdapter(system: ActivityKitRecordingSystem())
+        await activity.reconcile(activeSessionID: nil)
+        let recording = RecordingService(recorder: recorder, store: store, files: files, activity: activity)
+        #else
         let recording = RecordingService(recorder: recorder, store: store, files: files)
+        #endif
         #if canImport(Speech) && !os(watchOS)
         let transcriber: any Transcriber = OnDeviceTranscriber()
         #else
@@ -767,11 +876,19 @@ public enum WhimProductionComposition {
             playback = DebugRetryPlaybackAdapter(base: playback)
         }
         #endif
+        #if os(iOS)
+        let background: any BackgroundScheduling = BGTaskSchedulerAdapter()
+        #elseif os(watchOS)
+        let background: any BackgroundScheduling = await WatchBackgroundScheduler.shared
+        #else
+        let background: any BackgroundScheduling = NoBackgroundScheduler()
+        #endif
         let service = WhimService(recording: recording, store: store, files: files, title: title,
             delivery: delivery, configuration: configuration, configurationTest: configurationTest,
             recovery: RecoveryScanner(store: store, files: files), preferences: preferences,
             credentials: credentials, scheduler: scheduler,
-            onboarding: UserDefaultsOnboardingStore(suiteName: suiteName), permissions: permissions, playback: playback, peer: peer)
+            onboarding: UserDefaultsOnboardingStore(suiteName: suiteName), permissions: permissions, playback: playback, peer: peer,
+            background: background, device: deliveryDevice)
         #if DEBUG && os(watchOS)
         if watchTestID != nil, ProcessInfo.processInfo.arguments.contains("-WhimWatchConfigured"),
            try await store.latestConfigurationRevision() == nil {
@@ -789,6 +906,11 @@ public enum WhimProductionComposition {
         connectivity.onReconnect { [weak service] in
             Task { try? await service?.resumeDelivery() }
         }
+        #if os(watchOS)
+        await service.observeComplication(store: ComplicationStore(url: root.appendingPathComponent("complication.json"))) {
+            WidgetCenter.shared.reloadTimelines(ofKind: "app.whim.recording")
+        }
+        #endif
         return service
     }
 
@@ -801,7 +923,7 @@ public enum WhimProductionComposition {
     }
     #endif
 
-    private static func sharedRoot() throws -> URL {
+    public static func sharedRoot() throws -> URL {
         #if DEBUG && os(watchOS)
         if let testID = watchTestID {
             return FileManager.default.temporaryDirectory.appendingPathComponent("WhimWatchTests/" + testID)

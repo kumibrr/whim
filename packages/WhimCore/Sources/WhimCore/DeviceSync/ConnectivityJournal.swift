@@ -27,6 +27,12 @@ struct ConnectivityJournal: Sendable {
         }
     }
     struct Outgoing: Sendable { let envelope: ConnectivityEnvelope; let file: URL? }
+    func pendingAudioNoteIDs() throws -> Set<NoteID> {
+        try database.read { db in
+            Set(try Data.fetchAll(db, sql: "SELECT envelope FROM peer_outbox WHERE file IS NOT NULL AND submitted != 2")
+                .compactMap { try ConnectivityEnvelope.decode($0).payload.noteID })
+        }
+    }
     func enqueue(_ envelope: ConnectivityEnvelope, file: URL? = nil, resubmit: Bool = false, reset: ResetState? = nil) throws {
         struct Identity: Encodable { let generation: ResetGeneration; let payload: ConnectivityEnvelope.Payload; let file: Bool }
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]

@@ -1,7 +1,9 @@
 import AVFoundation
 import Foundation
 import XCTest
+#if !WHIM_SYSTEM_SURFACE_TESTS
 import GRDB
+#endif
 @testable import WhimCore
 final class WhimFacadeHarness: @unchecked Sendable {
     let root: URL
@@ -38,6 +40,7 @@ final class WhimFacadeHarness: @unchecked Sendable {
                      peer: ConnectivityMergeService? = nil,
                      onboarding: any OnboardingStoring = TestOnboarding(),
                      waveform: any AudioWaveformAdapter = AVAudioWaveformAdapter(),
+                     activity: (any RecordingActivityManaging)? = nil,
                      recoveryFiles: (any AudioFileManaging)? = nil) -> WhimService {
         let selectedStore = selectedStore ?? store
         let title = TitleService(transcriber: transcriber, store: selectedStore)
@@ -46,7 +49,7 @@ final class WhimFacadeHarness: @unchecked Sendable {
             requestBuilder: requestBuilder,
             titleSnapshot: { await title.enrich($0) }, scheduledFailure: { _, _ in },
             appVersion: "1.0.0", appBuild: "1")
-        let recording = RecordingService(recorder: recorder, store: selectedStore, files: files)
+        let recording = RecordingService(recorder: recorder, store: selectedStore, files: files, activity: activity)
         let configurationTest = ConfigurationTestService(credentials: credentials, transport: transport,
             fixtureAudioURL: root.appendingPathComponent("test.m4a"), appVersion: "1.0.0", appBuild: "1")
         return WhimService(recording: recording, store: selectedStore, files: files, title: title,
@@ -345,6 +348,7 @@ actor GatedPlayback: PlaybackAdapter {
     func release(_ call: Int) { held.removeValue(forKey: call)?.resume() }
 }
 
+#if !WHIM_SYSTEM_SURFACE_TESTS
 func relocateLegacyAudio(root: URL) throws {
     let queue = try DatabaseQueue(path: root.appendingPathComponent("whim.sqlite").path)
     try queue.write { db in
@@ -357,6 +361,7 @@ func relocateLegacyAudio(root: URL) throws {
         }
     }
 }
+#endif
 actor MutablePermissions: PermissionAdapter {
     private var permission = PermissionStatus.denied
     func grant() { permission = .granted }

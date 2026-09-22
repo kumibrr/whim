@@ -4,6 +4,25 @@ import XCTest
 @testable import WhimCore
 
 final class RecordingServiceIntegrationTests: XCTestCase {
+    #if DEBUG
+    func testCaptureLatencyRecordsInvocationAndDurableSession() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = try SQLiteWhimStore.open(at: root.appendingPathComponent("whim.sqlite"))
+        let files = try AudioFileStore(root: root.appendingPathComponent("Audio"), closeWriter: { _ in })
+        let service = RecordingService(recorder: FixtureAudioRecorder(), store: store, files: files)
+        _ = try await service.start(source: .iphone)
+        let first = CaptureLatencyProbe.shared.snapshot()
+        let invocation = try XCTUnwrap(first[.invocationReceived])
+        let persisted = try XCTUnwrap(first[.sessionPersisted])
+        XCTAssertLessThanOrEqual(invocation, persisted)
+        _ = try await service.start(source: .iphone)
+        XCTAssertEqual(CaptureLatencyProbe.shared.snapshot(), first)
+        try await service.discard()
+    }
+    #endif
+
     // Break: a second composition recovers a Recording Session whose writer is still alive.
     func testRecoveryDoesNotTouchAnotherLiveRecorder() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
