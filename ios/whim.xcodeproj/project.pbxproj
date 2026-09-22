@@ -1363,7 +1363,7 @@
 		};
 		35FA8F2FBFCE14E8671DF081 /* WhimCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "WhimCore" */;
+			package = B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "../packages/WhimCore" */;
 			productName = WhimCore;
 		};
 		4195615737AD9D45A625BE4C /* WhimCore */ = {
@@ -1379,11 +1379,6 @@
 		7D6ECB88619BE4362A0E9A7D /* WhimCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "../packages/WhimCore" */;
-			productName = WhimCore;
-		};
-		CA052F5875B9FF308A301124 /* WhimCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = B18728EED4585FB35DAD5404 /* XCLocalSwiftPackageReference "WhimCore" */;
 			productName = WhimCore;
 		};
 /* End XCSwiftPackageProductDependency section */
