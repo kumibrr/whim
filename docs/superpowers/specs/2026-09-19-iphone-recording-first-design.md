@@ -34,8 +34,10 @@ iOS 18.
 
 ### Idle
 
-A plain, thin white horizontal line spans the center of the screen. It does
-not animate while idle. A circular glass Record button sits at bottom center,
+The Whim logo waveform spans the center of the screen: a heavy white stroke
+that runs in flat from both edges, through the logo's voice-shaped curve and
+its floating dot. Stroke weight and height follow the logo's proportions. It
+does not animate while idle. A circular glass Record button sits at bottom center,
 above the safe area. A glass settings button sits at top right and contains
 only the settings icon visually; its accessibility label is Settings.
 
@@ -44,16 +46,24 @@ Below Record, a small tappable hint reads exactly:
 
 ### Active Recording Session
 
-Record starts capture through the existing command. The full-width line
-reacts to microphone input in real time. Speech increases its amplitude;
-silence settles it toward a plain line. It never progressively fills the
-screen and is not a left-to-right history of elapsed audio. Rendering may
-smooth between measured levels, but must not invent activity during silence.
-The line holds still for steady input. Volume scales amplitude; measured tonal
-brightness reshapes the center. Smooth only the transitions between changed
-measurements, with no clock-driven phase, perpetual animation, or random motion.
-Both edges taper toward almost zero. Silence settles to a flat line.
-Reduce Motion applies measurement changes without animated interpolation.
+Record starts capture through the existing command. One waveform serves both
+states: starting a Recording Session animates the mark into the recording line
+rather than swapping one drawing for another, and ending one animates it back.
+Capture begins as a flat line and stays flat until somebody speaks. Speech then
+draws a waveform trace of the voice, not the logo mark. Amplitude spans the
+loudness of a human voice near the device, so a quiet room reads as silence
+rather than as a moving line. The trace never progressively fills the screen and
+is not a left-to-right history of elapsed audio. Rendering may smooth between
+measured levels, but must not invent activity during silence. It holds still for
+steady input. Volume scales amplitude; measured tonal brightness redistributes
+the heights of its crests. The trace only ever moves vertically: its crossings
+never slide sideways. Brightness is measured across the human voice band, so
+rumble below it and hiss above it do not steer the shape. Smooth only the
+transitions between changed measurements and between the two states, with no
+clock-driven phase, perpetual animation, or random motion. Both edges taper
+toward almost zero. Silence settles to a flat line.
+Reduce Motion applies measurement and state changes without animated
+interpolation.
 
 Only Stop and Discard are available. Hide settings and the history hint,
 disable the history gesture, and close any presentation that would expose
@@ -62,7 +72,7 @@ time, five-minute progress, and the existing approaching-limit warning without
 competing visually with the waveform. Keep start/stop feedback.
 
 Stop saves and starts the existing workflow. After successful finalization,
-return to idle with the plain line. Do not automatically open history.
+return to idle with the resting logo curve. Do not automatically open history.
 Discard immediately ends and removes the Recording Session without confirmation. The red button has a minimum 120 × 56 point tappable area. On iOS 26 and later, its glass capsule morphs out of the Record/Stop glass control using a shared Liquid Glass container and namespace. Reduce Motion disables the morph; older systems retain the plain red button.
 No pause/resume recording is introduced.
 

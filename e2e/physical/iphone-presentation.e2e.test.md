@@ -87,19 +87,33 @@ Status: pending physical-device execution. Simulator checks do not prove haptics
 Status: pending physical iPhone execution. Tone means measured tonal brightness,
 not an exact musical pitch tracker.
 
-1. On a physical iPhone, record steady, low and high vowels at similar volume,
-   then vary loudness at steady pitch. Verify stable, input-driven shapes and soft
-   transitions. Let elapsed time advance without changing input: no phase drift.
-2. Stop and play the Note, including after a short sound followed by silence.
+1. On a physical iPhone, confirm the idle home shows the logo waveform: flat
+   lead-in and lead-out, the logo's curve and floating dot, and a stroke heavy
+   enough to read as the app mark. It must not animate while idle.
+2. Tap Record in a quiet room. Expect an immediately flat line that stays flat
+   through room tone, keyboard noise and distant sound, and that reacts as soon
+   as somebody speaks at a normal distance. Stop and repeat: it starts flat again.
+3. Watch the start and the end of a Recording Session. Expect the logo mark to
+   travel into the recording line and back, not to disappear and be replaced.
+   Repeat with Reduce Motion: the states change without animation.
+4. Record steady, low and high vowels at similar volume, then vary loudness at
+   steady pitch. Expect a waveform trace of the voice rather than the logo mark:
+   loudness raises and lowers it and a brighter voice changes which crests stand
+   tallest, always vertically, never sliding sideways. Let elapsed time advance
+   without changing input: no phase drift.
+5. Stop and play the Note, including after a short sound followed by silence.
    Verify audible audio, correct duration, and retention of meaningful short Notes.
-3. Repeat after playback, after an interruption, and after a microphone route
+6. Repeat after playback, after an interruption, and after a microphone route
    change (wired/Bluetooth input when available). Captured audio must be finalized
    through the existing interruption flow; another Recording Session must start.
-4. Discard during capture, then start again. Verify no old audio or tone leaks
+7. Discard during capture, then start again. Verify no old audio or tone leaks
    into the next Recording Session. Repeat with Reduce Motion.
 
-Closest deterministic coverage: RecordingSignal tests use known frequencies,
-gains and buffer phases; PCMRecorderHardware integration tests feed raw PCM through
+Closest deterministic coverage: LiveWaveform tests cover the resting logo curve,
+the flat line below speaking loudness, the voice trace that replaces the mark
+while somebody speaks, and the travel between the two;
+RecordingSignal tests use known frequencies, gains, buffer phases and out-of-band
+rumble and hiss; PCMRecorderHardware integration tests feed raw PCM through
 production analysis/conversion/AAC writing and test cleanup/interruption; native
 IPhoneModel integration tests verify progress propagation and session reset.
 
