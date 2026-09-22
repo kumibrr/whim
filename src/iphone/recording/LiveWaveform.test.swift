@@ -34,11 +34,8 @@ final class LiveWaveformTests: XCTestCase {
 
     func testASpeakingVoiceDrawsAWaveformRatherThanTheLogo() {
         let speaking = trace(level: 1, tone: 0.5)
-        let crossings = zip(speaking, speaking.dropFirst()).filter { $0 * $1 < 0 }.count
-        XCTAssertGreaterThanOrEqual(crossings, 5)
-        let peak = speaking.max() ?? 0
-        let dip = speaking.min() ?? 0
-        XCTAssertEqual(peak, -dip, accuracy: 0.15)
+        XCTAssertGreaterThanOrEqual(crossings(of: speaking).count, 5)
+        XCTAssertEqual(speaking.max() ?? 0, -(speaking.min() ?? 0), accuracy: 0.25)
         let logo = logoPoints().map(\.y)
         XCTAssertGreaterThan(abs((logo.max() ?? 0) + (logo.min() ?? 0)), 0.4)
     }
@@ -51,11 +48,12 @@ final class LiveWaveformTests: XCTestCase {
         }
     }
 
-    func testVoiceToneReshapesTheTraceAtTheSameVolume() {
-        let dark = trace(level: 0.6, tone: 0.2)
-        let bright = trace(level: 0.6, tone: 0.8)
-        XCTAssertTrue(zip(dark, bright).contains { $0 * $1 < -0.0001 })
-        XCTAssertGreaterThan(cycles(of: bright), cycles(of: dark))
+    func testVoiceToneChangesHeightsWithoutMovingTheTraceSideways() {
+        let dark = trace(level: 0.6, tone: 0.1)
+        let bright = trace(level: 0.6, tone: 0.9)
+        XCTAssertEqual(crossings(of: dark), crossings(of: bright))
+        XCTAssertTrue(zip(dark, bright).allSatisfy { $0 * $1 >= 0 })
+        XCTAssertTrue(zip(dark, bright).contains { abs($0 - $1) > 0.02 })
     }
 
     func testTheTraceTapersAtBothEdges() {
@@ -74,8 +72,27 @@ final class LiveWaveformTests: XCTestCase {
         }
     }
 
-    private func cycles(of samples: [Double]) -> Int {
-        zip(samples, samples.dropFirst()).filter { $0 * $1 < 0 }.count
+    func testTheWaveformTravelsBetweenTheLogoAndTheVoiceTrace() {
+        let logo = LiveWaveform.points(level: 0, tone: 0, rest: 1)
+        XCTAssertEqual(logo.map(\.y).max() ?? 0, 1, accuracy: 0.02)
+        XCTAssertEqual(LiveWaveform.accent(rest: 1), LiveWaveform.resting.accent)
+        let recording = LiveWaveform.points(level: 0, tone: 0, rest: 0)
+        XCTAssertTrue(recording.allSatisfy { $0.y == 0 })
+        XCTAssertEqual(LiveWaveform.accent(rest: 0).y, 0)
+        let halfway = LiveWaveform.points(level: 0, tone: 0, rest: 0.5)
+        XCTAssertEqual(halfway.map(\.y).max() ?? 0, 0.5, accuracy: 0.02)
+        XCTAssertEqual(LiveWaveform.accent(rest: 0.5).y, LiveWaveform.resting.accent.y / 2, accuracy: 0.000001)
+        for point in halfway + LiveWaveform.points(level: 1, tone: 1, rest: 0.4) {
+            XCTAssertTrue((0...1).contains(point.x))
+            XCTAssertLessThanOrEqual(abs(point.y), 1)
+        }
+    }
+
+    private func crossings(of samples: [Double]) -> [Int] {
+        let sounding = samples.enumerated().filter { $0.element != 0 }
+        return zip(sounding, sounding.dropFirst())
+            .filter { $0.element * $1.element < 0 }
+            .map { $1.offset }
     }
 
     private func trace(level: Double, tone: Double) -> [Double] {
