@@ -3,6 +3,17 @@
 import PackageDescription
 
 let productionSources = [
+    "Maintenance/BackgroundScheduler.swift",
+    "Maintenance/BGTaskSchedulerAdapter.swift",
+    "Maintenance/WatchBackgroundScheduler.swift",
+    "Maintenance/MaintenanceService.swift",
+    "Recording/CaptureLatencyProbe.swift",
+    "Recording/ComplicationStore.swift",
+    "Recording/ComplicationSnapshot.swift",
+    "Recording/RecordingActivityAttributes.swift",
+    "AppComposition/WhimRuntime.swift",
+    "Recording/LiveActivityAdapter.swift",
+    "Recording/CaptureEntryService.swift",
     "AppComposition/ActionableFailure.swift",
     "Recording/PCMRecorderHardware.swift",
     "Recording/RecordingSignal.swift",
@@ -64,6 +75,10 @@ let productionSources = [
     "WebhookConfiguration/WebhookRequestBuilder.swift",
 ]
 let unitTestSources = [
+    "Maintenance/WatchBackgroundScheduler.test.swift",
+    "Recording/CaptureLatencyProbe.test.swift",
+    "Recording/ComplicationSnapshot.test.swift",
+    "Recording/LiveActivityAdapter.test.swift",
     "AppComposition/ActionableFailure.test.swift",
     "Recording/RecordingSignal.test.swift",
     "DeviceSync/ConnectivityMergeService.test.swift",
@@ -88,6 +103,7 @@ let unitTestSources = [
     "WebhookConfiguration/WebhookRequestBuilder.test.swift",
 ]
 let integrationTestSources = [
+    "Maintenance/MaintenanceService.integration.test.swift",
     "Recording/PCMRecorderHardware.integration.test.swift",
     "Playback/AVAudioWaveformAdapter.integration.test.swift",
     "Recording/AVAudioRecorderAdapter.integration.test.swift",

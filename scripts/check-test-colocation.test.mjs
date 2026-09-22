@@ -117,3 +117,12 @@ test('rejects native iPhone tests omitted from the presentation package', async 
   });
   assert.ok((await checkRepository(root)).some(error => error.includes('TimelineFormat.test.swift') && error.includes('unitSources')));
 });
+
+test('rejects system-surface tests missing their dedicated target', async (t) => {
+  const root = await fixture(t, {
+    'src/intents/recording/RecordWhimIntent.swift': '',
+    'src/intents/recording/RecordWhimIntent.test.swift': '',
+    'ios/whim.xcodeproj/project.pbxproj': '/* system targets */',
+  });
+  assert.ok((await checkRepository(root)).some(error => error.includes('RecordWhimIntent.test.swift: missing from WhimSystemSurfaceTests')));
+});

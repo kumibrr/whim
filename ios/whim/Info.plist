@@ -49,6 +49,13 @@
 	<string>Whim records your voice Notes and stores them locally.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Whim uses on-device speech recognition to create short Note titles.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>processing</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -73,5 +80,9 @@
 	<string>Automatic</string>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>app.whim.maintenance</string>
+	</array>
 </dict>
 </plist>

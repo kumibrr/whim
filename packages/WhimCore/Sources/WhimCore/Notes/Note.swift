@@ -50,6 +50,7 @@ public struct Note: Codable, Equatable, Sendable {
     public let workflowID: String
     public let delivery: Delivery
     public let localError: LocalAudioError?
+    public let audioExpiredAt: Date?
 
     public var isDeliveryEligible: Bool { !requiresReview && localError == nil && delivery.receipt == nil }
 
@@ -66,7 +67,8 @@ public struct Note: Codable, Equatable, Sendable {
         audioURL: URL,
         workflowID: String = WorkflowDefinition.default.id,
         delivery: Delivery = .pending,
-        localError: LocalAudioError? = nil
+        localError: LocalAudioError? = nil,
+        audioExpiredAt: Date? = nil
     ) {
         self.id = id
         self.recordingSessionID = recordingSessionID
@@ -81,6 +83,7 @@ public struct Note: Codable, Equatable, Sendable {
         self.workflowID = workflowID
         self.delivery = delivery
         self.localError = localError
+        self.audioExpiredAt = audioExpiredAt
     }
 }
 
@@ -143,7 +146,7 @@ public struct NoteProjection: Codable, Equatable, Sendable {
         source = note.source
         status = note.localError != nil && note.delivery.receipt == nil ? .failed : note.delivery.status
         requiresReview = note.requiresReview
-        self.hasLocalAudio = hasLocalAudio && note.localError == nil
+        self.hasLocalAudio = hasLocalAudio && note.localError == nil && note.audioExpiredAt == nil
         localError = note.localError
         workflowError = note.delivery.workflowError
     }

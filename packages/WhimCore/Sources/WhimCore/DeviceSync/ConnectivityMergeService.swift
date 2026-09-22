@@ -226,6 +226,9 @@ public actor ConnectivityMergeService {
         try await flush()
     }
 
+    /// Keep the source file until the companion confirms its durable handoff.
+    public func pendingAudioNoteIDs() throws -> Set<NoteID> { try journal.pendingAudioNoteIDs() }
+
     public func queueDeletion(_ id: NoteID) async throws {
         try journal.enqueue(.init(generation: generation(), payload: .deletion(id)))
         try journal.discardNotePayloads(id)

@@ -28,6 +28,8 @@ def configure_target(target, bundle_identifier, deployment_target)
     settings['OTHER_SWIFT_FLAGS'] = settings['OTHER_SWIFT_FLAGS'].to_s.gsub(/\s*-D\s+EXPO_CONFIGURATION_(DEBUG|RELEASE)\b/, '').strip
     settings.delete('OTHER_SWIFT_FLAGS') if ['', '$(inherited)'].include?(settings['OTHER_SWIFT_FLAGS'])
     settings['CODE_SIGN_STYLE'] = 'Automatic'
+    settings['CURRENT_PROJECT_VERSION'] = '1'
+    settings['MARKETING_VERSION'] = '1.0.0'
     settings['GENERATE_INFOPLIST_FILE'] = 'YES'
     settings['PRODUCT_BUNDLE_IDENTIFIER'] = bundle_identifier
     settings['PRODUCT_NAME'] = '$(TARGET_NAME)'
@@ -170,6 +172,83 @@ app_target.build_configurations.each do |configuration|
   settings['TARGETED_DEVICE_FAMILY'] = '1'
 end
 
+# System entry points share source definitions with the hosting application.
+intent_group = virtual_group(project, 'WhimIntents')
+intent_refs = Dir.glob(File.join(repository_root, 'src/intents/**/*.swift')).reject(&test_source).map { |path| file_reference(intent_group, '../' + path.delete_prefix(repository_root + '/')) }
+[app_target, watch_target].each do |host|
+  intent_refs.each { |ref| host.add_file_references([ref]) unless host.source_build_phase.files_references.include?(ref) }
+end
+widget_group = virtual_group(project, 'WhimWidgets')
+[[:ios, 'WhimLiveActivity', app_target, '18.0', 'app.whim.ios.activity', 'whim/whim.entitlements'],
+ [:watchos, 'WhimComplication', watch_target, '11.0', 'app.whim.ios.watchkitapp.complication', 'WhimWatch.entitlements']].each do |platform, name, host, version, identifier, entitlements|
+  target = project.targets.find { |candidate| candidate.name == name } || project.new_target(:app_extension, name, platform, version)
+  configure_target(target, identifier, version)
+  paths = Dir.glob(File.join(repository_root, 'src/widgets/app-composition/*.swift'))
+  paths += Dir.glob(File.join(repository_root, platform == :ios ? 'src/widgets/{recording-activity,recording-control}/*.swift' : 'src/widgets/recording-complication/*.swift'))
+  refs = paths.reject(&test_source).map { |path| file_reference(widget_group, '../' + path.delete_prefix(repository_root + '/')) }
+  refs += intent_refs.reject { |ref| ref.path.end_with?('/WhimShortcutsProvider.swift') } if platform == :ios
+  target.source_build_phase.files.each { |entry| entry.remove_from_project unless refs.include?(entry.file_ref) }
+  refs.each { |ref| target.add_file_references([ref]) unless target.source_build_phase.files_references.include?(ref) }
+  unless target.package_product_dependencies.any? { |dependency| dependency.product_name == 'WhimCore' }
+    product = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+    product.package = package_reference; product.product_name = 'WhimCore'
+    target.package_product_dependencies << product
+    build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
+    build_file.product_ref = product; target.frameworks_build_phase.files << build_file
+  end
+  target.build_configurations.each do |configuration|
+    settings = configuration.build_settings
+    settings['INFOPLIST_FILE'] = "#{name}-Info.plist"
+    settings['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] = '$(inherited) WHIM_WIDGET_EXTENSION'
+    settings['CURRENT_PROJECT_VERSION'] = '1'
+    settings['MARKETING_VERSION'] = '1.0.0'
+    settings['CODE_SIGN_ENTITLEMENTS'] = entitlements
+    settings['SKIP_INSTALL'] = 'YES'
+    settings['TARGETED_DEVICE_FAMILY'] = platform == :ios ? '1' : '4'
+    settings['SDKROOT'] = platform == :ios ? 'iphoneos' : 'watchos'
+    settings['SUPPORTED_PLATFORMS'] = platform == :ios ? 'iphoneos iphonesimulator' : 'watchos watchsimulator'
+  end
+  host.add_dependency(target) unless host.dependencies.any? { |dependency| dependency.target == target }
+  phase = host.copy_files_build_phases.find { |candidate| candidate.name == 'Embed App Extensions' } || host.new_copy_files_build_phase('Embed App Extensions')
+  phase.dst_subfolder_spec = '13'
+  phase.add_file_reference(target.product_reference) unless phase.files_references.include?(target.product_reference)
+end
+
+# Tests compile the same system-surface source as the extensions, with boundary fixtures.
+surface_tests = project.targets.find { |target| target.name == 'WhimSystemSurfaceTests' } || project.new_target(:unit_test_bundle, 'WhimSystemSurfaceTests', :ios, '18.0')
+configure_target(surface_tests, 'app.whim.ios.systemsurfacetests', '18.0')
+surface_group = virtual_group(project, 'WhimSystemSurfaceTests')
+surface_paths = Dir.glob(File.join(repository_root, 'src/intents/**/*.swift')) + Dir.glob(File.join(repository_root, 'src/widgets/{recording-control,recording-activity}/**/*.swift'))
+surface_paths << File.join(repository_root, 'src/iphone/app-composition/IPhoneModel.test-support.swift')
+surface_refs = surface_paths.map { |path| file_reference(surface_group, '../' + path.delete_prefix(repository_root + '/')) }
+surface_tests.source_build_phase.files.each { |entry| entry.remove_from_project unless surface_refs.include?(entry.file_ref) }
+surface_refs.each { |ref| surface_tests.add_file_references([ref]) unless surface_tests.source_build_phase.files_references.include?(ref) }
+surface_tests.add_dependency(app_target) unless surface_tests.dependencies.any? { |dependency| dependency.target == app_target }
+unless surface_tests.package_product_dependencies.any? { |dependency| dependency.product_name == 'WhimCore' }
+  product = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+  product.package = package_reference; product.product_name = 'WhimCore'
+  surface_tests.package_product_dependencies << product
+  build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
+  build_file.product_ref = product; surface_tests.frameworks_build_phase.files << build_file
+end
+surface_tests.build_configurations.each do |configuration|
+  settings = configuration.build_settings
+  settings['BUNDLE_LOADER'] = '$(TEST_HOST)'
+  settings['TEST_HOST'] = '$(BUILT_PRODUCTS_DIR)/whim.app/whim'
+  settings['TEST_TARGET_NAME'] = 'whim'
+  settings['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] = '$(inherited) WHIM_SYSTEM_SURFACE_TESTS'
+  settings['TARGETED_DEVICE_FAMILY'] = '1'
+end
+
+# Every app/extension links WhimCore and shares preferences through its App Group.
+privacy_reference = project.files.find { |file| file.path == 'whim/PrivacyInfo.xcprivacy' }
+abort 'Expected shared privacy manifest' unless privacy_reference
+project.targets.select { |target| %w[whim WhimWatch WhimLiveActivity WhimComplication].include?(target.name) }.each do |target|
+  unless target.resources_build_phase.files_references.include?(privacy_reference)
+    target.resources_build_phase.add_file_reference(privacy_reference)
+  end
+end
+
 project.build_configurations.each do |configuration|
   %w[OTHER_CFLAGS OTHER_CPLUSPLUSFLAGS OTHER_SWIFT_FLAGS].each { |key| configuration.build_settings.delete(key) }
 end
@@ -210,6 +289,6 @@ def save_scheme(project_path, name, launch_target, test_targets)
   end
 end
 
-save_scheme(project_path, 'Whim', app_target, [])
+save_scheme(project_path, 'Whim', app_target, [surface_tests])
 save_scheme(project_path, 'WhimWatch', watch_target, [watch_tests, watch_ui_tests])
 save_scheme(project_path, 'WhimWatchUITests', watch_target, [watch_ui_tests])

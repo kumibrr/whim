@@ -1,0 +1,45 @@
+appId: app.whim.ios
+---
+- runFlow: flows/clean-launch.yaml
+- tapOn: Settings
+- tapOn:
+    id: webhook-url
+- inputText: https://whim-fixture.invalid/receive
+- tapOn: Webhook
+- scrollUntilVisible:
+    element: Save webhook
+    direction: DOWN
+    centerElement: true
+- tapOn: Save webhook
+- extendedWaitUntil:
+    visible: Webhook saved. Test it to check delivery.
+    timeout: 10000
+- scrollUntilVisible:
+    element: 'Keep audio: Immediately'
+    direction: DOWN
+    centerElement: true
+- tapOn: 'Keep audio: Immediately'
+- tapOn: Back
+- tapOn:
+    id: record-button
+- tapOn:
+    id: stop-recording
+- tapOn:
+    id: history-hint
+- extendedWaitUntil:
+    visible: 'Open .*Sent.*Audio expired.*'
+    timeout: 30000
+- assertVisible:
+    id: note-play-.*
+    enabled: false
+- tapOn:
+    id: note-row-.*
+- assertVisible:
+    id: note-detail
+- assertVisible:
+    id: note-play-.*
+    enabled: false
+- assertNotVisible: 'Local audio error:.*'
+- tapOn:
+    id: note-delete
+- assertVisible: No Notes here yet. Capture a thought.

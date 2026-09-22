@@ -3,6 +3,24 @@ import XCTest
 @testable import WhimCore
 
 final class PCMRecorderHardwareIntegrationTests: XCTestCase {
+    #if DEBUG
+    func testCaptureLatencyObservesStartedInputAndFirstEncodedBuffer() throws {
+        let input = FixturePCMInput()
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".m4a")
+        defer { try? FileManager.default.removeItem(at: url) }
+        CaptureLatencyProbe.shared.begin()
+        let hardware = PCMRecorderHardware(url: url, input: input)
+        XCTAssertTrue(hardware.prepareToRecord())
+        XCTAssertTrue(hardware.record())
+        defer { hardware.stop() }
+        input.send(try buffer(frequency: 800))
+        let timing = CaptureLatencyProbe.shared.snapshot()
+        let started = try XCTUnwrap(timing[.audioEngineStarted])
+        let encoded = try XCTUnwrap(timing[.firstEncodedBuffer])
+        XCTAssertLessThanOrEqual(started, encoded)
+    }
+    #endif
+
     func testCapturedPCMChangesToneWithoutDependingOnVolume() throws {
         let input = FixturePCMInput()
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".m4a")

@@ -3,6 +3,26 @@ import WhimCore
 @testable import WhimIPhone
 
 @MainActor final class IPhoneModelIntegrationTests: XCTestCase {
+    func testRepeatedSystemRecordKeepsElapsedTime() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let client = harness.makeService(permissions: GrantedPermissions())
+        let model = IPhoneModel(client: client)
+        await model.start()
+        _ = try await client.startRecording(source: .iphone)
+        await harness.recorder.emit(.elapsed(20))
+        for _ in 0..<200 where model.elapsedSeconds != 20 { try await Task.sleep(for: .milliseconds(5)) }
+        let events = client.events()
+        _ = try await CaptureEntryService(client: client, source: .iphone).record()
+        var iterator = events.makeAsyncIterator()
+        _ = await iterator.next()
+        // Let the independently subscribed presentation consume the same event.
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(model.elapsedSeconds, 20)
+        try await client.discardRecording()
+        model.stop()
+    }
+
     func testCollapsedFailurePreservesRecoveryAndClearsWhenResolved() async throws {
         let harness = try WhimFacadeHarness()
         defer { harness.remove() }

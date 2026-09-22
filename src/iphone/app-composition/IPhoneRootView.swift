@@ -135,7 +135,7 @@ struct IPhoneFailurePresentation: ViewModifier {
     private func resolve(_ failure: ActionableFailure) {
         switch failure.action {
         case .retry: Task { await model.retryVisibleFailure() }
-        case .microphoneSettings: Task { await model.perform { try await model.client.openSystemSettings() } }
+        case .microphoneSettings, .liveActivitySettings: Task { await model.perform { try await model.client.openSystemSettings() } }
         case .storageInstructions: showsStorageInstructions = true
         case .configureWebhook: configureWebhook()
         }

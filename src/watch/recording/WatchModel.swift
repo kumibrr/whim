@@ -84,7 +84,7 @@ final class WatchModel {
 
     /// Scene reactivation restores state. It cannot distinguish wrist-down from an icon tap,
     /// so only first launch or an explicit Record command may begin a new capture.
-    func activate() async {
+    func activate(captureURL: URL? = nil) async {
         guard !activating else { return }
         activating = true
         observeIfNeeded()
@@ -95,7 +95,7 @@ final class WatchModel {
             self.captureReady = true
             if revision == self.captureRevision { self.recording = startup.recording }
             if self.recording != nil { self.showsRecent = false }
-            if !self.activated, self.recording == nil, self.permission == .granted, !self.captureBusy {
+            if captureURL == nil, !self.activated, self.recording == nil, self.permission == .granted, !self.captureBusy {
                 self.captureBusy = true
                 defer { self.captureBusy = false }
                 self.lastCaptureCommand = .start
@@ -105,6 +105,7 @@ final class WatchModel {
         }
         activating = false
         if loaded {
+            if let captureURL { await handleCaptureURL(captureURL) }
             startMaintenanceIfNeeded()
             async let settings: Void = refreshSettings()
             async let notes: Void = refreshNotes()
@@ -146,6 +147,10 @@ final class WatchModel {
             self.permission = try await self.client.requestPermission(.microphone)
             if self.permission == .granted { try await self.beginCapture() }
         }
+    }
+    func handleCaptureURL(_ url: URL) async {
+        guard url.scheme == "whim", url.host == "record" else { return }
+        await record()
     }
     func record() async {
         lastCaptureCommand = .start
@@ -251,6 +256,7 @@ final class WatchModel {
                 guard let self else { return }
                 switch event.type {
                 case .recordingStarted:
+                    self.showsRecent = false
                     self.captureRevision += 1
                     self.recording = event.recording
                     self.peakPowerDBFS = -160

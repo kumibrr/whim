@@ -12,7 +12,7 @@ The iPhone interface uses SwiftUI (updated by the approved 2026-09-19 migration 
 
 ## Goals
 
-- Start recording with the least practical delay from the iPhone app, Watch app, Watch complication, App Shortcut, Siri, and supported Action-button entry points.
+- Start recording with the least practical delay from the iPhone app, iPhone Lock Screen recording control, Watch app, Watch complication, App Shortcut, Siri, and supported Action-button entry points.
 - Record independently on iPhone and Apple Watch, including simultaneous recording on both devices.
 - Preserve every finalized recording locally until the user deletes it or its successful-delivery retention period expires.
 - Deliver recordings directly to a user-owned webhook through a documented, signed, idempotent contract.
@@ -24,7 +24,7 @@ The iPhone interface uses SwiftUI (updated by the approved 2026-09-19 migration 
 
 - Minimum iPhone version: iOS 18.
 - Minimum Watch version: watchOS 11.
-- All iPhone, Watch, complication, Live Activity, and Shortcut surfaces are required before v1 is complete, although implementation proceeds incrementally.
+- All iPhone, Watch, complication, Lock Screen recording control, iPhone Action-button, Live Activity, and Shortcut surfaces are required before v1 is complete, although implementation proceeds incrementally.
 - Whim v1 is free and Apple-only.
 - Android, web, macOS, and an optimized iPad interface are excluded.
 - Both applications build natively in Xcode.
@@ -34,7 +34,7 @@ The iPhone interface uses SwiftUI (updated by the approved 2026-09-19 migration 
 - Multiple user-configurable Workflows, a Workflow editor, or third-party Steps
 - Pause/resume recording or the future Cut interaction
 - Full transcript storage, title editing, trimming, tagging, sharing, or export
-- An iPhone Home or Lock Screen widget separate from the required Live Activity
+- An informational iPhone Home or Lock Screen widget; the recording control and Live Activity are required
 - Accounts, cloud sync, a Whim-operated application backend, diagnostics, crash reporting, analytics, or usage telemetry
 - StoreKit, subscriptions, or other monetization
 - An application-specific biometric lock
@@ -287,13 +287,17 @@ Watch produces a distinct start haptic, restores the active recorder after wrist
 
 The WidgetKit complication shows the Whim mark while idle, elapsed recording state while active, and an attention indicator when failed Notes exist. Tapping it launches directly into capture.
 
-## App Intents and Live Activity
+## App Intents, Lock Screen control, Action button, and Live Activity
 
 Whim defines separate "Record a Whim" and "Stop Whim Recording" App Shortcuts. The recording intent conforms to `AudioRecordingIntent`; starting it creates and maintains the required Live Activity for the full recording. A second Record invocation focuses the active recorder rather than toggling state.
 
 On iPhone, the Live Activity displays elapsed time and Stop on the Lock Screen and Dynamic Island. The activity appears in the paired Watch Smart Stack where supported. Missing permission routes into Whim with an explanation instead of silently failing.
 
-No separate iPhone widget ships in v1.
+On iOS 18 and later, Whim provides a “Record a Whim” WidgetKit control that the user can add to the Lock Screen. It invokes the same recording intent to start capture while the iPhone remains locked, after microphone permission has been granted. It is available before a Recording Session exists; the Live Activity supplies elapsed time and Stop after capture starts.
+
+On supported iPhones, the user can assign the “Record a Whim” App Shortcut to the Action button in system Settings. Activating it starts capture while locked or unlocked. Repeated Lock Screen or Action-button invocation preserves the existing Recording Session and never toggles it off. Both routes use the same local recorder and required Live Activity lifecycle as other intent entry points. Missing permission routes into Whim with an explanation; any required system authentication is respected. Locked recording is a physical-device acceptance requirement, not satisfied by merely opening the app.
+
+No informational iPhone widget ships in v1. The recording control is the explicit exception to the previous exclusion of separate iPhone widgets.
 
 ## Error handling
 
@@ -398,7 +402,7 @@ Required iPhone E2E journeys include:
 - Observe a failed row, inspect its reason, update configuration, and retry
 - Review and explicitly send a recovered Note
 - Change retention and reset all local data
-- Start and stop through App Shortcuts and the Live Activity where simulator automation permits
+- Start through the Lock Screen recording control and App Shortcuts, and stop through the Live Activity where simulator automation permits; cover the shared Action-button intent through the same automated seam
 
 Required Watch E2E journeys include:
 
@@ -421,7 +425,9 @@ Every pull request runs unit, integration, iPhone E2E, and Watch E2E suites. A f
 
 A paired physical iPhone and Apple Watch must verify:
 
-- Capture from the app, complication, App Shortcut, Siri, and supported Action-button entry points
+- Capture from the app, iPhone Lock Screen recording control, complication, App Shortcut, Siri, and supported Action-button entry points
+- On a supported physical iPhone, configure the Lock Screen control and Action-button shortcut; start from each while locked, repeat Record without creating another session or stopping, and stop through the Live Activity
+- Repeat both iPhone routes with the app not running, with microphone permission missing, and with Live Activities unavailable; verify permission guidance and that activity-start failure leaves no intent-owned capture running
 - Locked-iPhone, wrist-down Watch, and five-minute recording
 - Live Activity, Dynamic Island, Smart Stack, and Stop intent
 - Offline capture and later delivery

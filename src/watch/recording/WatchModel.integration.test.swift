@@ -6,6 +6,39 @@ import WhimCore
 
 @MainActor
 final class WatchModelIntegrationTests: XCTestCase {
+    func testRepeatedSystemRecordFocusesCaptureFromPreviousNotes() async throws {
+        let fixture = try WatchFixture()
+        defer { fixture.remove() }
+        let model = WatchModel(client: fixture.client, haptic: { _ in })
+        await model.activate()
+        model.showsRecent = true
+        _ = try await CaptureEntryService(client: fixture.client, source: .appleWatch).record()
+        for _ in 0..<100 {
+            if !model.showsRecent { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(model.showsRecent)
+        await model.discard()
+    }
+
+    func testComplicationLaunchRestartsIdleCaptureAndPreservesExistingSession() async throws {
+        let fixture = try WatchFixture()
+        defer { fixture.remove() }
+        let model = WatchModel(client: fixture.client, haptic: { _ in })
+        await model.activate()
+        await model.stop()
+        await model.handleCaptureURL(URL(string: "whim://record")!)
+        let first = try await fixture.client.activeRecording()
+        XCTAssertNotNil(first)
+        await model.handleCaptureURL(URL(string: "whim://record")!)
+        let repeated = try await fixture.client.activeRecording()
+        XCTAssertEqual(first, repeated)
+        await model.discard()
+        await model.handleCaptureURL(URL(string: "other://record")!)
+        let ignored = try await fixture.client.activeRecording()
+        XCTAssertNil(ignored)
+    }
+
     func testLaunchRecordsBeforeOptionalSettingsComplete() async throws {
         let permissions = SlowWatchPermissions()
         let fixture = try WatchFixture(permissions: permissions)

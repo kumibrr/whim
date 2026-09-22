@@ -76,6 +76,7 @@ public struct DeliveryService: Sendable {
     }
 
     public func events() -> AsyncStream<NoteID> { deliveryEvents }
+    public func cancelNotifications() async { await notifications.cancelAll() }
 
     public func deliver(noteID: NoteID) async throws -> DeliveryResult {
         do { return try await deliverCurrent(noteID: noteID) }
@@ -153,7 +154,10 @@ public struct DeliveryService: Sendable {
             try await store.releaseLease(.delivery, noteID: noteID, owner: leaseOwner)
             return result
         } catch {
-            try? await store.releaseLease(.delivery, noteID: noteID, owner: leaseOwner)
+            // A cancelled upload must still complete its SQLite cleanup. GRDB
+            // cancels writes inherited from the upload's cancelled task.
+            let release = Task { try await store.releaseLease(.delivery, noteID: noteID, owner: leaseOwner) }
+            _ = try? await release.value
             throw error
         }
     }

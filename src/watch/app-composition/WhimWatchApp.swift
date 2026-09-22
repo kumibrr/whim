@@ -26,7 +26,7 @@ struct WhimWatchApp: App {
         #endif
         starting = true
         defer { starting = false }
-        do { model = WatchModel(client: try await WhimWatchRuntime.service()); error = nil }
+        do { model = WatchModel(client: try await WhimRuntime.shared.service()); error = nil }
         catch { self.error = ActionableFailure(error, operation: .preparation) }
     }
 }
@@ -40,21 +40,20 @@ final class WhimWatchDelegate: NSObject, WKApplicationDelegate {
                     let coordinator = WatchBackgroundTaskCoordinator.shared
                     coordinator.beginProcessing()
                     defer { coordinator.endProcessing() }
-                    if let service = try? await WhimWatchRuntime.service() { try? await service.launch() }
+                    if let service = try? await WhimRuntime.shared.service() { try? await service.launch() }
                 }
+            } else if let refresh = task as? WKApplicationRefreshBackgroundTask,
+                      WatchBackgroundScheduler.shared.accepts(refresh.userInfo) {
+                let worker = Task {
+                    defer { refresh.setTaskCompletedWithSnapshot(false) }
+                    do {
+                        let service = try await WhimRuntime.shared.service()
+                        try Task.checkCancellation()
+                        try await service.performBackgroundMaintenance()
+                    } catch { }
+                }
+                refresh.expirationHandler = { worker.cancel() }
             } else { task.setTaskCompletedWithSnapshot(false) }
         }
-    }
-}
-
-@MainActor
-private enum WhimWatchRuntime {
-    private static var instance: Task<WhimService, Error>?
-    static func service() async throws -> WhimService {
-        if let instance { return try await instance.value }
-        let task = Task { try await WhimProductionComposition.make() }
-        instance = task
-        do { return try await task.value }
-        catch { instance = nil; throw error }
     }
 }
