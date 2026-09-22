@@ -56,6 +56,14 @@ struct IPhoneRootView: View {
     private func home(_ settings: SettingsProjection?) -> some View {
         ZStack {
             Color.black.ignoresSafeArea()
+            // One waveform outlives both states, so the mark can travel to the
+            // recording line and back instead of being swapped out.
+            GeometryReader { geometry in
+                LiveWaveformView(power: model.peakPowerDBFS, tone: model.recordingTone,
+                                 isResting: model.recording == nil)
+                    .frame(height: 160)
+                    .position(x: geometry.size.width / 2, y: geometry.size.height * 0.45)
+            }
             CaptureGlassContainer(isRecording: model.recording != nil) {
                 if model.recording != nil {
                     RecorderView(model: model, glassNamespace: captureGlassNamespace)

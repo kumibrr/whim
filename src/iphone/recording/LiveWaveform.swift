@@ -17,6 +17,14 @@ public struct WaveformCurve: Equatable, Sendable {
         public init(control1: WaveformPoint, control2: WaveformPoint, end: WaveformPoint) {
             self.control1 = control1; self.control2 = control2; self.end = end
         }
+        func point(at u: Double, from start: WaveformPoint) -> WaveformPoint {
+            let v = 1 - u
+            let weights = [v * v * v, 3 * v * v * u, 3 * v * u * u, u * u * u]
+            let xs = [start.x, control1.x, control2.x, end.x]
+            let ys = [start.y, control1.y, control2.y, end.y]
+            return WaveformPoint(x: zip(weights, xs).reduce(0) { $0 + $1.0 * $1.1 },
+                                 y: zip(weights, ys).reduce(0) { $0 + $1.0 * $1.1 })
+        }
     }
     public let start: WaveformPoint
     public let segments: [Segment]
@@ -42,17 +50,55 @@ public enum LiveWaveform {
                                               segments: logo, accent: accent)
 
     /// The voice itself, drawn as a waveform rather than as the logo. Loudness scales
-    /// its amplitude and measured tonal brightness tightens its cycles; silence is a
-    /// flat line. No clock, so a steady voice holds a steady trace.
+    /// the trace and measured tonal brightness redistributes its heights. Every factor
+    /// but the wave itself stays positive, so the trace only ever moves up and down —
+    /// its crossings never slide sideways. No clock, so a steady voice holds still.
     public static func displacement(at x: Double, level: Double, tone: Double) -> Double {
         let amplitude = level.isFinite ? max(0, min(1, level)) : 0
         let brightness = tone.isFinite ? max(0, min(1, tone)) : 0
         let position = max(0, min(1, x))
         let envelope = pow(sin(.pi * position), 2)
-        let cycles = 2.5 + 2.5 * brightness
-        let wave = sin(2 * .pi * cycles * position) * 0.72
-            + sin(4 * .pi * cycles * position) * 0.28
-        return amplitude * envelope * wave
+        let wave = sin(2 * .pi * cyclesAcrossTheWidth * position)
+        // A fixed contour, slower than the wave itself, gives the trace the uneven
+        // rise and fall of speech while treating crests and troughs alike.
+        let contour = 0.62 + 0.38 * sin(2 * .pi * position - 0.4 * .pi)
+        // Brighter voices hold the tallest crest and push the others down.
+        let voice = 1 - 0.45 * brightness * (0.5 + 0.5 * cos(5 * .pi * position))
+        return amplitude * envelope * contour * voice * wave
+    }
+
+    /// Blends the voice trace into the resting logo. `rest` is 0 while recording and
+    /// 1 when idle; values between are the transition between the two.
+    public static func points(level: Double, tone: Double, rest: Double) -> [WaveformPoint] {
+        let blend = rest.isFinite ? max(0, min(1, rest)) : 0
+        return (0...traceSteps).map { step in
+            let progress = Double(step) / Double(traceSteps)
+            let live = WaveformPoint(x: progress,
+                                     y: displacement(at: progress, level: level, tone: tone))
+            guard blend > 0 else { return live }
+            let mark = logoTrace[step]
+            return WaveformPoint(x: live.x + (mark.x - live.x) * blend,
+                                 y: live.y + (mark.y - live.y) * blend)
+        }
+    }
+
+    /// The logo's dot, which belongs to the resting mark and arrives with it.
+    public static func accent(rest: Double) -> WaveformPoint {
+        let blend = rest.isFinite ? max(0, min(1, rest)) : 0
+        return WaveformPoint(x: accent.x, y: accent.y * blend)
+    }
+
+    private static let cyclesAcrossTheWidth = 3.0
+    private static let traceSteps = 480
+
+    /// The logo sampled at the same resolution as the trace, so one can travel to
+    /// the other point by point.
+    private static let logoTrace: [WaveformPoint] = (0...traceSteps).map { step in
+        let progress = Double(step) / Double(traceSteps) * Double(logo.count)
+        let index = min(logo.count - 1, Int(progress))
+        let u = progress - Double(index)
+        let from = index == 0 ? WaveformPoint(x: 0, y: 0) : logo[index - 1].end
+        return logo[index].point(at: u, from: from)
     }
 
     private static let accent = WaveformPoint(x: 0.57333, y: 0.38690)
