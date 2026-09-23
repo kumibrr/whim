@@ -69,6 +69,29 @@ final class WatchModelIntegrationTests: XCTestCase {
         XCTAssertEqual(model.peakPowerDBFS, -160)
     }
 
+    func testMeasuredToneShapesTheWaveformAndResetsForTheNextSession() async throws {
+        let fixture = try WatchFixture()
+        defer { fixture.remove() }
+        let model = WatchModel(client: fixture.client, haptic: { _ in })
+        await model.activate()
+        let samples = (0..<1600).map { Float(0.5 * sin(2 * .pi * 800 * Double($0) / 16000)) }
+        let signal = RecordingSignal.measure(samples, sampleRate: 16000)
+        await fixture.microphone.emit(.signal(signal))
+        await fixture.microphone.emit(.elapsed(1))
+        for _ in 0..<200 where model.elapsed != 1 { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(model.peakPowerDBFS, Double(signal.peakPowerDBFS), accuracy: 0.01)
+        XCTAssertEqual(model.recordingTone, Double(signal.tone), accuracy: 0.015)
+        let heldTone = model.recordingTone
+        await fixture.microphone.emit(.elapsed(20))
+        for _ in 0..<200 where model.elapsed != 20 { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(model.recordingTone, heldTone, "Elapsed time must not drive tone")
+        await model.discard()
+        XCTAssertEqual(model.recordingTone, 0)
+        await model.record()
+        XCTAssertEqual(model.recordingTone, 0)
+        await model.discard()
+    }
+
     func testLaunchAndWristDownRestoreOneRecordingSession() async throws {
         let fixture = try WatchFixture()
         defer { fixture.remove() }

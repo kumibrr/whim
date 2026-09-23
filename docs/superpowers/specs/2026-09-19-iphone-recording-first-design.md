@@ -14,7 +14,8 @@ This design supersedes the v1 specification's timeline-first iPhone home,
 system Light/Dark appearance, and coral recording accent. It preserves the
 v1 domain model, recording/finalization rules, delivery behavior, retention,
 onboarding, settings capabilities, and accessibility requirements. Watch UI
-and behavior are unchanged. The minimum iPhone deployment version remains
+and behavior are unchanged, except that the Watch capture screen shares the
+logo waveform described below. The minimum iPhone deployment version remains
 iOS 18.
 
 ## Visual system
@@ -64,6 +65,12 @@ clock-driven phase, perpetual animation, or random motion. Both edges taper
 toward almost zero. Silence settles to a flat line.
 Reduce Motion applies measurement and state changes without animated
 interpolation.
+
+The Watch capture screen uses the same waveform, geometry and transitions,
+scaled to its width. WhimCore owns the shared waveform so both devices draw
+one mark. The Watch keeps AVAudioRecorder, which measures loudness but not
+tonal brightness, so its voice trace scales with volume while its crest
+heights keep their neutral shape until a tone measurement is available.
 
 Only Stop and Discard are available. Hide settings and the history hint,
 disable the history gesture, and close any presentation that would expose

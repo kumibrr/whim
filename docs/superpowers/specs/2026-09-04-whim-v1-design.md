@@ -277,7 +277,7 @@ Onboarding:
 
 Speech and notification permissions are requested contextually after the first recording. Denied permissions are not repeatedly requested; Settings provides the relevant system-settings route.
 
-The iPhone uses a sober black appearance with white accents and native typography, native Liquid Glass where available, and a translucent material fallback on iOS 18. Watch appearance remains unchanged. Every status includes text or symbols rather than relying on color. VoiceOver, Dynamic Type, sufficient contrast, haptic plus visible feedback, logical focus order, and Reduce Motion support are v1 requirements.
+The iPhone uses a sober black appearance with white accents and native typography, native Liquid Glass where available, and a translucent material fallback on iOS 18. Watch appearance remains unchanged apart from sharing the iPhone's logo waveform on its capture screen. Every status includes text or symbols rather than relying on color. VoiceOver, Dynamic Type, sufficient contrast, haptic plus visible feedback, logical focus order, and Reduce Motion support are v1 requirements.
 
 ## Watch experience
 

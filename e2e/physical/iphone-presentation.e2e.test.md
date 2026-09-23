@@ -109,7 +109,7 @@ not an exact musical pitch tracker.
 7. Discard during capture, then start again. Verify no old audio or tone leaks
    into the next Recording Session. Repeat with Reduce Motion.
 
-Closest deterministic coverage: LiveWaveform tests cover the resting logo curve,
+Closest deterministic coverage: WhimCore LiveWaveform tests cover the resting logo curve,
 the flat line below speaking loudness, the voice trace that replaces the mark
 while somebody speaks, and the travel between the two;
 RecordingSignal tests use known frequencies, gains, buffer phases and out-of-band

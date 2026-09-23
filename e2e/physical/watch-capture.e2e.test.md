@@ -75,3 +75,22 @@ Measure first capture-frame appearance and actual microphone onset separately on
 Deny microphone permission and launch: verify the error container/action sits in the upper half and tapping the whole glass card opens device-specific guidance. Grant access in Watch Settings and return: the error clears, and Record starts explicitly after the initial activation. Verify glass, older-OS material fallback, Reduce Transparency, VoiceOver, and large text. The compact message must wrap at large text sizes. Tap near the card edge as well as its text: both trigger recovery. Verify VoiceOver announces the action and offers Dismiss error for auxiliary failures; a horizontal swipe dismisses those failures without triggering retry. Stop/Discard must remain accessible. Include storage-full guidance followed by Check again after freeing space. Check initial speech preservation and wrist-down continuity on hardware.
 
 Compact errors: verify the glass card fits its message without an empty scrolling area or a separate action row. Tapping anywhere on the card runs its recovery action; repeated taps during work are disabled.
+
+## Logo waveform
+
+On a physical Watch with microphone access granted:
+
+1. Stop any Recording Session. Expect the idle capture screen to show the Whim
+   logo waveform — flat lead-in and lead-out, the logo curve and its floating
+   dot — as a stroke heavy enough to read as the app mark. It must not animate.
+2. Tap Record in a quiet room. Expect the mark to travel into a flat line rather
+   than being swapped out, and to stay flat until somebody speaks nearby.
+3. Speak at varying loudness. Expect a voice trace that rises and falls with
+   volume, moves only vertically and holds still for steady input.
+4. Stop and Discard. Each time, expect the line to travel back into the logo.
+   Repeat with Reduce Motion: the states change without animation.
+
+Closest deterministic coverage: WhimCore LiveWaveform tests cover the resting
+logo, the silent flat line, the voice trace and the travel between them;
+WatchModel integration tests cover loudness and tone propagation and their
+reset between Recording Sessions.
