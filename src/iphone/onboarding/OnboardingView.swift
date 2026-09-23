@@ -5,6 +5,11 @@ struct OnboardingView: View {
     var model: IPhoneModel
     let settings: SettingsProjection?
     @State private var step = 0
+    @State private var webhook: WebhookEditor
+    init(model: IPhoneModel, settings: SettingsProjection?) {
+        self.model = model; self.settings = settings
+        _webhook = State(initialValue: WebhookEditor(client: model.client))
+    }
     var body: some View {
         WhimContent {
             Text(step == 0 ? "A place for your thoughts" : step == 1 ? "Your workflow, directly" : "Ready when inspiration strikes").whimTitle()
@@ -12,7 +17,10 @@ struct OnboardingView: View {
                 Text("Whim stores voice Notes locally on your iPhone and Apple Watch and delivers them directly to your webhook. No account, cloud storage, or analytics.")
                 Button("Get started") { step = 1 }
             } else if step == 1 {
-                if let settings { WebhookConfigurationView(model: model, configuration: settings.webhook) }
+                if let settings {
+                    WebhookConfigurationView(model: model, editor: webhook, configuration: settings.webhook)
+                    Button("Save webhook") { Task { await webhook.save(); await model.refresh() } }.disabled(!webhook.isDirty || webhook.isPending)
+                }
                 else { ProgressView("Loading webhook settings…") }
                 Button("Continue to microphone") { step = 2 }
                 Button("Skip webhook setup") { step = 2 }

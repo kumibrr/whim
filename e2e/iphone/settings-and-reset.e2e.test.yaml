@@ -5,12 +5,7 @@ appId: app.whim.ios
 - tapOn:
     id: webhook-url
 - inputText: https://whim-fixture.invalid/receive
-- tapOn: Webhook
-- scrollUntilVisible:
-    element: Save webhook
-    direction: DOWN
-    centerElement: true
-- tapOn: Save webhook
+- tapOn: Save settings
 - extendedWaitUntil:
     visible: Webhook saved. Test it to check delivery.
     timeout: 10000
@@ -24,10 +19,17 @@ appId: app.whim.ios
     centerElement: true
 - assertVisible: Keep audio after delivery
 - scrollUntilVisible:
-    element: 'Keep audio: Never'
+    element:
+      id: retention-picker
     direction: DOWN
     centerElement: true
-- tapOn: 'Keep audio: Never'
+- tapOn:
+    id: retention-picker
+- tapOn: Never
+- tapOn: Save settings
+- assertVisible:
+    text: Save settings
+    enabled: false
 - scrollUntilVisible:
     element: On-device titles
     direction: DOWN
