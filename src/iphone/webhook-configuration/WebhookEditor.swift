@@ -10,11 +10,13 @@ import WhimCore
     public var newName = "" { didSet { clearOutcome() } }
     public var newValue = "" { didSet { clearOutcome() } }
     public var newSecret = true
+    public private(set) var isAddingHeader = false
     public private(set) var error: IPhoneError?
     public private(set) var message: String?
     public private(set) var offersRetry = false
     public private(set) var isPending = false
     private let client: any WhimClient
+    private var draftBase: [HeaderPatch] = []
     public var isDirty: Bool { !endpoint.isEmpty || bearer.action != .preserve || hmac.action != .preserve || headers != nil || !newName.isEmpty || !newValue.isEmpty }
     public init(client: any WhimClient) { self.client = client }
     public func existingHeaders(_ configuration: WebhookSettingsProjection?) -> [HeaderPatch] {
@@ -22,10 +24,13 @@ import WhimCore
             HeaderPatch(name: header.name, action: .preserve, value: nil, isSecret: header.isSecret)
         } ?? [])
     }
+    /// Shows the new-header fields; a previously filled draft is kept as a pending header.
     public func addHeader(configuration: WebhookSettingsProjection?) {
-        headers = existingHeaders(configuration) + [HeaderPatch(name: newName, action: .replace, value: newValue, isSecret: newSecret)]
-        newName = ""; newValue = ""
+        if isAddingHeader, !newName.isEmpty { headers = existingHeaders(configuration) + [draftHeader] }
+        draftBase = existingHeaders(configuration)
+        newName = ""; newValue = ""; newSecret = true; isAddingHeader = true
     }
+    public func cancelHeader() { newName = ""; newValue = ""; newSecret = true; isAddingHeader = false }
     public func removeHeader(at index: Int, configuration: WebhookSettingsProjection?) {
         var values = existingHeaders(configuration)
         guard values.indices.contains(index) else { return }
@@ -34,8 +39,9 @@ import WhimCore
     public func save() async {
         await perform {
             let result = try await client.patchWebhook(.init(endpoint: endpoint.isEmpty ? nil : endpoint,
-                bearerToken: bearer, hmacSecret: hmac, customHeaders: headers))
+                bearerToken: bearer, hmacSecret: hmac, customHeaders: pendingHeaders))
             endpoint = ""; bearer = .init(action: .preserve); hmac = .init(action: .preserve); headers = nil
+            cancelHeader()
             message = "Webhook saved. Test it to check delivery."
             offersRetry = result.failedCount + result.setupRequiredCount > 0
         }
@@ -55,6 +61,10 @@ import WhimCore
             let count = try await client.retryAllFailed()
             message = "\(count) Notes offered for delivery."; offersRetry = false
         }
+    }
+    private var draftHeader: HeaderPatch { HeaderPatch(name: newName, action: .replace, value: newValue, isSecret: newSecret) }
+    private var pendingHeaders: [HeaderPatch]? {
+        isAddingHeader && !newName.isEmpty ? (headers ?? draftBase) + [draftHeader] : headers
     }
     private func perform(_ operation: () async throws -> Void) async {
         guard !isPending else { return }; isPending = true; clearOutcome()

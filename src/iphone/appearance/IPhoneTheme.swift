@@ -151,3 +151,18 @@ struct IPhoneStartupShell: View {
         }.accessibilityIdentifier(onboardingCompleted ? "whim-home" : "onboarding")
     }
 }
+
+extension View {
+    /// Liquid Glass button on iOS 26; bordered fallback on earlier systems.
+    @ViewBuilder func whimGlassButton() -> some View {
+        if #available(iOS 26, *) { buttonStyle(.glass) } else { buttonStyle(.bordered) }
+    }
+    @ViewBuilder func whimProminentGlassButton() -> some View {
+        if #available(iOS 26, *) { buttonStyle(.glassProminent) } else { buttonStyle(.borderedProminent) }
+    }
+    /// Pins content below the navigation bar, sharing its scroll-edge effect on iOS 26.
+    @ViewBuilder func whimTopBar<Bar: View>(@ViewBuilder _ bar: () -> Bar) -> some View {
+        if #available(iOS 26, *) { safeAreaBar(edge: .top) { bar() } }
+        else { safeAreaInset(edge: .top) { bar().background(.bar) } }
+    }
+}

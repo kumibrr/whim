@@ -1,144 +1,142 @@
 import SwiftUI
 import WhimCore
 import WhimIPhone
+
+private enum SettingsSection: String, CaseIterable, Hashable {
+    case webhook = "Webhook", audio = "Audio", titles = "Titles", permissions = "Access", watch = "Watch", reset = "Reset"
+    static let jumpTargets: [SettingsSection] = [.webhook, .audio, .titles, .permissions, .watch]
+}
+
 struct PreferencesView: View {
     var model: IPhoneModel
     let settings: SettingsProjection
-    @State private var language: String
+    @State private var editor: SettingsEditor
     @State private var confirm = false
+    @State private var section: SettingsSection = .webhook
+    @State private var position = ScrollPosition(idType: SettingsSection.self)
     init(model: IPhoneModel, settings: SettingsProjection) {
         self.model = model; self.settings = settings
-        _language = State(initialValue: settings.preferences.transcriptionLocaleIdentifier ?? "")
+        _editor = State(initialValue: SettingsEditor(client: model.client, preferences: settings.preferences))
     }
     private let choices: [(RetentionPolicy, String)] = [(.immediately, "Immediately"), (.oneDay, "1 day"), (.sevenDays, "7 days"), (.thirtyDays, "30 days"), (.ninetyDays, "90 days"), (.never, "Never")]
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                Text("Make Whim your own.")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                SettingsCard {
-                    WebhookConfigurationView(model: model, configuration: settings.webhook)
+            VStack(alignment: .leading, spacing: 36) {
+                settingsSection(.webhook, title: "Webhook") {
+                    WebhookConfigurationView(model: model, editor: editor.webhook, configuration: settings.webhook)
                 }
-                SettingsCard(title: "Audio retention", symbol: "externaldrive") {
-                    Text("Keep audio after delivery").font(.subheadline.weight(.medium))
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120))], spacing: 10) {
-                        ForEach(choices, id: \.1) { policy, label in
-                            retentionChoice(policy, label: label)
+                settingsSection(.audio, title: "Audio retention") {
+                    HStack {
+                        Text("Keep audio after delivery")
+                        Spacer()
+                        Picker("Keep audio", selection: $editor.retentionPolicy) {
+                            ForEach(choices, id: \.0) { policy, label in Text(label).tag(policy) }
                         }
+                        .pickerStyle(.menu).labelsHidden().accessibilityIdentifier("retention-picker")
                     }
-                    Text("Unsent and recovered Notes are always kept until you delete them. Timeline metadata remains after audio expires.")
-                        .font(.footnote).foregroundStyle(.secondary)
+                    footnote("Unsent and recovered Notes are always kept until you delete them. Timeline metadata remains after audio expires.")
                 }
-                SettingsCard(title: "On-device titles", symbol: "text.bubble") {
-                    Toggle("Transcription", isOn: Binding(get: { settings.preferences.transcriptionEnabled }, set: { update(transcription: $0) }))
-                        .accessibilityLabel("Transcription enabled")
-                    Text("Only on-device recognition is used. No full transcript is stored.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                    Divider()
-                    Text("Recognition language").font(.subheadline.weight(.medium))
-                    TextField("Device language (e.g. es-ES)", text: $language)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled().whimInput("Transcription language")
-                    Button("Save language") { update(saveLanguage: true) }
+                settingsSection(.titles, title: "On-device titles") {
+                    Toggle("Transcription", isOn: $editor.transcriptionEnabled).accessibilityLabel("Transcription enabled")
+                    footnote("Only on-device recognition is used. No full transcript is stored.")
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Transcription language").font(.subheadline).foregroundStyle(.secondary)
+                        TextField(editor.deviceLanguage, text: $editor.language)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled().whimInput("Transcription language")
+                    }
+                    footnote("Defaults to your iPhone language.")
                 }
-                SettingsCard(title: "Permissions", symbol: "hand.raised") {
+                settingsSection(.permissions, title: "Permissions") {
                     permission(.microphone, status: settings.permissions.microphone, title: "Microphone")
-                    Divider()
                     permission(.speech, status: settings.permissions.speech, title: "Speech recognition")
-                    Divider()
                     permission(.notifications, status: settings.permissions.notifications, title: "Notifications")
-                    Text("Choose whether notification previews show Note titles on the Lock Screen in system Settings → Notifications → Whim → Show Previews.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                    Button("Notification preview settings") { systemSettings() }
+                    footnote("Choose whether notification previews show Note titles on the Lock Screen in system Settings → Notifications → Whim → Show Previews.")
+                    Button("Notification preview settings", systemImage: "bell.badge") { systemSettings() }.whimGlassButton()
                 }
-                SettingsCard(title: "Apple Watch", symbol: "applewatch") {
+                settingsSection(.watch, title: "Apple Watch") {
                     Text("Watch synchronization \(settings.watch.availability).")
-                    Text("Last synchronized: \(settings.watch.lastSynchronizedAt.map(TimelineFormat.date) ?? "Not yet synchronized")")
-                        .font(.footnote).foregroundStyle(.secondary)
+                    footnote("Last synchronized: \(settings.watch.lastSynchronizedAt.map(TimelineFormat.date) ?? "Not yet synchronized")")
                     if settings.watch.resetState == "pending" {
                         Text("Reset pending on Apple Watch. It will finish after reconnection.").foregroundStyle(.secondary)
                     }
                     if settings.watch.resetState == "synchronized" {
                         Text("Reset completed on both devices.").foregroundStyle(.secondary)
                     }
-                    Text("A disconnected Watch cannot be erased immediately.")
-                        .font(.footnote).foregroundStyle(.secondary)
+                    footnote("A disconnected Watch cannot be erased immediately.")
                 }
-                SettingsCard(title: "Reset", symbol: "arrow.counterclockwise") {
-                    Text("Remove all local Notes and restore Whim’s settings.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                    Button("Reset Whim", role: .destructive) { confirm = true }
-                        .foregroundStyle(.red)
+                settingsSection(.reset, title: "Reset") {
+                    footnote("Remove all local Notes and restore Whim’s settings.")
+                    Button("Reset Whim", systemImage: "arrow.counterclockwise", role: .destructive) { confirm = true }
+                        .whimGlassButton().tint(.red)
                 }
-                if let error = model.error { WhimErrorText(message: error.message) }
+                if let error = editor.preferencesError ?? model.error { WhimErrorText(message: error.message) }
             }
-            .frame(maxWidth: 600)
+            .scrollTargetLayout()
+            .frame(maxWidth: 600, alignment: .leading)
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 32)
         }
+        .scrollPosition($position)
+        .onChange(of: position.viewID(type: SettingsSection.self)) { _, id in
+            if let id, SettingsSection.jumpTargets.contains(id) { section = id }
+        }
+        .whimTopBar {
+            Picker("Section", selection: Binding(get: { section }, set: { target in
+                section = target
+                withAnimation { position.scrollTo(id: target, anchor: .top) }
+            })) {
+                ForEach(SettingsSection.jumpTargets, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 20).padding(.vertical, 8)
+            .frame(maxWidth: 600)
+        }
         .scrollDismissesKeyboard(.interactively)
         .background(Color.black)
-        .disabled(model.isPending)
+        .disabled(model.isPending || editor.isPending)
         .accessibilityIdentifier("preferences")
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)
         .toolbar(.visible, for: .navigationBar)
-            .sheet(isPresented: $confirm) {
-                ConfirmationView(title: "Reset Whim on this iPhone?", message: "This removes all local audio, Notes, history, webhook configuration and credentials. It cannot revoke delivery accepted by your server or erase a disconnected Watch immediately.", confirm: "Confirm reset", error: model.error?.message, onCancel: { confirm = false }, onConfirm: { await model.perform { try await model.client.reset() } })
-                    .presentationDetents([.medium, .large]).interactiveDismissDisabled(model.isPending)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save", systemImage: "checkmark") {
+                    Task { await editor.save(); await model.refresh() }
+                }
+                .whimProminentGlassButton().tint(.blue)
+                .disabled(!editor.canSave)
+                .accessibilityLabel("Save settings")
             }
-    }
-    private func retentionChoice(_ policy: RetentionPolicy, label: String) -> some View {
-        let selected = settings.preferences.retentionPolicy == policy
-        return Button { update(retention: policy) } label: {
-            HStack(spacing: 6) {
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .accessibilityHidden(true)
-                Text(label).fixedSize(horizontal: false, vertical: true)
-            }
-            .font(.subheadline.weight(.medium))
-            .frame(maxWidth: .infinity, minHeight: 48)
-            .padding(.horizontal, 8)
-            .foregroundStyle(selected ? Color.black : Color.white)
-            .background(selected ? Color.white : Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(selected ? 0 : 0.18), lineWidth: 0.5))
-            .contentShape(RoundedRectangle(cornerRadius: 14))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Keep audio: \(label)")
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .sheet(isPresented: $confirm) {
+            ConfirmationView(title: "Reset Whim on this iPhone?", message: "This removes all local audio, Notes, history, webhook configuration and credentials. It cannot revoke delivery accepted by your server or erase a disconnected Watch immediately.", confirm: "Confirm reset", error: model.error?.message, onCancel: { confirm = false }, onConfirm: { await model.perform { try await model.client.reset() } })
+                .presentationDetents([.medium, .large]).interactiveDismissDisabled(model.isPending)
+        }
     }
+    private func settingsSection<Content: View>(_ id: SettingsSection, title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .id(id)
+    }
+    private func footnote(_ text: String) -> some View { Text(text).font(.footnote).foregroundStyle(.secondary) }
     private func permission(_ kind: PermissionKind, status: PermissionStatus, title: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("\(title): \(status.rawValue.replacingOccurrences(of: "_", with: " "))")
+        HStack {
+            Text(title)
+            Spacer()
             if status == .notDetermined {
-                Button("Allow \(kind.rawValue)") { Task { await model.perform { _ = try await model.client.requestPermission(kind) } } }
-            } else if status == .denied || status == .restricted { Button("Open \(kind.rawValue) settings") { systemSettings() } }
+                Button("Allow") { Task { await model.perform { _ = try await model.client.requestPermission(kind) } } }
+                    .whimGlassButton().accessibilityLabel("Allow \(kind.rawValue)")
+            } else if status == .denied || status == .restricted {
+                Button("Open settings") { systemSettings() }
+                    .whimGlassButton().accessibilityLabel("Open \(kind.rawValue) settings")
+            } else {
+                Text(status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized).foregroundStyle(.secondary)
+            }
         }
+        .frame(minHeight: 44)
     }
     private func systemSettings() { Task { await model.perform { try await model.client.openSystemSettings() } } }
-    private func update(retention: RetentionPolicy? = nil, transcription: Bool? = nil, saveLanguage: Bool = false) {
-        let locale = language.trimmingCharacters(in: .whitespacesAndNewlines)
-        Task { await model.perform { try await model.client.updatePreferences(.init(retentionPolicy: retention ?? settings.preferences.retentionPolicy, transcriptionEnabled: transcription ?? settings.preferences.transcriptionEnabled, transcriptionLocaleIdentifier: saveLanguage ? (locale.isEmpty ? nil : locale) : settings.preferences.transcriptionLocaleIdentifier)) } }
-    }
-}
-
-private struct SettingsCard<Content: View>: View {
-    var title: String? = nil
-    var symbol: String? = nil
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if let title, let symbol {
-                Label(title, systemImage: symbol)
-                    .font(.headline)
-                    .accessibilityAddTraits(.isHeader)
-                Divider()
-            }
-            content
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .whimGlass(in: RoundedRectangle(cornerRadius: 28))
-    }
 }
