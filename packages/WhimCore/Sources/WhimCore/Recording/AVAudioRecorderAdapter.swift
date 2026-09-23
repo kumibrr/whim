@@ -89,10 +89,7 @@ public final class AVAudioRecorderAdapter: NSObject, AudioRecorder, @unchecked S
             #if os(watchOS)
             try WatchAudioSessionAdapter().activate()
             #elseif os(iOS)
-            let session = AVAudioSession.sharedInstance()
-            // spokenAudio is a playback mode; physical iPhones can reject it for capture.
-            try session.setCategory(.record, mode: .default)
-            try session.setActive(true)
+            try IPhoneAudioSessionAdapter().activate()
             #endif
 
             do {
@@ -252,7 +249,7 @@ public final class AVAudioRecorderAdapter: NSObject, AudioRecorder, @unchecked S
         #if os(watchOS)
         WatchAudioSessionAdapter().deactivate()
         #elseif os(iOS)
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        IPhoneAudioSessionAdapter().deactivate()
         #endif
     }
 }

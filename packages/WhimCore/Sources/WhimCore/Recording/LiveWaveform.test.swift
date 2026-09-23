@@ -1,5 +1,5 @@
 import XCTest
-import WhimIPhone
+import WhimCore
 
 final class LiveWaveformTests: XCTestCase {
     func testTheDefaultWaveformIsTheLogoCurveSpanningTheFullWidth() {

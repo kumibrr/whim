@@ -59,14 +59,24 @@ final class WatchRecordingUITests: XCTestCase {
         app.launchArguments = WatchUITestConfiguration.arguments
         app.launch()
         XCTAssertTrue(app.buttons["watch-stop"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.descendants(matching: .any)["watch-waveform"].firstMatch.exists)
+        let waveform = app.descendants(matching: .any)["watch-waveform"].firstMatch
+        XCTAssertTrue(waveform.exists)
         XCTAssertTrue(app.staticTexts["watch-recorder"].exists)
+        // The mark sits in its own band between the elapsed time and the control.
+        XCTAssertLessThanOrEqual(app.staticTexts["watch-elapsed"].frame.maxY, waveform.frame.minY)
+        XCTAssertLessThanOrEqual(waveform.frame.maxY, app.buttons["watch-stop"].frame.minY)
+        let controlFrame = app.buttons["watch-stop"].frame
+        let headerBottom = app.staticTexts["watch-elapsed"].frame.maxY
         let historyHeading = app.navigationBars["Previous Notes"]
         XCTAssertTrue(!historyHeading.exists
             || historyHeading.frame.minY >= app.windows.firstMatch.frame.maxY - 2)
         app.buttons["watch-stop"].tap()
         XCTAssertTrue(app.buttons["watch-record"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["watch-recent-notes"].exists)
+        // Idle keeps the same layout, so the mark travels in place rather than jumping.
+        XCTAssertEqual(app.buttons["watch-record"].frame, controlFrame)
+        XCTAssertGreaterThanOrEqual(waveform.frame.minY, headerBottom)
+        XCTAssertLessThanOrEqual(waveform.frame.maxY, app.buttons["watch-record"].frame.minY)
         app.swipeUp()
         XCTAssertTrue(app.staticTexts["Setup required"].waitForExistence(timeout: 10))
     }

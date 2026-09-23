@@ -65,6 +65,7 @@ final class WatchModel {
     private(set) var synchronization = WatchSettingsProjection.unavailable
     private(set) var elapsed: TimeInterval = 0
     private(set) var peakPowerDBFS = -160.0
+    private(set) var recordingTone = 0.0
     private(set) var warned = false
     private(set) var playback: PlaybackProjection?
     private var commandError: String?
@@ -160,7 +161,7 @@ final class WatchModel {
         let existing = try await client.activeRecording()
         recording = try await client.startRecording(source: .appleWatch)
         showsRecent = false
-        if existing == nil { elapsed = 0; peakPowerDBFS = -160; warned = false; haptic(.start) }
+        if existing == nil { elapsed = 0; peakPowerDBFS = -160; recordingTone = 0; warned = false; haptic(.start) }
     }
     func stop() async {
         lastCaptureCommand = .stop
@@ -168,6 +169,7 @@ final class WatchModel {
             _ = try await self.client.stopRecording()
             self.recording = nil
             self.peakPowerDBFS = -160
+            self.recordingTone = 0
             self.haptic(.stop)
             Task { await self.refreshNotes() }
         }
@@ -178,6 +180,7 @@ final class WatchModel {
             try await self.client.discardRecording()
             self.recording = nil
             self.peakPowerDBFS = -160
+            self.recordingTone = 0
             self.haptic(.stop)
         }
     }
@@ -260,13 +263,19 @@ final class WatchModel {
                     self.captureRevision += 1
                     self.recording = event.recording
                     self.peakPowerDBFS = -160
+                    self.recordingTone = 0
                 case .recordingStopped, .recordingDiscarded:
                     self.captureRevision += 1
                     self.recording = nil
                     self.peakPowerDBFS = -160
+                    self.recordingTone = 0
                 case .recordingProgress:
                     if let elapsed = event.elapsedSeconds { self.elapsed = elapsed }
                     if let power = event.peakPowerDBFS { self.peakPowerDBFS = Double(power) }
+                    if let tone = event.recordingTone, tone.isFinite {
+                        let bounded = max(0, min(1, Double(tone)))
+                        if abs(bounded - self.recordingTone) >= 0.015 { self.recordingTone = bounded }
+                    }
                 case .recordingMaximumDurationWarning: self.warned = true; self.haptic(.notification)
                 case .noteChanged, .noteDeleted: Task { await self.refreshNotes() }
                 case .notesReset:

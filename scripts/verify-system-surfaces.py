@@ -52,5 +52,9 @@ for bundle in [iphone, watch]:
         assert actions['RecordWhimIntent']['authenticationPolicy'] == 0, 'Record must permit locked execution'
         assert actions['RecordWhimIntent']['openAppWhenRun'] is False
         assert actions['StopWhimRecordingIntent']['openAppWhenRun'] is False
+        extension = json.loads((iphone / 'PlugIns/WhimLiveActivity.appex/Metadata.appintents/extract.actionsdata').read_text())['actions']
+        for metadata_actions in [actions, extension]:
+            # Controls run intents in the widget extension unless LiveActivityIntent routes them to the app process.
+            assert 'com.apple.link.systemProtocol.SessionStarting' in metadata_actions['RecordWhimIntent']['systemProtocols'], 'Record control must run in the app process'
 
 print('Built system surfaces: four App Groups, extension embedding, Live Activity support, and recording shortcuts verified.')

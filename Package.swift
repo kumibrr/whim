@@ -2,8 +2,8 @@
 import PackageDescription
 import Foundation
 
-let modelSources = ["recording/LiveWaveform.swift", "timeline/TimelineFormat.swift", "app-composition/IPhoneModel.swift", "app-composition/IPhoneError.swift", "note-detail/NoteDetailModel.swift", "webhook-configuration/WebhookEditor.swift", "preferences/SettingsEditor.swift"]
-let unitSources = ["recording/LiveWaveform.test.swift", "timeline/TimelineFormat.test.swift", "app-composition/IPhoneError.test.swift"]
+let modelSources = ["timeline/TimelineFormat.swift", "app-composition/IPhoneModel.swift", "app-composition/IPhoneError.swift", "note-detail/NoteDetailModel.swift", "webhook-configuration/WebhookEditor.swift", "preferences/SettingsEditor.swift"]
+let unitSources = ["timeline/TimelineFormat.test.swift", "app-composition/IPhoneError.test.swift"]
 let integrationSources = ["app-composition/IPhoneModel.integration.test.swift", "app-composition/IPhoneModel.test-support.swift", "note-detail/NoteDetailModel.integration.test.swift", "webhook-configuration/WebhookEditor.integration.test.swift", "preferences/SettingsEditor.integration.test.swift"]
 let sourceRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("src/iphone")
 let allSources = (FileManager.default.enumerator(atPath: sourceRoot.path)?.allObjects as? [String] ?? []).filter {
