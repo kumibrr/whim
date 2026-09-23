@@ -39,7 +39,8 @@ The Whim logo waveform spans the center of the screen: a heavy white stroke
 that runs in flat from both edges, through the logo's voice-shaped curve and
 its floating dot. Stroke weight and height follow the logo's proportions. It
 does not animate while idle. A circular glass Record button sits at bottom center,
-above the safe area. A glass settings button sits at top right and contains
+above the safe area. No wordmark accompanies the logo waveform; the waveform
+is the mark. A glass settings button sits at top right and contains
 only the settings icon visually; its accessibility label is Settings.
 
 Below Record, a small tappable hint reads exactly:
@@ -67,8 +68,10 @@ Reduce Motion applies measurement and state changes without animated
 interpolation.
 
 The Watch capture screen uses the same waveform, geometry and transitions,
-scaled to its width. WhimCore owns the shared waveform so both devices draw
-one mark. The Watch keeps AVAudioRecorder, which measures loudness but not
+scaled to its width. It occupies its own band between the recorder header
+and the Record/Stop control, clear of both; idle keeps the header's space so
+the mark travels in place. WhimCore owns the shared waveform so both devices
+draw one mark. The Watch keeps AVAudioRecorder, which measures loudness but not
 tonal brightness, so its voice trace scales with volume while its crest
 heights keep their neutral shape until a tone measurement is available.
 

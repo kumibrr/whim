@@ -21,41 +21,40 @@ struct WatchCaptureView: View {
     private var captureContent: some View {
         ZStack {
             Color.black
-            // One waveform outlives both states, so the logo mark can travel to the
-            // recording line and back instead of being swapped out.
-            LiveWaveformView(power: model.peakPowerDBFS, tone: model.recordingTone,
-                             isResting: model.recording == nil,
-                             accessibilityIdentifier: "watch-waveform")
-                .frame(height: 110)
 
             VStack(spacing: model.visibleFailure == nil ? 8 : 4) {
-                if model.recording != nil {
+                // Idle reserves the recorder header, so the waveform keeps its band
+                // and the mark travels in place instead of jumping.
+                VStack(spacing: model.visibleFailure == nil ? 8 : 4) {
                     if model.visibleFailure == nil {
-                    Text("RECORDING")
-                        .font(.system(size: 9, weight: .medium))
-                        .tracking(2)
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("watch-recorder")
+                        Text("RECORDING")
+                            .font(.system(size: 9, weight: .medium))
+                            .tracking(2)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("watch-recorder")
                     }
                     Text(Duration.seconds(model.elapsed).formatted(.time(pattern: .minuteSecond)))
                         .font(.system(size: 18, weight: .light, design: .monospaced))
                         .monospacedDigit()
                         .accessibilityIdentifier("watch-elapsed")
-                } else {
-                    Text("whim")
-                        .font(.system(size: 18, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.45))
-                        .accessibilityHidden(true)
                 }
+                .opacity(model.recording == nil ? 0 : 1)
+                .accessibilityHidden(model.recording == nil)
 
-                Spacer()
+                // One waveform outlives both states, so the logo mark can travel to the
+                // recording line and back instead of being swapped out.
+                LiveWaveformView(power: model.peakPowerDBFS, tone: model.recordingTone,
+                                 isResting: model.recording == nil,
+                                 accessibilityIdentifier: "watch-waveform")
+                    .frame(maxHeight: .infinity)
+                    .padding(.horizontal, -8)
+
                 if model.recording != nil && model.warned {
                     Text("Stopping at five minutes")
                         .font(.caption2)
                         .accessibilityIdentifier("watch-limit-warning")
                 }
                 captureControl
-                if #unavailable(watchOS 26) { Spacer() }
 
                 if model.recording != nil {
                     Button(role: .destructive) {
@@ -78,6 +77,8 @@ struct WatchCaptureView: View {
                     }
                     .font(.system(size: 10))
                     .foregroundStyle(.white.opacity(0.5))
+                    // Matches Discard's height so the waveform's band holds across states.
+                    .frame(minHeight: 44)
                     .accessibilityLabel("Scroll for previous Notes")
                     .accessibilityIdentifier("watch-history-hint")
                 }

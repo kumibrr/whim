@@ -82,7 +82,9 @@ On a physical Watch with microphone access granted:
 
 1. Stop any Recording Session. Expect the idle capture screen to show the Whim
    logo waveform — flat lead-in and lead-out, the logo curve and its floating
-   dot — as a stroke heavy enough to read as the app mark. It must not animate.
+   dot — as a stroke heavy enough to read as the app mark, with no "whim"
+   wordmark. It sits above the Record button with space on both sides, clear of
+   the clock and the control. It must not animate.
 2. Tap Record in a quiet room. Expect the mark to travel into a flat line rather
    than being swapped out, and to stay flat until somebody speaks nearby.
 3. Speak at varying loudness. Expect a voice trace that rises and falls with

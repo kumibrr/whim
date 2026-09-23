@@ -11,10 +11,6 @@ struct CaptureHomeView: View {
             HStack {
                 if model.areFailuresCollapsed {
                     ErrorNotificationsButton(model: model)
-                } else {
-                    Text("whim").font(.system(size: 22, weight: .medium, design: .rounded))
-                        .tracking(-1).foregroundStyle(.white.opacity(0.45)).accessibilityHidden(
-                            true)
                 }
                 Spacer()
                 Button(action: settings) {
