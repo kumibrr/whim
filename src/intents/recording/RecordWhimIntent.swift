@@ -42,6 +42,11 @@ struct RecordWhimIntent: AudioRecordingIntent {
     }
 }
 
+#if os(iOS)
+/// Routes the Lock Screen control to the app's microphone owner instead of the widget extension.
+extension RecordWhimIntent: LiveActivityIntent {}
+#endif
+
 #if !WHIM_WIDGET_EXTENSION
 extension RecordWhimIntent: ForegroundContinuableIntent {}
 #else
