@@ -12,13 +12,14 @@ struct WebhookConfigurationView: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Webhook").whimHeading().accessibilityIdentifier("webhook-configuration").onTapGesture { focused = false }
+            Label("Webhook", systemImage: "link").font(.headline).accessibilityAddTraits(.isHeader).accessibilityIdentifier("webhook-configuration").onTapGesture { focused = false }
             if let configuration { Text("Current destination: \(destinationLabel(configuration.destination))").foregroundStyle(.secondary) }
             TextField(configuration == nil ? "https://your-workflow.example/whim" : "Leave blank to keep current URL", text: $editor.endpoint)
                 .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled().focused($focused).whimInput("Webhook HTTPS URL").accessibilityIdentifier("webhook-url")
             secret("Bearer token", value: $editor.bearer, exists: configuration?.hasBearerToken == true, id: "webhook-bearer-token")
             secret("HMAC secret", value: $editor.hmac, exists: configuration?.hasHMACSecret == true, id: "webhook-hmac-secret")
-            Text("Custom headers").whimHeading()
+            Divider()
+            Text("Custom headers").font(.subheadline.weight(.semibold)).accessibilityAddTraits(.isHeader)
             ForEach(Array(editor.existingHeaders(configuration).enumerated()), id: \.offset) { index, header in
                 VStack(alignment: .leading) {
                     Text("\(header.name) · ••••")
