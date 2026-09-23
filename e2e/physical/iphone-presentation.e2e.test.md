@@ -173,3 +173,33 @@ failure during capture, verify collapse/reopen leaves Stop and Discard usable.
 Closest deterministic coverage: IPhoneModel integration tests cover collapse,
 error counts, recovery preservation and resolution; the onboarding iPhone E2E
 journey covers upward swipe, the warning button and reopening the recovery card.
+
+## Categorized settings
+
+Status: pending physical-device execution.
+
+1. Open Settings. Verify Webhook, Audio retention, On-device titles, Permissions,
+   Apple Watch, and Reset have distinct rounded cards, readable headings and icons.
+2. On iOS 26 or later, inspect native Liquid Glass. On iOS 18, inspect the material
+   fallback. Enable Reduce Transparency: expect opaque, clearly bounded cards.
+3. Enable the largest accessibility text size and VoiceOver. Navigate by headings,
+   edit webhook and language fields, and reach every retention choice and Reset.
+   Expect wrapping labels, no clipped controls, and a spoken selected retention
+   choice. Verify the checkmark and contrast also identify the selected choice.
+4. Change retention, leave Settings and reopen it. Verify the selection persists.
+   Cancel Reset and verify settings remain; confirm Reset only with disposable data.
+
+Closest deterministic coverage: `e2e/iphone/settings-and-reset.e2e.test.yaml` checks
+category headings, configures and tests a webhook, changes retention and exercises
+both reset cancellation and confirmation through the installed application.
+
+Simulator verification, 2026-09-22: the settings-and-reset Maestro journey passed
+on a fresh iPhone 17 Pro simulator running iOS 27. Screenshots were inspected for
+category card boundaries, heading hierarchy, field layout, and section spacing.
+This does not establish physical-device, VoiceOver, largest Dynamic Type, Reduce
+Transparency, or iOS 18 fallback acceptance. The initial aggregate run was blocked by
+`testScheduledAttemptPublishesSendingBeforeTransportCompletes` waiting indefinitely.
+On 2026-09-23, a fresh `NSUnbufferedIO=YES npm run test:all` completed successfully,
+including all ten iPhone E2E flows and Watch E2E. No delivery-code change was needed.
+The earlier stall was not reproduced; its cause remains unconfirmed. Physical
+acceptance cases above remain pending.
