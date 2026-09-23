@@ -126,3 +126,19 @@ test('rejects system-surface tests missing their dedicated target', async (t) =>
   });
   assert.ok((await checkRepository(root)).some(error => error.includes('RecordWhimIntent.test.swift: missing from WhimSystemSurfaceTests')));
 });
+
+test('rejects dangling Xcode package products before a clean extension build', async (t) => {
+  const project = `
+    TARGET /* WhimComplication */ = {isa = PBXNativeTarget; name = WhimComplication; packageProductDependencies = (CORE /* WhimCore */,); };
+    BUILD /* WhimCore in Frameworks */ = {isa = PBXBuildFile; productRef = CORE /* WhimCore */; };
+    PACKAGE /* WhimCore */ = {isa = XCLocalSwiftPackageReference; relativePath = ../packages/WhimCore; };
+  `;
+  const root = await fixture(t, { 'ios/whim.xcodeproj/project.pbxproj': project });
+  const errors = await checkRepository(root);
+  assert.ok(errors.some(error => error.includes('WhimComplication') && error.includes('CORE')));
+  assert.ok(errors.some(error => error.includes('BUILD') && error.includes('CORE')));
+  await writeFile(path.join(root, 'ios/whim.xcodeproj/project.pbxproj'), project + `
+    CORE /* WhimCore */ = {isa = XCSwiftPackageProductDependency; package = PACKAGE /* WhimCore */; productName = WhimCore; };
+  `);
+  assert.deepEqual(await checkRepository(root), []);
+});

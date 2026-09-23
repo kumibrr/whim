@@ -220,6 +220,17 @@ export async function checkRepository(root = process.cwd()) {
   }
 
   if (xcodeProject) {
+    const objects = pbxObjects(xcodeProject);
+    for (const [identifier, body] of objects) {
+      const references = listIdentifiers(body, 'packageProductDependencies');
+      const product = body.match(/productRef\s*=\s*([A-Za-z0-9_]+)/)?.[1];
+      if (product) references.push(product);
+      for (const reference of references) {
+        if (scalar(objects.get(reference) ?? '', 'isa') !== 'XCSwiftPackageProductDependency') {
+          errors.push(`${scalar(body, 'name') ?? identifier}: missing Xcode package product ${reference}`);
+        }
+      }
+    }
     const memberships = xcodeSourceMemberships(xcodeProject);
     for (const file of normalizedFiles) {
       const relative = file.slice('src/iphone/'.length);

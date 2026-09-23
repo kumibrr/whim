@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "ios": "./scripts/run-iphone.sh",
+    "verify:release": "./scripts/archive-release.sh",
     "test-server": "WHIM_WEBHOOK_PORT=${WHIM_WEBHOOK_PORT:-8787} node packages/WhimCore/Sources/WhimCore/WebhookConfiguration/Fixtures/webhook-server.mjs",
     "test:unit:tooling": "node --test scripts/*.test.mjs packages/WhimCore/Sources/WhimCore/WebhookConfiguration/Fixtures/*.test.mjs",
     "test:unit:swift": "./scripts/test-swift.sh unit",

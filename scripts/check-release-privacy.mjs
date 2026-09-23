@@ -17,7 +17,7 @@ async function files(root, relative) {
   }
   return result;
 }
-export async function checkReleasePrivacy(root = process.cwd()) {
+export async function checkReleasePrivacy(root = process.cwd(), app) {
   const errors = [];
   const paths = ['package.json', 'package-lock.json', ...await files(root, 'src'), ...await files(root, 'packages'), ...await files(root, 'ios')];
   for (const path of paths) {
@@ -26,23 +26,29 @@ export async function checkReleasePrivacy(root = process.cwd()) {
     catch (error) { if (error.code === 'ENOENT') continue; throw error; }
     if (disallowed.test(source)) errors.push(`${path}: disallowed tracking/diagnostics SDK reference`);
   }
-  try {
-    const manifest = JSON.parse(execFileSync('python3', ['-c',
-      'import json,plistlib,sys; print(json.dumps(plistlib.load(open(sys.argv[1], "rb"))))',
-      join(root, 'ios/whim/PrivacyInfo.xcprivacy')], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
-    if (manifest.NSPrivacyTracking !== false || (manifest.NSPrivacyTrackingDomains ?? []).length) errors.push('Privacy manifest: tracking must be disabled');
-    if (!Array.isArray(manifest.NSPrivacyCollectedDataTypes) || manifest.NSPrivacyCollectedDataTypes.length) errors.push('Privacy manifest: unexpected app-operator data collection');
-    const reasons = new Map((manifest.NSPrivacyAccessedAPITypes ?? []).map(item => [item.NSPrivacyAccessedAPIType, item.NSPrivacyAccessedAPITypeReasons]));
-    for (const [category, required] of Object.entries({
-      UserDefaults: ['CA92.1', '1C8F.1'], FileTimestamp: ['C617.1'], SystemBootTime: ['35F9.1'],
-    })) {
-      for (const reason of required) if (!reasons.get(`NSPrivacyAccessedAPICategory${category}`)?.includes(reason)) errors.push(`Privacy manifest: missing ${category} reason ${reason}`);
-    }
-  } catch { errors.push('Privacy manifest: missing or invalid plist'); }
+  const manifests = [join(root, 'ios/whim/PrivacyInfo.xcprivacy')];
+  if (app) for (const bundle of ['', 'PlugIns/WhimLiveActivity.appex', 'Watch/WhimWatch.app', 'Watch/WhimWatch.app/PlugIns/WhimComplication.appex']) {
+    manifests.push(join(app, bundle, 'PrivacyInfo.xcprivacy'));
+  }
+  for (const path of manifests) {
+    try {
+      const manifest = JSON.parse(execFileSync('python3', ['-c',
+        'import json,plistlib,sys; print(json.dumps(plistlib.load(open(sys.argv[1], "rb"))))',
+        path], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
+      if (manifest.NSPrivacyTracking !== false || (manifest.NSPrivacyTrackingDomains ?? []).length) errors.push(`${path}: tracking must be disabled`);
+      if (!Array.isArray(manifest.NSPrivacyCollectedDataTypes) || manifest.NSPrivacyCollectedDataTypes.length) errors.push(`${path}: unexpected app-operator data collection`);
+      const reasons = new Map((manifest.NSPrivacyAccessedAPITypes ?? []).map(item => [item.NSPrivacyAccessedAPIType, item.NSPrivacyAccessedAPITypeReasons]));
+      for (const [category, required] of Object.entries({
+        UserDefaults: ['CA92.1', '1C8F.1'], FileTimestamp: ['C617.1'], SystemBootTime: ['35F9.1'],
+      })) {
+        for (const reason of required) if (!reasons.get(`NSPrivacyAccessedAPICategory${category}`)?.includes(reason)) errors.push(`${path}: missing ${category} reason ${reason}`);
+      }
+    } catch { errors.push(`${path}: missing or invalid plist`); }
+  }
   return errors;
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const errors = await checkReleasePrivacy(process.argv[2] ?? process.cwd());
+  const errors = await checkReleasePrivacy(process.argv[2] ?? process.cwd(), process.argv[3]);
   if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1; }
   else console.log('Release privacy source and manifest checks passed.');
 }
