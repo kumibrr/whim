@@ -21,37 +21,40 @@ struct WatchCaptureView: View {
     private var captureContent: some View {
         ZStack {
             Color.black
-            WatchWaveformView(power: model.recording == nil ? -160 : model.peakPowerDBFS)
-                .frame(height: 110)
 
             VStack(spacing: model.visibleFailure == nil ? 8 : 4) {
-                if model.recording != nil {
+                // Idle reserves the recorder header, so the waveform keeps its band
+                // and the mark travels in place instead of jumping.
+                VStack(spacing: model.visibleFailure == nil ? 8 : 4) {
                     if model.visibleFailure == nil {
-                    Text("RECORDING")
-                        .font(.system(size: 9, weight: .medium))
-                        .tracking(2)
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("watch-recorder")
+                        Text("RECORDING")
+                            .font(.system(size: 9, weight: .medium))
+                            .tracking(2)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("watch-recorder")
                     }
                     Text(Duration.seconds(model.elapsed).formatted(.time(pattern: .minuteSecond)))
                         .font(.system(size: 18, weight: .light, design: .monospaced))
                         .monospacedDigit()
                         .accessibilityIdentifier("watch-elapsed")
-                } else {
-                    Text("whim")
-                        .font(.system(size: 18, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.45))
-                        .accessibilityHidden(true)
                 }
+                .opacity(model.recording == nil ? 0 : 1)
+                .accessibilityHidden(model.recording == nil)
 
-                Spacer()
+                // One waveform outlives both states, so the logo mark can travel to the
+                // recording line and back instead of being swapped out.
+                LiveWaveformView(power: model.peakPowerDBFS, tone: model.recordingTone,
+                                 isResting: model.recording == nil,
+                                 accessibilityIdentifier: "watch-waveform")
+                    .frame(maxHeight: .infinity)
+                    .padding(.horizontal, -8)
+
                 if model.recording != nil && model.warned {
                     Text("Stopping at five minutes")
                         .font(.caption2)
                         .accessibilityIdentifier("watch-limit-warning")
                 }
                 captureControl
-                if #unavailable(watchOS 26) { Spacer() }
 
                 if model.recording != nil {
                     Button(role: .destructive) {
@@ -74,6 +77,8 @@ struct WatchCaptureView: View {
                     }
                     .font(.system(size: 10))
                     .foregroundStyle(.white.opacity(0.5))
+                    // Matches Discard's height so the waveform's band holds across states.
+                    .frame(minHeight: 44)
                     .accessibilityLabel("Scroll for previous Notes")
                     .accessibilityIdentifier("watch-history-hint")
                 }
@@ -145,39 +150,6 @@ struct WatchCaptureView: View {
             .accessibilityIdentifier("watch-record")
             .handGestureShortcut(.primaryAction)
             .disabled(model.captureBusy)
-        }
-    }
-}
-
-private struct WatchWaveformView: View {
-    let power: Double
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var level: Double { power.isFinite ? max(0, min(1, (power + 60) / 60)) : 0 }
-
-    var body: some View {
-        WatchReactiveLine(level: level)
-            .stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: 1.25, lineCap: .round))
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: level)
-            .accessibilityLabel("Microphone level")
-            .accessibilityValue("\(Int(level * 100)) percent")
-            .accessibilityIdentifier("watch-waveform")
-    }
-}
-
-private struct WatchReactiveLine: Shape {
-    var level: Double
-    var animatableData: Double { get { level } set { level = newValue } }
-
-    func path(in rect: CGRect) -> Path {
-        Path { path in
-            for step in 0...120 {
-                let x = Double(step) / 120
-                let envelope = pow(sin(.pi * x), 2)
-                let wave = sin(8 * .pi * x) * 0.7 + sin(18 * .pi * x) * 0.3
-                let point = CGPoint(x: rect.width * x,
-                    y: rect.midY + level * rect.height * 0.42 * envelope * wave)
-                if step == 0 { path.move(to: point) } else { path.addLine(to: point) }
-            }
         }
     }
 }
