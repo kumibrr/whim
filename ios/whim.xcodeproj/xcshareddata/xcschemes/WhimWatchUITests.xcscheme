@@ -65,7 +65,6 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "6FE2CA72B8CB7CEE6161295C"
             BuildableName = "WhimWatch.app"
-            BlueprintName = "WhimWatch"
             ReferencedContainer = "container:whim.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -82,7 +81,6 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "6FE2CA72B8CB7CEE6161295C"
             BuildableName = "WhimWatch.app"
-            BlueprintName = "WhimWatch"
             ReferencedContainer = "container:whim.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
