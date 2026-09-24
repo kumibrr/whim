@@ -1,4 +1,5 @@
 import AppIntents
+import UIKit
 import WhimCore
 import XCTest
 
@@ -21,5 +22,11 @@ import XCTest
         XCTAssertEqual(RecordWhimIntent.authenticationPolicy, .alwaysAllowed)
         XCTAssertFalse(RecordWhimIntent.openAppWhenRun)
         try await client.discardRecording()
+    }
+
+    // Break: the control falls back to a generic system glyph instead of Whim's app icon waveform.
+    func testControlShowsTheAppIconSymbol() throws {
+        let image = try XCTUnwrap(UIImage(named: RecordWhimControl.symbolName, in: Bundle(for: Self.self), with: nil))
+        XCTAssertTrue(image.isSymbolImage, "Controls only render SF Symbols, so the app icon must ship as a custom symbol")
     }
 }

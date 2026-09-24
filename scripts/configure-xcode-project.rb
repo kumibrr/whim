@@ -249,6 +249,14 @@ project.targets.select { |target| %w[whim WhimWatch WhimLiveActivity WhimComplic
   end
 end
 
+# Widget surfaces render the app icon waveform as a custom symbol.
+widget_assets = file_reference(widget_group, '../src/widgets/app-composition/WidgetAssets.xcassets')
+project.targets.select { |target| %w[WhimLiveActivity WhimComplication WhimSystemSurfaceTests].include?(target.name) }.each do |target|
+  unless target.resources_build_phase.files_references.include?(widget_assets)
+    target.resources_build_phase.add_file_reference(widget_assets)
+  end
+end
+
 project.build_configurations.each do |configuration|
   %w[OTHER_CFLAGS OTHER_CPLUSPLUSFLAGS OTHER_SWIFT_FLAGS].each { |key| configuration.build_settings.delete(key) }
 end
