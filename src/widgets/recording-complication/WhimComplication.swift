@@ -49,7 +49,7 @@ private struct WhimComplicationView: View {
         } else if entry.snapshot.hasFailedNotes {
             Label("Whim", systemImage: "exclamationmark.triangle.fill").accessibilityLabel("Record a Whim. Failed Notes need attention")
         } else {
-            Label("Whim", systemImage: "waveform").accessibilityLabel("Record a Whim")
+            Label("Whim", image: "whim.waveform").accessibilityLabel("Record a Whim")
         }
     }
 }
