@@ -3,6 +3,8 @@ appId: app.whim.ios
 - runFlow: flows/clean-launch.yaml
 - tapOn: Settings
 - tapOn:
+    id: settings-webhook
+- tapOn:
     id: webhook-url
 - inputText: https://whim-fixture.invalid/receive
 - tapOn: Save settings
@@ -10,7 +12,9 @@ appId: app.whim.ios
     visible: Webhook saved. Test it to check delivery.
     timeout: 10000
 - tapOn:
-    text: Back
+    id: BackButton
+- tapOn:
+    id: BackButton
 - tapOn:
     id: record-button
 - assertVisible:

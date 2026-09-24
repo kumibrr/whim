@@ -4,6 +4,8 @@ appId: app.whim.ios
 - evalScript: '${http.post(WHIM_WEBHOOK_RESPONSE_URL, {headers: {"Content-Type": "application/json"}, body: JSON.stringify({status: 400})})}'
 - tapOn: Settings
 - tapOn:
+    id: settings-webhook
+- tapOn:
     id: webhook-url
 - inputText: https://whim-fixture.invalid/receive
 - tapOn: Save settings
@@ -11,7 +13,9 @@ appId: app.whim.ios
     visible: Webhook saved. Test it to check delivery.
     timeout: 10000
 - tapOn:
-    text: Back
+    id: BackButton
+- tapOn:
+    id: BackButton
 - tapOn:
     id: record-button
 - tapOn:
@@ -33,6 +37,8 @@ appId: app.whim.ios
 - tapOn: Close history
 - tapOn: Settings
 - tapOn:
+    id: settings-webhook
+- tapOn:
     id: webhook-url
 - inputText: https://whim-fixture.invalid/receive
 - tapOn:
@@ -49,7 +55,9 @@ appId: app.whim.ios
     centerElement: true
 - tapOn: Retry unsent Notes
 - tapOn:
-    text: Back
+    id: BackButton
+- tapOn:
+    id: BackButton
 - tapOn:
     id: history-hint
 - extendedWaitUntil:
