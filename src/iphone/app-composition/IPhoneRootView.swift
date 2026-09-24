@@ -2,7 +2,7 @@ import SwiftUI
 import WhimCore
 import WhimIPhone
 
-enum IPhoneRoute: Hashable { case settings, note(NoteID) }
+enum IPhoneRoute: Hashable { case settings, settingsSection(SettingsSection), note(NoteID) }
 struct IPhoneRootView: View {
     @Bindable var model: IPhoneModel
     var pendingLink: PendingIPhoneLink?
@@ -17,6 +17,8 @@ struct IPhoneRootView: View {
             }.navigationDestination(for: IPhoneRoute.self) { route in
                 switch route {
                 case .settings: if let settings = model.settings { PreferencesView(model: model, settings: settings) }
+                case .settingsSection(let section):
+                    if let settings = model.settings { SettingsSectionView(model: model, settings: settings, section: section) }
                 case .note(let id): NoteDetailView(root: model, noteID: id)
                 }
             }.toolbar(.hidden, for: .navigationBar)
@@ -48,7 +50,9 @@ struct IPhoneRootView: View {
                 await model.closeHistory()
                 guard await model.prepareForNavigation() else { return }
                 let parts = ([url.host].compactMap { $0 } + url.pathComponents.filter { $0 != "/" })
-                if parts.first == "settings" { path = [.settings] }
+                if parts.first == "settings" {
+                    path = [.settings] + (parts.dropFirst().first.flatMap(SettingsSection.init(rawValue:)).map { [.settingsSection($0)] } ?? [])
+                }
                 else if parts.first == "note", let raw = parts.last, let id = UUID(uuidString: raw) { path = [.note(NoteID(rawValue: id))] }
                 else { path = [] }
             }
@@ -101,7 +105,7 @@ struct IPhoneRootView: View {
     private func openWebhookSettings() {
         Task {
             await model.closeHistory()
-            if await model.prepareForNavigation() { path.append(.settings) }
+            if await model.prepareForNavigation() { path = [.settings, .settingsSection(.webhook)] }
         }
     }
     private func permission(_ kind: PermissionKind) { Task { await model.perform { _ = try await model.client.requestPermission(kind) } } }

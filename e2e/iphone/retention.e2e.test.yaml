@@ -3,17 +3,18 @@ appId: app.whim.ios
 - runFlow: flows/clean-launch.yaml
 - tapOn: Settings
 - tapOn:
+    id: settings-webhook
+- tapOn:
     id: webhook-url
 - inputText: https://whim-fixture.invalid/receive
 - tapOn: Save settings
 - extendedWaitUntil:
     visible: Webhook saved. Test it to check delivery.
     timeout: 10000
-- scrollUntilVisible:
-    element:
-      id: retention-picker
-    direction: DOWN
-    centerElement: true
+- tapOn:
+    id: BackButton
+- tapOn:
+    id: settings-audio
 - tapOn:
     id: retention-picker
 - tapOn: Immediately
@@ -21,7 +22,10 @@ appId: app.whim.ios
 - assertVisible:
     text: Save settings
     enabled: false
-- tapOn: Back
+- tapOn:
+    id: BackButton
+- tapOn:
+    id: BackButton
 - tapOn:
     id: record-button
 - tapOn:
