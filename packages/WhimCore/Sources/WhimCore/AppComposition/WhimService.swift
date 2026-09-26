@@ -360,6 +360,16 @@ public actor WhimService: WhimClient {
         return NoteDetailProjection(note: note, hasLocalAudio: files.audioError(at: note.audioURL) == nil, deliveryAttempts: attempts)
     }
 
+    public func webhookErrors() async throws -> [WebhookErrorProjection] {
+        _ = try await prepareCapture()
+        var errors: [WebhookErrorProjection] = []
+        for summary in try await store.listNotes(filter: .all) {
+            guard let note = try await store.note(id: summary.id) else { continue }
+            errors += note.delivery.failedAttempts.map { WebhookErrorProjection(note: note, failure: $0) }
+        }
+        return errors.sorted { $0.failedAt > $1.failedAt }
+    }
+
     public func retry(noteID: NoteID) async throws {
         try await runManualDelivery(noteID: noteID, recovered: false)
     }

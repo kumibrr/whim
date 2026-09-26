@@ -17,6 +17,15 @@ appId: app.whim.ios
 - extendedWaitUntil:
     visible: Test passed. Idempotency confirmed.
     timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: shortcut-webhook-errors
+    direction: DOWN
+- tapOn:
+    id: shortcut-webhook-errors
+- assertVisible: No webhook errors.
+- tapOn:
+    id: BackButton
 - tapOn:
     id: BackButton
 - tapOn:

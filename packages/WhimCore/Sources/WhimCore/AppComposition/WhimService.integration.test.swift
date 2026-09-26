@@ -600,6 +600,35 @@ final class WhimServiceIntegrationTests: XCTestCase {
         XCTAssertEqual(sent?.status, .sent)
     }
 
+    func testWebhookErrorsListReceivedFailureMessagesNewestFirst() async throws {
+        let harness = try WhimFacadeHarness(responses: [
+            HTTPResponse(statusCode: 400, body: Data("Missing field: event".utf8)),
+            HTTPResponse(statusCode: 422, body: Data("Audio rejected".utf8)),
+        ])
+        defer { harness.remove() }
+        _ = try await harness.configuration.save(.init(endpoint: "https://example.com/whim?token=abc"))
+        let client = harness.makeService()
+        _ = try await client.startRecording(source: .iphone)
+        _ = try await client.stopRecording()
+        let failed = try await waitForNote(client: client, status: .failed)
+        let noteID = NoteID(rawValue: try XCTUnwrap(UUID(uuidString: try XCTUnwrap(failed).id)))
+        harness.clock.advance(by: 60)
+        try await client.retry(noteID: noteID)
+
+        let errors = try await client.webhookErrors()
+
+        XCTAssertEqual(errors.map(\.responseStatusCode), [422, 400])
+        XCTAssertEqual(errors.map(\.message), ["Audio rejected", "Missing field: event"])
+        XCTAssertEqual(errors.first?.noteID, failed?.id)
+        XCTAssertEqual(errors.first?.noteTitle, failed?.title)
+        XCTAssertEqual(errors.first?.destination.host, "example.com")
+        XCTAssertEqual(errors.first?.destination.path, "/whim")
+        XCTAssertEqual(errors.first?.failedAt, harness.clock.now)
+        try await client.delete(noteID: noteID)
+        let afterDeletion = try await client.webhookErrors()
+        XCTAssertEqual(afterDeletion, [])
+    }
+
     func testSentAttemptDetailSurvivesReceiptReductionAndStoreReopen() async throws {
         let harness = try WhimFacadeHarness()
         defer { harness.remove() }

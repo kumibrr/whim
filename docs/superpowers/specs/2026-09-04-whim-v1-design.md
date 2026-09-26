@@ -267,7 +267,7 @@ Record starts capture immediately. The full-width central line reacts to microph
 
 Note detail offers playback, delivery details, Retry when applicable, and Delete. Recovered Notes instead offer Review, Send, and Delete.
 
-Settings includes webhook configuration and test, retention period, transcription enablement and language, notification status, Watch synchronization status, and Reset Whim. Reset requires destructive confirmation and removes local audio, metadata, history, configuration, and credentials.
+Settings includes webhook configuration and test, a webhook error log listing each failed Attempt’s status and retained response excerpt newest first, retention period, transcription enablement and language, notification status, Watch synchronization status, and Reset Whim. Reset requires destructive confirmation and removes local audio, metadata, history, configuration, and credentials.
 
 Onboarding:
 

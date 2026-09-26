@@ -3,10 +3,11 @@ import WhimCore
 import WhimIPhone
 
 enum SettingsSection: String, CaseIterable, Hashable {
-    case webhook, audio, titles, permissions, watch
+    case webhook, webhookErrors = "webhook-errors", audio, titles, permissions, watch
     var title: String {
         switch self {
         case .webhook: "Webhook"
+        case .webhookErrors: "Webhook errors"
         case .audio: "Audio retention"
         case .titles: "On-device titles"
         case .permissions: "Permissions"
@@ -16,6 +17,7 @@ enum SettingsSection: String, CaseIterable, Hashable {
     var symbol: String {
         switch self {
         case .webhook: "link"
+        case .webhookErrors: "exclamationmark.triangle"
         case .audio: "waveform"
         case .titles: "text.bubble"
         case .permissions: "hand.raised"
@@ -73,7 +75,7 @@ struct PreferencesView: View {
         case .webhook: settings.webhook.map { destinationLabel($0.destination) } ?? "Not configured"
         case .audio: retentionChoices.first { $0.0 == settings.preferences.retentionPolicy }?.1 ?? ""
         case .titles: settings.preferences.transcriptionEnabled ? "On" : "Off"
-        case .permissions: ""
+        case .webhookErrors, .permissions: ""
         case .watch: settings.watch.availability.capitalized
         }
     }
@@ -85,16 +87,18 @@ struct SettingsSectionView: View {
     let settings: SettingsProjection
     let section: SettingsSection
     @State private var editor: SettingsEditor
+    @State private var errorLog: WebhookErrorLog
     init(model: IPhoneModel, settings: SettingsProjection, section: SettingsSection) {
         self.model = model; self.settings = settings; self.section = section
         _editor = State(initialValue: SettingsEditor(client: model.client, preferences: settings.preferences))
+        _errorLog = State(initialValue: WebhookErrorLog(client: model.client))
     }
     private var isEditable: Bool { [.webhook, .audio, .titles].contains(section) }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 content
-                if let error = editor.preferencesError ?? model.error { WhimErrorText(message: error.message) }
+                if let error = editor.preferencesError ?? errorLog.error ?? model.error { WhimErrorText(message: error.message) }
             }
             .frame(maxWidth: 600, alignment: .leading)
             .frame(maxWidth: .infinity)
@@ -107,6 +111,7 @@ struct SettingsSectionView: View {
         .navigationTitle(section.title)
         .navigationBarTitleDisplayMode(.large)
         .toolbar(.visible, for: .navigationBar)
+        .task(id: model.revision) { if section == .webhookErrors { await errorLog.refresh() } }
         .toolbar {
             if isEditable {
                 ToolbarItem(placement: .confirmationAction) {
@@ -124,6 +129,14 @@ struct SettingsSectionView: View {
         switch section {
         case .webhook:
             WebhookConfigurationView(model: model, editor: editor.webhook, configuration: settings.webhook)
+            sectionShortcut(.webhookErrors, label: "View webhook errors")
+        case .webhookErrors:
+            if errorLog.entries.isEmpty {
+                Text("No webhook errors.").foregroundStyle(.secondary)
+            }
+            ForEach(errorLog.entries) { entry in webhookError(entry) }
+            footnote("Messages your webhook returned for failed Attempts, with secrets redacted. Entries are removed with their Note.")
+            sectionShortcut(.webhook, label: "Webhook settings")
         case .audio:
             HStack {
                 Text("Keep audio after delivery")
@@ -160,6 +173,34 @@ struct SettingsSectionView: View {
             }
             footnote("A disconnected Watch cannot be erased immediately.")
         }
+    }
+    private func sectionShortcut(_ target: SettingsSection, label: String) -> some View {
+        NavigationLink(value: IPhoneRoute.settingsSection(target)) {
+            Label(label, systemImage: target.symbol)
+        }
+        .whimGlassButton()
+        .accessibilityIdentifier("shortcut-\(target.rawValue)")
+    }
+    private func webhookError(_ entry: WebhookErrorLog.Entry) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("⚠ \(entry.status)").fontWeight(.semibold)
+                Spacer()
+                Text(TimelineFormat.date(entry.failedAt)).font(.footnote).foregroundStyle(.secondary)
+            }
+            Text(entry.message).font(.callout.monospaced()).textSelection(.enabled)
+                .accessibilityIdentifier("webhook-error-message")
+            Text(destinationLabel(entry.destination)).font(.footnote).foregroundStyle(.secondary)
+            if let noteID = entry.noteID {
+                NavigationLink(value: IPhoneRoute.note(noteID)) {
+                    Label(entry.noteTitle, systemImage: "waveform").font(.footnote).lineLimit(1)
+                }
+                .accessibilityLabel("Open Note \(entry.noteTitle)")
+            }
+        }
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("webhook-error")
     }
     private func footnote(_ text: String) -> some View { Text(text).font(.footnote).foregroundStyle(.secondary) }
     private func permission(_ kind: PermissionKind, status: PermissionStatus, title: String) -> some View {
