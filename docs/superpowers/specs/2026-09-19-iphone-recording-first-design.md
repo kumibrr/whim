@@ -92,8 +92,12 @@ warning-triangle button at the top left shows the number of active errors;
 tapping it restores the highest-priority error and its recovery action. The
 button is also available during an active Recording Session. Resolved errors
 leave the count, and the button disappears when none remain. A new issue
-reopens the card. VoiceOver offers a Collapse notifications action. History
-and settings retain their expanded recovery presentation.
+reopens the card. VoiceOver offers a Collapse notifications action. Collapsing
+morphs the card into the warning button and reopening morphs it back; Reduce
+Motion switches without movement. The error card appears only on the capture
+home: Settings and Previous notes do not show it. Settings screens keep their
+inline errors, and a failed inline playback shows its message on the affected
+Note row, where playing again retries.
 
 
 Pending commands prevent duplicate actions. A failed command preserves the

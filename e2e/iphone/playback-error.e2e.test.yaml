@@ -18,16 +18,19 @@ appId: app.whim.ios
 - tapOn:
     id: note-play-.*
     index: 0
-- assertVisible: The audio player could not open this Note. Try playback again.
+- assertVisible:
+    id: note-playback-error-.*
+    text: The audio player could not open this Note. Try playback again.
 - assertNotVisible:
-    id: startup-error-action
+    id: startup-error
 - assertVisible:
     id: history-sheet
 - tapOn:
-    id: startup-error
+    id: note-play-.*
+    index: 0
 - assertVisible:
     id: note-stop-.*
 - assertNotVisible:
-    id: startup-error
+    id: note-playback-error-.*
 - assertVisible:
     id: history-sheet

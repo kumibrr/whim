@@ -8,6 +8,7 @@ struct IPhoneRootView: View {
     var pendingLink: PendingIPhoneLink?
     @Environment(\.scenePhase) private var phase
     @Namespace private var captureGlassNamespace
+    @Namespace private var failureNamespace
     @State private var path: [IPhoneRoute] = []
     var body: some View {
         NavigationStack(path: $path) {
@@ -23,13 +24,12 @@ struct IPhoneRootView: View {
                 }
             }.toolbar(.hidden, for: .navigationBar)
         }
-        .modifier(IPhoneFailurePresentation(model: model, enabled: !model.isHistoryPresented, allowsCollapse: model.onboardingCompleted && path.isEmpty, configureWebhook: openWebhookSettings))
+        .modifier(IPhoneFailurePresentation(model: model, enabled: path.isEmpty && !model.isHistoryPresented, allowsCollapse: model.onboardingCompleted, morphNamespace: failureNamespace, configureWebhook: openWebhookSettings))
         .sheet(isPresented: Binding(
             get: { model.isHistoryPresented },
             set: { presented in if !presented { Task { await model.closeHistory() } } }
         )) {
             HistorySheet(model: model)
-                .modifier(IPhoneFailurePresentation(model: model, configureWebhook: openWebhookSettings))
         }
         .onChange(of: model.isHistoryPresented) { old, new in
             if !old && new { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
@@ -70,10 +70,10 @@ struct IPhoneRootView: View {
             }
             CaptureGlassContainer(isRecording: model.recording != nil) {
                 if model.recording != nil {
-                    RecorderView(model: model, glassNamespace: captureGlassNamespace)
+                    RecorderView(model: model, glassNamespace: captureGlassNamespace, failureNamespace: failureNamespace)
                         .transition(.identity)
                 } else {
-                    CaptureHomeView(model: model, glassNamespace: captureGlassNamespace) {
+                    CaptureHomeView(model: model, glassNamespace: captureGlassNamespace, failureNamespace: failureNamespace) {
                         Task { if await model.prepareForNavigation() { path.append(.settings) } }
                     }
                     .transition(.identity)
@@ -111,13 +111,15 @@ struct IPhoneRootView: View {
     private func permission(_ kind: PermissionKind) { Task { await model.perform { _ = try await model.client.requestPermission(kind) } } }
 }
 
-/// Attach to the visible presentation surface so sheets cannot cover recovery actions.
+/// The error card belongs to the capture home; Settings and history report failures inline.
 struct IPhoneFailurePresentation: ViewModifier {
     var model: IPhoneModel
     var enabled = true
     var allowsCollapse = false
+    var morphNamespace: Namespace.ID? = nil
     var configureWebhook: () -> Void
     @State private var showsStorageInstructions = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func body(content: Content) -> some View {
         content.safeAreaInset(edge: .top) {
             if enabled, !(allowsCollapse && model.areFailuresCollapsed), let failure = model.visibleFailure {
@@ -125,7 +127,10 @@ struct IPhoneFailurePresentation: ViewModifier {
                     busy: model.isResolvingError || model.isPending || model.isRecordingPending,
                     action: { resolve(failure) },
                     dismiss: [.history, .settings, .maintenance].contains(failure.operation) ? { model.dismissAuxiliaryError() } : nil,
-                    collapse: allowsCollapse ? { model.collapseFailures() } : nil)
+                    collapse: allowsCollapse ? {
+                        withAnimation(.failureNotificationsMorph(reduceMotion: reduceMotion)) { model.collapseFailures() }
+                    } : nil)
+                    .failureNotificationsMorph(in: morphNamespace)
                     .padding(.horizontal, 20).padding(.top, 8)
             }
         }

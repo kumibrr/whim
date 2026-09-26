@@ -30,6 +30,7 @@ struct NoteRowView: View {
     let note: any NoteCardPresentation
     let waveform: AudioWaveform?
     let playback: PlaybackProjection?
+    var playbackFailure: String? = nil
     let open: (() -> Void)?
     let retry: (() -> Void)?
     let togglePlayback: () -> Void
@@ -60,6 +61,10 @@ struct NoteRowView: View {
                 Text(status).fontWeight(note.status == .failed || note.requiresReview ? .semibold : .regular)
             }.font(.caption2)
             if let audio { Text(audio).font(.caption).foregroundStyle(.secondary) }
+            if let playbackFailure {
+                WhimErrorText(message: playbackFailure).font(.caption)
+                    .accessibilityIdentifier("note-playback-error-\(id)")
+            }
             if note.workflowError != nil { Label("Delivery needs attention", systemImage: "exclamationmark.circle").font(.caption) }
             if note.status == .failed && !note.requiresReview, let retry {
                 Button("Retry", action: retry).accessibilityLabel("Retry \(note.title)")

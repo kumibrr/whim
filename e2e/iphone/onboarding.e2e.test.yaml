@@ -37,6 +37,15 @@ appId: app.whim.ios
     id: whim-home
 - assertVisible:
     id: startup-error
+- tapOn:
+    id: settings-button
+- assertVisible: Webhook
+- assertNotVisible:
+    id: startup-error
+- tapOn:
+    id: BackButton
+- assertVisible:
+    id: startup-error
 - swipe:
     start: 50%, 11%
     end: 50%, 3%

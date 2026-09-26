@@ -98,6 +98,11 @@ import WhimCore
             playback = value
         } else { playback = nil; inlineNoteID = nil }
     }
+    /// History shows playback failures on the affected row instead of the error card.
+    public func playbackFailure(for id: NoteID) -> String? {
+        guard failedPlaybackNoteID == id, error?.recovery.operation == .playback else { return nil }
+        return error?.message
+    }
     private func clearPlaybackFailure() {
         failedPlaybackNoteID = nil
         if error?.recovery.operation == .playback { error = nil }
