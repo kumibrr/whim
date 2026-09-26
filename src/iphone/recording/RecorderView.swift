@@ -5,12 +5,13 @@ import WhimIPhone
 struct CaptureHomeView: View {
     var model: IPhoneModel
     var glassNamespace: Namespace.ID
+    var failureNamespace: Namespace.ID
     var settings: () -> Void
     var body: some View {
         VStack {
             HStack {
                 if model.areFailuresCollapsed {
-                    ErrorNotificationsButton(model: model)
+                    ErrorNotificationsButton(model: model, namespace: failureNamespace)
                 }
                 Spacer()
                 Button(action: settings) {
@@ -54,6 +55,7 @@ struct CaptureHomeView: View {
 struct RecorderView: View {
     var model: IPhoneModel
     var glassNamespace: Namespace.ID
+    var failureNamespace: Namespace.ID
     var body: some View {
         if let recording = model.recording {
             let remaining = max(0, recording.maximumDurationSeconds - floor(model.elapsedSeconds))
@@ -104,7 +106,7 @@ struct RecorderView: View {
                     .padding(.bottom, 12)
             }.frame(maxWidth: .infinity).overlay(alignment: .topLeading) {
                 if model.areFailuresCollapsed {
-                    ErrorNotificationsButton(model: model).padding(.leading, 24).padding(.top, 12)
+                    ErrorNotificationsButton(model: model, namespace: failureNamespace).padding(.leading, 24).padding(.top, 12)
                 }
             }.disabled(model.isRecordingPending).accessibilityElement(children: .contain)
                 .accessibilityIdentifier("recorder-panel")
@@ -121,8 +123,12 @@ struct RecorderView: View {
 
 private struct ErrorNotificationsButton: View {
     var model: IPhoneModel
+    var namespace: Namespace.ID
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
-        Button { model.expandFailures() } label: {
+        Button {
+            withAnimation(.failureNotificationsMorph(reduceMotion: reduceMotion)) { model.expandFailures() }
+        } label: {
             HStack(spacing: 8) {
                 Image(systemName: "exclamationmark.triangle")
                 Text("\(model.failureCount)").monospacedDigit()
@@ -132,6 +138,7 @@ private struct ErrorNotificationsButton: View {
             .whimGlass(in: Capsule())
         }
         .buttonStyle(.plain)
+        .failureNotificationsMorph(in: namespace)
         .accessibilityLabel(model.failureCount == 1 ? "1 notification" : "\(model.failureCount) notifications")
         .accessibilityHint("Show error details")
         .accessibilityIdentifier("error-notifications")

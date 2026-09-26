@@ -180,6 +180,9 @@ Deny microphone access, then swipe the error card upward. Verify it becomes a
 warning-triangle button with count 1 in the top-left corner, without opening
 history or Settings. Tap it to restore the full message, then tap the message
 to open Settings. Grant access and return; the card and warning button disappear.
+Collapsing must visibly shrink the card into the top-left warning button, and
+reopening must grow the card back out of it; with Reduce Motion both switch
+without movement.
 Repeat with VoiceOver's Collapse notifications action, large Dynamic Type,
 Reduce Motion, Reduce Transparency, and the iOS 18 material fallback. For a
 failure during capture, verify collapse/reopen leaves Stop and Discard usable.

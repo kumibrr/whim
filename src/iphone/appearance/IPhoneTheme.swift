@@ -87,6 +87,16 @@ extension View {
     func captureGlassIdentity(_ id: String, in namespace: Namespace.ID) -> some View {
         modifier(CaptureGlassIdentity(id: id, namespace: namespace))
     }
+    /// Shares one frame so the error card shrinks into its notifications button and grows back out.
+    @ViewBuilder func failureNotificationsMorph(in namespace: Namespace.ID?) -> some View {
+        if let namespace { matchedGeometryEffect(id: "failure-notifications", in: namespace) } else { self }
+    }
+}
+
+extension Animation {
+    static func failureNotificationsMorph(reduceMotion: Bool) -> Animation? {
+        reduceMotion ? nil : .smooth(duration: 0.35)
+    }
 }
 
 /// Error content occupies the upper safe area; the recorder retains the remaining space.
