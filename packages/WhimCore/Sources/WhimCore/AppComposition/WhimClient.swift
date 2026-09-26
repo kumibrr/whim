@@ -20,6 +20,7 @@ public protocol WhimClient: Sendable {
     func note(id: NoteID) async throws -> NoteDetailProjection?
     func retry(noteID: NoteID) async throws
     func retryAllFailed() async throws -> Int
+    func synchronize() async throws -> SynchronizationRoute
     func sendRecovered(noteID: NoteID) async throws
     func delete(noteID: NoteID) async throws
     func updateWebhook(_ input: WebhookConfigurationInput) async throws -> ConfigurationUpdateResult
@@ -38,8 +39,15 @@ public protocol WhimClient: Sendable {
     func events() -> AsyncStream<WhimEvent>
 }
 
+/// Where a manual Sync now sent pending Notes.
+public enum SynchronizationRoute: String, Codable, Equatable, Sendable {
+    case companion, webhook, offline
+    case setupRequired = "setup_required"
+}
+
 public extension WhimClient {
     func maintain() async throws {}
+    func synchronize() async throws -> SynchronizationRoute { throw WhimServiceError.setupRequired("Sync unavailable.") }
     func startup() async throws -> StartupProjection {
         let settings = try await settings()
         return try await StartupProjection(onboardingCompleted: settings.onboardingCompleted,

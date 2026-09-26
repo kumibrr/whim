@@ -1370,6 +1370,103 @@ private actor SuspendedOptionalPermissions: PermissionAdapter {
     func openSettings() {}
 }
 
+final class ManualSynchronizationTests: XCTestCase {
+    func testSyncNowHandsNotesToReachableIPhoneWithoutWebhookAttempt() async throws {
+        let h = try WhimFacadeHarness(); defer { h.remove() }
+        _ = try await h.configuration.save(.init(endpoint: "https://example.com/whim"))
+        let transport = SyncPeerTransport(reachable: true)
+        let client = h.makeService(isConnected: { true }, peer: try h.merge(transport))
+        let note = try await h.storeWatchNote()
+
+        let route = try await client.synchronize()
+
+        XCTAssertEqual(route, .companion)
+        XCTAssertTrue(transport.files.contains { $0.payload.noteID == note })
+        let requests = await h.transport.requestCount
+        XCTAssertEqual(requests, 0, "A reachable iPhone owns delivery; Sync now must not also call the webhook")
+    }
+
+    func testSyncNowDeliversQueuedAndFailedNotesDirectlyWhenIPhoneIsUnreachable() async throws {
+        let h = try WhimFacadeHarness(responses: [HTTPResponse(statusCode: 400)]); defer { h.remove() }
+        _ = try await h.configuration.save(.init(endpoint: "https://example.com/whim"))
+        let connected = FacadeConnectivity()
+        let client = h.makeService(isConnected: { await connected.read() },
+            peer: try h.merge(SyncPeerTransport(reachable: false)))
+        _ = try await client.startRecording(source: .appleWatch)
+        let stoppedQueued = try await client.stopRecording()
+        let queued = try XCTUnwrap(stoppedQueued)
+        _ = try await waitForNote(client: client, status: .queued)
+        await connected.connect()
+        _ = try await client.startRecording(source: .appleWatch)
+        let stoppedFailed = try await client.stopRecording()
+        let failed = try XCTUnwrap(stoppedFailed)
+        for _ in 0..<200 {
+            if try await client.listNotes(filter: .failed).contains(where: { $0.id == failed.id }) { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        let route = try await client.synchronize()
+
+        XCTAssertEqual(route, .webhook)
+        for _ in 0..<200 {
+            if try await client.listNotes(filter: .sent).count == 2 { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let sent = try await client.listNotes(filter: .sent).map(\.id)
+        XCTAssertEqual(Set(sent), [queued.id, failed.id])
+    }
+
+    func testSyncNowReportsOfflineOrSetupRequiredWithoutChangingNotes() async throws {
+        let h = try WhimFacadeHarness(); defer { h.remove() }
+        let online = h.makeService(isConnected: { true }, peer: try h.merge(SyncPeerTransport(reachable: false)))
+        let setupRoute = try await online.synchronize()
+        XCTAssertEqual(setupRoute, .setupRequired)
+
+        _ = try await h.configuration.save(.init(endpoint: "https://example.com/whim"))
+        let offline = h.makeService(isConnected: { false }, peer: try h.merge(SyncPeerTransport(reachable: false)))
+        _ = try await offline.startRecording(source: .appleWatch)
+        _ = try await offline.stopRecording()
+        let offlineRoute = try await offline.synchronize()
+        XCTAssertEqual(offlineRoute, .offline)
+        let notes = try await offline.listNotes(filter: .all)
+        XCTAssertEqual(notes.map(\.status), [.queued])
+        let requests = await h.transport.requestCount
+        XCTAssertEqual(requests, 0)
+    }
+}
+
+private extension WhimFacadeHarness {
+    func merge(_ transport: any PeerTransport) throws -> ConnectivityMergeService {
+        try ConnectivityMergeService(store: store, files: files, databaseURL: databaseURL,
+            root: root.appendingPathComponent("Peer"), device: .appleWatch, credentials: credentials, transport: transport)
+    }
+
+    func storeWatchNote() async throws -> NoteID {
+        let session = RecordingSession(id: RecordingSessionID(), noteID: NoteID(), createdAt: clock.now, source: .appleWatch)
+        try await store.saveRecordingSession(session)
+        try writeAudioFixture(to: files.temporaryURL(for: session.id))
+        let audio = try files.finalize(sessionID: session.id, noteID: session.noteID)
+        _ = try await store.saveFinalized(.init(id: session.noteID, recordingSessionID: session.id,
+            title: "Watch Note", titleSource: .timestamp, createdAt: session.createdAt, duration: 1,
+            source: .appleWatch, captureOutcome: .completed, requiresReview: false, audioURL: audio.url))
+        return session.noteID
+    }
+}
+
+private final class SyncPeerTransport: PeerTransport, @unchecked Sendable {
+    private let lock = NSLock()
+    private var transferred: [ConnectivityEnvelope] = []
+    let isReachable: Bool
+    init(reachable: Bool) { isReachable = reachable }
+    var isAvailable: Bool { true }
+    var isActivated: Bool { true }
+    var files: [ConnectivityEnvelope] { lock.withLock { transferred } }
+    func activate(receive: @escaping @Sendable (PeerEvent) -> Void) {}
+    func transfer(_ envelope: ConnectivityEnvelope) throws {}
+    func transferFile(at url: URL, metadata: ConnectivityEnvelope) throws { lock.withLock { transferred.append(metadata) } }
+    func updateContext(_ envelope: ConnectivityEnvelope, credentials: StoredWebhookCredentials?) throws {}
+}
+
 private final class SuspendedRecoveryFiles: AudioFileManaging, @unchecked Sendable {
     let base: AudioFileStore
     let entered: XCTestExpectation

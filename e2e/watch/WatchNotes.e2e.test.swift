@@ -31,6 +31,10 @@ final class WatchNotesUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Webhook available"].waitForExistence(timeout: 5))
         app.swipeUp()
         XCTAssertTrue(app.staticTexts["Queued"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["watch-sync-now"].waitForExistence(timeout: 5))
+        app.buttons["watch-sync-now"].tap()
+        XCTAssertTrue(app.staticTexts["No connection. Notes stay queued."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Queued"].exists)
     }
 
     func testDirectDeliveryFailureCanBeRetriedSuccessfully() async throws {

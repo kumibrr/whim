@@ -11,6 +11,7 @@ public final class DebugPeerTransport: PeerTransport, @unchecked Sendable {
     private var raced: Set<NoteID> = []
     public var isAvailable: Bool { scenario != "isolated" }
     public var isActivated: Bool { true }
+    public var isReachable: Bool { isAvailable }
     private init(scenario: String, fixture: URL) { self.scenario = scenario; self.fixture = fixture }
     public static func from(arguments: [String], fixture: URL) throws -> DebugPeerTransport? {
         guard let index = arguments.firstIndex(of: "-WhimPeerScenario") else {

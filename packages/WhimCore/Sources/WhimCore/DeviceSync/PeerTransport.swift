@@ -1,10 +1,11 @@
 import Foundation
 
 /// Authenticated Watch Connectivity is the system boundary. Immediate reachability
-/// is deliberately absent from this contract: it never gates durable delivery.
+/// never gates durable delivery; it only routes a user's explicit Sync now.
 public protocol PeerTransport: Sendable {
     var isAvailable: Bool { get }
     var isActivated: Bool { get }
+    var isReachable: Bool { get }
     func activate(receive: @escaping @Sendable (PeerEvent) -> Void)
     func completeReceivedFile(_ url: URL) throws
     func transfer(_ envelope: ConnectivityEnvelope) throws
@@ -21,5 +22,6 @@ public enum PeerEvent: Sendable {
 }
 
 public extension PeerTransport {
+    var isReachable: Bool { false }
     func completeReceivedFile(_ url: URL) throws {}
 }

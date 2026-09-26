@@ -6,6 +6,7 @@ struct TimelineView: View {
     var model: IPhoneModel
     var open: (NoteID) -> Void
     @State private var filter = "All"
+    @State private var showsSettled = false
     private var visible: [NoteProjection] {
         model.notes.filter { note in
             filter == "All"
@@ -32,35 +33,51 @@ struct TimelineView: View {
                     Text("No Notes here yet. Capture a thought.").foregroundStyle(.secondary)
                 }
             }
+            let sections = NoteSections(visible, now: Date())
             LazyVStack(spacing: 14) {
-                ForEach(visible, id: \.id) { note in
-                    NoteRowView(
-                        note: note, waveform: model.waveforms[note.id], playback: model.playback,
-                        open: { open(note.id) },
-                        retry: {
-                            Task {
-                                await model.perform {
-                                    try await model.client.retry(noteID: note.id)
-                                }
-                            }
-                        },
-                        togglePlayback: {
-                            Task {
-                                if model.playback?.noteID
-                                    == note.id.rawValue.uuidString.lowercased(),
-                                    model.playback?.isPlaying == true
-                                {
-                                    await model.stopInlinePlayback()
-                                } else {
-                                    await model.playInline(note.id)
-                                }
-                            }
-                        }
-                    )
-                    .task(id: note.hasLocalAudio) { await model.loadWaveform(note.id) }
+                ForEach(sections.active, id: \.id, content: row)
+            }
+            if !sections.settled.isEmpty {
+                DisclosureGroup(isExpanded: $showsSettled) {
+                    LazyVStack(spacing: 14) {
+                        ForEach(sections.settled, id: \.id, content: row)
+                    }
+                    .padding(.top, 14)
+                } label: {
+                    Text("Settled (\(sections.settled.count))")
+                        .font(.system(.subheadline, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.65))
                 }
+                .tint(.white.opacity(0.65))
+                .accessibilityIdentifier("settled-notes")
             }
         }.accessibilityIdentifier("notes-list")
+    }
+    private func row(_ note: NoteProjection) -> some View {
+        NoteRowView(
+            note: note, waveform: model.waveforms[note.id], playback: model.playback,
+            open: { open(note.id) },
+            retry: {
+                Task {
+                    await model.perform {
+                        try await model.client.retry(noteID: note.id)
+                    }
+                }
+            },
+            togglePlayback: {
+                Task {
+                    if model.playback?.noteID
+                        == note.id.rawValue.uuidString.lowercased(),
+                        model.playback?.isPlaying == true
+                    {
+                        await model.stopInlinePlayback()
+                    } else {
+                        await model.playInline(note.id)
+                    }
+                }
+            }
+        )
+        .task(id: note.hasLocalAudio) { await model.loadWaveform(note.id) }
     }
     private var filters: some View {
         ForEach(["All", "Queued", "Failed", "Sent"], id: \.self) { value in

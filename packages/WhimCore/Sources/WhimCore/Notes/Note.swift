@@ -136,6 +136,8 @@ public struct NoteProjection: Codable, Equatable, Sendable {
     public let hasLocalAudio: Bool
     public let localError: LocalAudioError?
     public let workflowError: DeliveryWorkflowError?
+    /// When a Receipt made the Note sent; nil until delivery succeeds.
+    public let settledAt: Date?
 
     public init(note: Note, hasLocalAudio: Bool = true) {
         schemaVersion = WhimCoreVersion.schema
@@ -149,11 +151,12 @@ public struct NoteProjection: Codable, Equatable, Sendable {
         self.hasLocalAudio = hasLocalAudio && note.localError == nil && note.audioExpiredAt == nil
         localError = note.localError
         workflowError = note.delivery.workflowError
+        settledAt = note.delivery.receipt?.receivedAt
     }
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, id, title, createdAt, durationSeconds, source, status
-        case requiresReview, hasLocalAudio, localError, workflowError
+        case requiresReview, hasLocalAudio, localError, workflowError, settledAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -173,6 +176,7 @@ public struct NoteProjection: Codable, Equatable, Sendable {
         hasLocalAudio = try values.decode(Bool.self, forKey: .hasLocalAudio)
         localError = try values.decodeIfPresent(LocalAudioError.self, forKey: .localError)
         workflowError = try values.decodeIfPresent(DeliveryWorkflowError.self, forKey: .workflowError)
+        settledAt = try values.decodeIfPresent(Date.self, forKey: .settledAt)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -185,5 +189,23 @@ public struct NoteProjection: Codable, Equatable, Sendable {
         try values.encode(hasLocalAudio, forKey: .hasLocalAudio)
         try values.encode(localError, forKey: .localError)
         try values.encode(workflowError, forKey: .workflowError)
+        try values.encode(settledAt, forKey: .settledAt)
+    }
+}
+
+/// Previous-notes lists keep recent Notes visible and tuck long-delivered ones into Settled.
+public struct NoteSections: Equatable, Sendable {
+    public static let settledAge: TimeInterval = 7 * 24 * 60 * 60
+    public let active: [NoteProjection]
+    public let settled: [NoteProjection]
+
+    public init(_ notes: [NoteProjection], now: Date) {
+        let cutoff = now.addingTimeInterval(-Self.settledAge)
+        var active: [NoteProjection] = [], settled: [NoteProjection] = []
+        for note in notes {
+            if note.status == .sent, let settledAt = note.settledAt, settledAt <= cutoff { settled.append(note) }
+            else { active.append(note) }
+        }
+        self.active = active; self.settled = settled
     }
 }

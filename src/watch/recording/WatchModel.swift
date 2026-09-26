@@ -77,6 +77,9 @@ final class WatchModel {
     var error: String? { commandError ?? refreshError }
     var showsRecent = false
     private(set) var captureBusy = false
+    private(set) var isSyncing = false
+    private(set) var syncStatus: String?
+    var sections: NoteSections { NoteSections(notes, now: Date()) }
 
     init(client: any WhimClient, haptic: @escaping (WKHapticType) -> Void = { WKInterfaceDevice.current().play($0) }) {
         self.client = client; self.haptic = haptic
@@ -208,6 +211,14 @@ final class WatchModel {
             await self.refreshNotes()
         }
     }
+    func syncNow() async {
+        guard !isSyncing else { return }
+        isSyncing = true
+        defer { isSyncing = false }
+        do { syncStatus = try await client.synchronize().watchLabel }
+        catch { syncStatus = "Sync failed. Try again." }
+        await refreshNotes()
+    }
     func play(_ note: NoteProjection) async {
         failedPlaybackNote = note
         if await perform(operation: .playback, { self.playback = try await self.client.playNote(note.id) }) { failedPlaybackNote = nil }
@@ -287,6 +298,17 @@ final class WatchModel {
                 default: break
                 }
             }
+        }
+    }
+}
+
+extension SynchronizationRoute {
+    var watchLabel: String {
+        switch self {
+        case .companion: "Sent to iPhone"
+        case .webhook: "Sending to webhook"
+        case .offline: "No connection. Notes stay queued."
+        case .setupRequired: "Set up a webhook on iPhone"
         }
     }
 }
