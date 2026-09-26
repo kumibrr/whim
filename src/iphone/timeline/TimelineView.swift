@@ -36,6 +36,7 @@ struct TimelineView: View {
                 ForEach(visible, id: \.id) { note in
                     NoteRowView(
                         note: note, waveform: model.waveforms[note.id], playback: model.playback,
+                        playbackFailure: model.playbackFailure(for: note.id),
                         open: { open(note.id) },
                         retry: {
                             Task {

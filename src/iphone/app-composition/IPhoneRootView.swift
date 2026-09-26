@@ -24,13 +24,12 @@ struct IPhoneRootView: View {
                 }
             }.toolbar(.hidden, for: .navigationBar)
         }
-        .modifier(IPhoneFailurePresentation(model: model, enabled: !model.isHistoryPresented, allowsCollapse: model.onboardingCompleted && path.isEmpty, morphNamespace: failureNamespace, configureWebhook: openWebhookSettings))
+        .modifier(IPhoneFailurePresentation(model: model, enabled: path.isEmpty && !model.isHistoryPresented, allowsCollapse: model.onboardingCompleted, morphNamespace: failureNamespace, configureWebhook: openWebhookSettings))
         .sheet(isPresented: Binding(
             get: { model.isHistoryPresented },
             set: { presented in if !presented { Task { await model.closeHistory() } } }
         )) {
             HistorySheet(model: model)
-                .modifier(IPhoneFailurePresentation(model: model, configureWebhook: openWebhookSettings))
         }
         .onChange(of: model.isHistoryPresented) { old, new in
             if !old && new { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
@@ -112,7 +111,7 @@ struct IPhoneRootView: View {
     private func permission(_ kind: PermissionKind) { Task { await model.perform { _ = try await model.client.requestPermission(kind) } } }
 }
 
-/// Attach to the visible presentation surface so sheets cannot cover recovery actions.
+/// The error card belongs to the capture home; Settings and history report failures inline.
 struct IPhoneFailurePresentation: ViewModifier {
     var model: IPhoneModel
     var enabled = true

@@ -162,6 +162,25 @@ import WhimCore
         model.stop()
     }
 
+    func testPlaybackFailureBelongsToItsNoteUntilPlaybackSucceeds() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let model = IPhoneModel(client: harness.makeService(playback: FailsFirstPlayback(), permissions: GrantedPermissions()))
+        await model.start()
+        await model.startRecording(); await model.stopRecording()
+        await model.startRecording(); await model.stopRecording()
+        let failed = try XCTUnwrap(model.notes.first).id
+        let other = try XCTUnwrap(model.notes.last).id
+        model.openHistory()
+        await model.playInline(failed)
+        XCTAssertNotNil(model.playbackFailure(for: failed))
+        XCTAssertEqual(model.playbackFailure(for: failed), model.error?.message)
+        XCTAssertNil(model.playbackFailure(for: other))
+        await model.playInline(failed)
+        XCTAssertNil(model.playbackFailure(for: failed))
+        model.stop()
+    }
+
     func testRecordingEventDuringStartupDoesNotWithholdCaptureReadiness() async throws {
         let harness = try WhimFacadeHarness()
         defer { harness.remove() }
