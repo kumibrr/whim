@@ -203,6 +203,40 @@ final class WatchModelIntegrationTests: XCTestCase {
         XCTAssertEqual(detail?.attempts.first?.device, .appleWatch)
     }
 
+    func testSyncNowRetriesFailedNoteThroughWebhookWithoutIPhoneAndReportsRoute() async throws {
+        let fixture = try WatchFixture(connected: true)
+        defer { fixture.remove() }
+        await fixture.transport.setResponses([400])
+        _ = try await fixture.client.updateWebhook(.init(endpoint: "https://example.com/receive"))
+        let model = WatchModel(client: fixture.client, haptic: { _ in })
+        await model.activate()
+        await model.stop()
+        _ = try await failedNote(fixture.client)
+
+        await model.syncNow()
+
+        XCTAssertEqual(model.syncStatus, "Sending to webhook")
+        XCTAssertFalse(model.isSyncing)
+        for _ in 0..<100 {
+            if model.notes.first?.status == .sent { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(model.notes.first?.status, .sent)
+        XCTAssertEqual(model.sections.active.count, 1, "A Note sent today stays in the main list")
+    }
+
+    func testSyncNowOfflineKeepsNotesQueuedAndSaysSo() async throws {
+        let fixture = try WatchFixture()
+        defer { fixture.remove() }
+        _ = try await fixture.client.updateWebhook(.init(endpoint: "https://example.com/receive"))
+        let model = WatchModel(client: fixture.client, haptic: { _ in })
+        await model.activate()
+        await model.stop()
+        await model.syncNow()
+        XCTAssertEqual(model.syncStatus, "No connection. Notes stay queued.")
+        XCTAssertEqual(model.notes.map(\.status), [.queued])
+    }
+
     func testPendingRetryCannotBlockStopOrSkipDeletion() async throws {
         for deleting in [false, true] {
             let fixture = try WatchFixture(connected: true)

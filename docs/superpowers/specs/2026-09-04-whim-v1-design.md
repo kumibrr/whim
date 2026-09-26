@@ -261,7 +261,7 @@ Deleting delivered Notes is immediate. Deleting queued, sending, failed, or reco
 
 Whim opens to a recording-first black home screen, as updated by the approved [2026-09-19 iPhone design](2026-09-19-iphone-recording-first-design.md). A plain white line sits in the center, with a glass Record button at bottom center and an icon-only glass settings button at top right. The hint “scroll to see previous notes.” opens history by upward drag or tap. History uses a native sheet with its own navigation toolbar and provides one soft haptic when opening commits.
 
-History contains newest-first glass Note cards with a single-line title and date/time on the left, an inline waveform player alongside, and duration, source device, and delivery/review status. Accessibility text sizes stack the layout and allow title wrapping. Failed Notes remain in chronological position with prominent text and symbol treatment plus a Retry action. Filters offer All, Queued, Failed, and Sent. Only one Note plays at a time; leaving history or opening detail stops inline playback.
+History contains newest-first glass Note cards with a single-line title and date/time on the left, an inline waveform player alongside, and duration, source device, and delivery/review status. Accessibility text sizes stack the layout and allow title wrapping. Failed Notes remain in chronological position with prominent text and symbol treatment plus a Retry action. Filters offer All, Queued, Failed, and Sent. Notes whose Receipt is more than seven days old move into a collapsed "Settled" section below the list; Notes sent within the last week stay in the main list. Only one Note plays at a time; leaving history or opening detail stops inline playback.
 
 Record starts capture immediately. The full-width central line reacts to microphone input without progressively filling the screen. During a Recording Session, only Stop and immediate Discard are available; history and settings are inaccessible. Elapsed time, five-minute progress, and the limit warning remain visible. Stop returns to idle without opening history. Visible and haptic feedback confirm start and stop.
 
@@ -281,7 +281,7 @@ The iPhone uses a sober black appearance with white accents and native typograph
 
 ## Watch experience
 
-After microphone permission exists, launching Whim through the app icon, complication, App Shortcut, or supported Action-button route starts recording immediately. The primary view shows elapsed time, Stop, and Discard. A secondary recent-Notes view exposes locally available playback, delivery status, Retry, and Delete.
+After microphone permission exists, launching Whim through the app icon, complication, App Shortcut, or supported Action-button route starts recording immediately. The primary view shows elapsed time, Stop, and Discard. A secondary recent-Notes view exposes locally available playback, delivery status, Retry, and Delete. It uses the same collapsed "Settled" section as iPhone history. Just above that section, a "Sync now" button hands pending Notes to iPhone when it is reachable. When iPhone is unreachable and the Watch has a network connection, the button instead delivers queued and failed Notes directly to the webhook. Either way, the Watch reports which route it used, or that it is offline or needs setup.
 
 Watch produces a distinct start haptic, restores the active recorder after wrist-down, and stops safely at five minutes. Configuration may be viewed only as available/unavailable and last synchronized.
 

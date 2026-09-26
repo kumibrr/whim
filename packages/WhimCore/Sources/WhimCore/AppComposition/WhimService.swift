@@ -321,6 +321,24 @@ public actor WhimService: WhimClient {
         try await resumeEligibleNotes(only: noteID)
     }
 
+    /// Sync now prefers the paired companion; only an unreachable companion sends directly.
+    public func synchronize() async throws -> SynchronizationRoute {
+        _ = try await prepareCapture()
+        if let peer, peer.isCompanionReachable {
+            await beginCommand(); defer { endCommand() }
+            for note in try await store.listNotes(filter: .all) { try await peer.queueNote(note.id) }
+            try await peer.flush()
+            return .companion
+        }
+        guard try await store.latestConfigurationRevision() != nil else { return .setupRequired }
+        guard await delivery.isOnline() else { return .offline }
+        try await resumeDelivery()
+        let failed = try await store.listNotes(filter: .failed)
+            .filter { !$0.requiresReview && $0.localError == nil && $0.workflowError == nil }
+        for note in failed { Task { try? await self.retry(noteID: note.id) } }
+        return .webhook
+    }
+
     public func startRecording(source: CaptureSource) async throws -> RecordingProjection {
         _ = try await prepareCapture(); await beginCommand(); defer { endCommand() }
         let permission = await permissions.status(.microphone)

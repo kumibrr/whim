@@ -162,6 +162,8 @@ public struct DeliveryService: Sendable {
         }
     }
 
+    public func isOnline() async -> Bool { await isConnected() }
+
     public func retry(noteID: NoteID) async throws -> DeliveryResult {
         guard try await store.beginRetryCycle(noteID: noteID) else {
             return (try await store.note(id: noteID))?.delivery.receipt == nil ? .failed : .alreadySent

@@ -281,6 +281,11 @@ public actor ConnectivityMergeService {
         try await flush()
     }
 
+    public nonisolated var isCompanionReachable: Bool {
+        guard let transport else { return false }
+        return transport.isActivated && transport.isAvailable && transport.isReachable
+    }
+
     public func status() throws -> WatchSettingsProjection {
         let reset = try journal.resetState()
         let endpoints = try journal.read("resetAcknowledged", as: [String].self) ?? []

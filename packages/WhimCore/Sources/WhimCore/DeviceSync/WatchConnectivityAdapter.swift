@@ -23,6 +23,7 @@ public final class WatchConnectivityAdapter: PeerTransport, Sendable {
     public init(session: any WatchConnectivitySession) { self.session = session }
     public var isAvailable: Bool { session.isAvailable }
     public var isActivated: Bool { session.isActivated }
+    public var isReachable: Bool { session.isReachable }
     public func activate(receive: @escaping @Sendable (PeerEvent) -> Void) {
         session.activate { event in
             do {
