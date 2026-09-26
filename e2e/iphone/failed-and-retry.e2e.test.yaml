@@ -37,7 +37,17 @@ appId: app.whim.ios
 - tapOn: Close history
 - tapOn: Settings
 - tapOn:
-    id: settings-webhook
+    id: settings-webhook-errors
+- assertVisible: '⚠ HTTP 400'
+- assertVisible:
+    id: webhook-error-message
+    text: '.*note_id.*'
+- scrollUntilVisible:
+    element:
+      id: shortcut-webhook
+    direction: DOWN
+- tapOn:
+    id: shortcut-webhook
 - tapOn:
     id: webhook-url
 - inputText: https://whim-fixture.invalid/receive
@@ -54,6 +64,9 @@ appId: app.whim.ios
     direction: DOWN
     centerElement: true
 - tapOn: Retry unsent Notes
+# Webhook was opened from Webhook errors, so return through it.
+- tapOn:
+    id: BackButton
 - tapOn:
     id: BackButton
 - tapOn:

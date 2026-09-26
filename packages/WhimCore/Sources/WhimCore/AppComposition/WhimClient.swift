@@ -34,6 +34,8 @@ public protocol WhimClient: Sendable {
     func stopPlayback() async
     func playbackSnapshot() async -> PlaybackProjection?
     func patchWebhook(_ patch: WebhookPatch) async throws -> ConfigurationUpdateResult
+    /// Failed webhook Attempts across local Notes, newest first.
+    func webhookErrors() async throws -> [WebhookErrorProjection]
     func reset() async throws
     func events() -> AsyncStream<WhimEvent>
 }
@@ -54,6 +56,7 @@ public extension WhimClient {
     func completeOnboarding() async throws { throw WhimServiceError.setupRequired("Onboarding unavailable.") }
     func settings() async throws -> SettingsProjection { throw WhimServiceError.setupRequired("Settings unavailable.") }
     func patchWebhook(_ patch: WebhookPatch) async throws -> ConfigurationUpdateResult { throw WhimServiceError.setupRequired("Settings unavailable.") }
+    func webhookErrors() async throws -> [WebhookErrorProjection] { [] }
 }
 
 public struct RecordingProjection: Codable, Equatable, Sendable {
@@ -149,8 +152,8 @@ public struct NoteDetailProjection: Codable, Equatable, Sendable {
                 return Self.project(attempt, outcome: .sent, responseStatusCode: receipt.statusCode)
             }
             if let failure = note.delivery.failedAttempts.first(where: { $0.attempt.id == attempt.id }) {
-                return Self.project(attempt, outcome: .failed, failureReason: Self.failure(failure.reason),
-                    responseStatusCode: Self.status(failure.reason))
+                return Self.project(attempt, outcome: .failed, failureReason: failure.reason.externalRawValue,
+                    responseStatusCode: failure.reason.statusCode)
             }
             guard note.delivery.activeAttempts.contains(where: { $0.id == attempt.id }) else { return nil }
             return Self.project(attempt, outcome: .sending)
@@ -166,12 +169,6 @@ public struct NoteDetailProjection: Codable, Equatable, Sendable {
             destination: .init(attempt.endpoint), outcome: outcome, failureReason: failureReason,
             responseStatusCode: responseStatusCode)
     }
-    private static func failure(_ reason: AttemptFailureReason) -> String {
-        switch reason { case .network: "network"; case .httpStatus: "http_status" }
-    }
-    private static func status(_ reason: AttemptFailureReason) -> Int? {
-        if case .httpStatus(let value) = reason { value } else { nil }
-    }
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, id, title, createdAt, durationSeconds, source, status
@@ -186,6 +183,50 @@ public struct NoteDetailProjection: Codable, Equatable, Sendable {
         try values.encode(hasLocalAudio, forKey: .hasLocalAudio); try values.encode(localError, forKey: .localError)
         try values.encode(workflowError, forKey: .workflowError)
         try values.encode(attempts, forKey: .attempts)
+    }
+}
+
+/// One failed webhook Attempt and the message the destination returned, if any.
+public struct WebhookErrorProjection: Codable, Equatable, Sendable {
+    public let attemptID: String
+    public let noteID: String
+    public let noteTitle: String
+    public let device: CaptureSource
+    public let failedAt: Date
+    public let destination: SanitizedEndpointProjection
+    public let failureReason: String
+    public let responseStatusCode: Int?
+    /// The sanitized, capped response excerpt; nil when no response body was received.
+    public let message: String?
+
+    public init(note: Note, failure: AttemptFailure) {
+        attemptID = failure.attempt.id.rawValue.uuidString.lowercased()
+        noteID = note.id.rawValue.uuidString.lowercased(); noteTitle = note.title
+        device = failure.attempt.device == .iphone ? .iphone : .appleWatch
+        failedAt = failure.failedAt; destination = .init(failure.attempt.endpoint)
+        failureReason = failure.reason.externalRawValue; responseStatusCode = failure.reason.statusCode
+        message = failure.responseExcerpt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case attemptID, noteID, noteTitle, device, failedAt, destination, failureReason, responseStatusCode, message
+    }
+    public func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(attemptID, forKey: .attemptID); try values.encode(noteID, forKey: .noteID)
+        try values.encode(noteTitle, forKey: .noteTitle); try values.encode(device, forKey: .device)
+        try values.encode(failedAt, forKey: .failedAt); try values.encode(destination, forKey: .destination)
+        try values.encode(failureReason, forKey: .failureReason)
+        try values.encode(responseStatusCode, forKey: .responseStatusCode); try values.encode(message, forKey: .message)
+    }
+}
+
+extension AttemptFailureReason {
+    var externalRawValue: String {
+        switch self { case .network: "network"; case .httpStatus: "http_status" }
+    }
+    var statusCode: Int? {
+        if case .httpStatus(let value) = self { value } else { nil }
     }
 }
 
