@@ -24,9 +24,10 @@ import XCTest
         try await client.discardRecording()
     }
 
-    // Break: the control shows no glyph because it names a custom symbol Control Center cannot render.
-    func testControlShowsTheSystemVoiceRecorderSymbol() {
-        XCTAssertEqual(RecordWhimControl.symbolName, "waveform")
-        XCTAssertNotNil(UIImage(systemName: RecordWhimControl.symbolName), "Controls only render system SF Symbols reliably")
+    // Break: the control shows a glyph other than the compact Whim mark, or one Control Center cannot render.
+    func testControlShowsTheCompactWhimMarkSymbol() throws {
+        XCTAssertEqual(RecordWhimControl.symbolName, "whim.small.symbol")
+        let image = try XCTUnwrap(UIImage(named: RecordWhimControl.symbolName, in: Bundle(for: Self.self), with: nil))
+        XCTAssertTrue(image.isSymbolImage, "Controls only render symbols, so the compact mark must ship as a custom symbol")
     }
 }

@@ -65,8 +65,8 @@ private struct WhimComplicationView: View {
                 Image("whim.small")
                     .resizable()
                     .scaledToFit()
+                    // The stroke's round caps reach the artwork's edges, so the tips meet the rim.
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(10)
                     .widgetAccentable()
                     .accessibilityLabel("Record a Whim")
             }
