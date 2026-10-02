@@ -3,7 +3,8 @@ import SwiftUI
 import WidgetKit
 
 struct RecordWhimControl: ControlWidget {
-    static let symbolName = "whim.waveform"
+    // Controls only render symbols, so the compact Whim mark ships as a custom symbol.
+    static let symbolName = "whim.small.symbol"
     let action: RecordWhimIntent
     init() { self.action = RecordWhimIntent() }
     init(action: RecordWhimIntent) { self.action = action }
