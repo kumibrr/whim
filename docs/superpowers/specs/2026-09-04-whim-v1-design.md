@@ -285,7 +285,7 @@ After microphone permission exists, launching Whim through the app icon, complic
 
 Watch produces a distinct start haptic, restores the active recorder after wrist-down, and stops safely at five minutes. Configuration may be viewed only as available/unavailable and last synchronized.
 
-The WidgetKit complication shows the Whim mark while idle, elapsed recording state while active, and an attention indicator when failed Notes exist. Tapping it launches directly into capture.
+The WidgetKit complication shows the Whim mark while idle, elapsed recording time above the Watch app's Stop glyph while active (the circular family uses the compact mark), and an attention indicator when failed Notes exist. Tapping it launches directly into capture.
 
 ## App Intents, Lock Screen control, Action button, and Live Activity
 

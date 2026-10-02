@@ -24,9 +24,9 @@ import XCTest
         try await client.discardRecording()
     }
 
-    // Break: the control falls back to a generic system glyph instead of Whim's app icon waveform.
-    func testControlShowsTheAppIconSymbol() throws {
-        let image = try XCTUnwrap(UIImage(named: RecordWhimControl.symbolName, in: Bundle(for: Self.self), with: nil))
-        XCTAssertTrue(image.isSymbolImage, "Controls only render SF Symbols, so the app icon must ship as a custom symbol")
+    // Break: the control shows no glyph because it names a custom symbol Control Center cannot render.
+    func testControlShowsTheSystemVoiceRecorderSymbol() {
+        XCTAssertEqual(RecordWhimControl.symbolName, "waveform")
+        XCTAssertNotNil(UIImage(systemName: RecordWhimControl.symbolName), "Controls only render system SF Symbols reliably")
     }
 }
