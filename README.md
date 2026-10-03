@@ -37,11 +37,15 @@ When native view files change, run `ruby scripts/configure-xcode-project.rb` (re
 
 See [CONTEXT.md](CONTEXT.md), the [v1 design](docs/superpowers/specs/2026-09-04-whim-v1-design.md), the [iPhone and Watch startup timelines](docs/startup-flow.md), and [migration verification](docs/swiftui-migration-verification.md). Real hardware acceptance procedures live under `e2e/physical/`.
 
+## Versioning
+
+[Changesets](https://github.com/changesets/changesets) owns the App Store marketing version in `ios/package.json` (`@whim/app`). Record user-visible changes with `npm run changeset`; at release time run `npm run release:version`, which bumps the version, writes `ios/CHANGELOG.md`, and syncs `MARKETING_VERSION` into every Xcode target. Never edit `MARKETING_VERSION` by hand. 1.0.0 is the initial release and has no changelog. Xcode's distribution flow manages build numbers.
+
 ## Release gates
 
 The [webhook contract](docs/webhook-contract-v1.md) documents signing and persistent Note-ID deduplication. [Privacy](docs/privacy-v1.md) describes local processing, paired-device transfer, and user-selected endpoints. The [paired-device matrix](e2e/physical/paired-device.e2e.test.md) records the physical checks still required before release.
 
-Run `npm run verify:release` on macOS to create a clean unsigned Release device archive and validate all four embedded executables and privacy manifests. CI runs this after `test:all`. The archive defaults to `ios/build/Whim.xcarchive`; override it with `WHIM_ARCHIVE_PATH`. Distribution signing and physical acceptance remain separate release requirements.
+Run `npm run verify:release` on macOS to create a clean unsigned Release device archive and validate all four embedded executables, privacy manifests and submission metadata (shared marketing version and build number, lowercase `whim` display names, export-compliance key). CI runs this after `test:all`. The archive defaults to `ios/build/Whim.xcarchive`; override it with `WHIM_ARCHIVE_PATH`. Distribution signing and physical acceptance remain separate release requirements.
 
 Run `./scripts/check-release-privacy.sh` to check SDK references and source manifest reasons, or pass a built `whim.app` path to also inspect every embedded target’s manifest. After building or archiving Release, run `./scripts/check-release-fixtures.sh /absolute/path/to/whim.app` to inspect all four executables for debug injection code. That gate also requires the product-owner-approved, non-sensitive recording at `src/iphone/webhook-configuration/configuration-test.m4a`, matching the runtime configuration-test asset. The development fixture is not release approval.
 
