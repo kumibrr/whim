@@ -5,7 +5,7 @@ set -euo pipefail
 
 whim_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$whim_root/scripts/apple-toolchain.sh"
-whim_derived_data="${WHIM_DERIVED_DATA_PATH:-$whim_root/ios/build/DerivedData}"
+source "$whim_root/scripts/xcode-build-locations.sh"
 whim_webhook_log="$whim_root/ios/build/webhook-e2e.log"
 whim_bundle_id="app.whim.ios"
 mkdir -p "$(dirname "$whim_webhook_log")"
@@ -75,12 +75,12 @@ xcodebuild build -quiet \
   -workspace "$whim_root/ios/Whim.xcworkspace" \
   -scheme Whim \
   -configuration Debug \
-  -derivedDataPath "$whim_derived_data" \
+  "${whim_xcode_build_locations[@]}" \
   -destination "id=${WHIM_IPHONE_SIMULATOR_UDID}" \
   CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
 fi
 
-whim_app="$whim_derived_data/Build/Products/Debug-iphonesimulator/whim.app"
+whim_app="$whim_build_products/Debug-iphonesimulator/whim.app"
 xcrun simctl uninstall "$WHIM_IPHONE_SIMULATOR_UDID" "$whim_bundle_id" >/dev/null 2>&1 || true
 xcrun simctl install "$WHIM_IPHONE_SIMULATOR_UDID" "$whim_app"
 whim_flows=(

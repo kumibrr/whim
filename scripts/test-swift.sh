@@ -3,7 +3,7 @@ set -euo pipefail
 
 whim_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$whim_root/scripts/apple-toolchain.sh"
-whim_derived_data="${WHIM_DERIVED_DATA_PATH:-$whim_root/ios/build/DerivedData}"
+source "$whim_root/scripts/xcode-build-locations.sh"
 
 case "${1:-}" in
   unit)
@@ -21,7 +21,7 @@ case "${1:-}" in
       cd "$whim_root/packages/WhimCore"
       xcodebuild test -quiet \
         -scheme WhimCore \
-        -derivedDataPath "$whim_derived_data" \
+        "${whim_xcode_build_locations[@]}" \
         -only-testing:WhimCoreIntegrationTests/AVAudioRecorderSessionIntegrationTests \
         -only-testing:WhimCoreIntegrationTests/PCMRecorderHardwareIntegrationTests \
         -destination "id=${WHIM_IPHONE_SIMULATOR_UDID}" \
@@ -31,7 +31,7 @@ case "${1:-}" in
     xcodebuild test -quiet \
       -workspace "$whim_root/ios/Whim.xcworkspace" \
       -scheme WhimWatch \
-      -derivedDataPath "$whim_derived_data" \
+      "${whim_xcode_build_locations[@]}" \
       -only-testing:WhimWatchTests \
       -destination "id=${WHIM_WATCH_SIMULATOR_UDID}" \
       CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-

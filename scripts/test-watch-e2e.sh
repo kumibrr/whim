@@ -5,7 +5,7 @@ set -euo pipefail
 
 whim_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$whim_root/scripts/apple-toolchain.sh"
-whim_derived_data="${WHIM_DERIVED_DATA_PATH:-$whim_root/ios/build/DerivedData}"
+source "$whim_root/scripts/xcode-build-locations.sh"
 
 whim_fixture_directory="$(mktemp -d "${TMPDIR:-/tmp}/whim-watch-e2e.XXXXXX")"
 python3 - "$whim_fixture_directory/audio.wav" <<'PYTHON'
@@ -41,7 +41,7 @@ export TEST_RUNNER_WHIM_WATCH_WEBHOOK_URL="http://127.0.0.1:$whim_webhook_port"
 xcodebuild test -quiet \
   -workspace "$whim_root/ios/Whim.xcworkspace" \
   -scheme WhimWatchUITests \
-  -derivedDataPath "$whim_derived_data" \
+  "${whim_xcode_build_locations[@]}" \
   -only-testing:"${WHIM_WATCH_E2E_TEST:-WhimWatchUITests}" \
   -destination "id=${WHIM_WATCH_SIMULATOR_UDID}" \
   CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
