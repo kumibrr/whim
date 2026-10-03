@@ -200,6 +200,8 @@ struct SettingsSectionView: View {
         }
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Contain children so the entry identifier does not replace webhook-error-message.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("webhook-error")
     }
     private func footnote(_ text: String) -> some View { Text(text).font(.footnote).foregroundStyle(.secondary) }

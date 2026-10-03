@@ -174,10 +174,26 @@ import WhimCore
         model.openHistory()
         await model.playInline(failed)
         XCTAssertNotNil(model.playbackFailure(for: failed))
-        XCTAssertEqual(model.playbackFailure(for: failed), model.error?.message)
+        XCTAssertEqual(model.playbackFailure(for: failed), "The audio player could not open this Note. Try playback again.")
         XCTAssertNil(model.playbackFailure(for: other))
         await model.playInline(failed)
         XCTAssertNil(model.playbackFailure(for: failed))
+        model.stop()
+    }
+
+    func testPlaybackFailureNotifiesRowsObservingTheirNote() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let model = IPhoneModel(client: harness.makeService(playback: FailsFirstPlayback(), permissions: GrantedPermissions()))
+        await model.start()
+        await model.startRecording(); await model.stopRecording()
+        let id = try XCTUnwrap(model.notes.first).id
+        model.openHistory()
+        let changed = expectation(description: "Row observing its playback failure re-renders")
+        withObservationTracking { _ = model.playbackFailure(for: id) } onChange: { changed.fulfill() }
+        await model.playInline(id)
+        await fulfillment(of: [changed], timeout: 1)
+        XCTAssertNotNil(model.playbackFailure(for: id))
         model.stop()
     }
 

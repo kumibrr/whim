@@ -5,10 +5,10 @@ source "$whim_root/scripts/apple-toolchain.sh"
 if [[ -z "${WHIM_IPHONE_SIMULATOR_UDID:-}" ]]; then
   eval "$("$whim_root/scripts/boot-apple-simulators.sh")"
 fi
-whim_derived_data="${WHIM_DERIVED_DATA_PATH:-$whim_root/ios/build/DerivedData}"
+source "$whim_root/scripts/xcode-build-locations.sh"
 xcodebuild test -quiet \
   -workspace "$whim_root/ios/Whim.xcworkspace" -scheme Whim \
-  -derivedDataPath "$whim_derived_data" \
+  "${whim_xcode_build_locations[@]}" \
   -only-testing:WhimSystemSurfaceTests \
   -destination "id=${WHIM_IPHONE_SIMULATOR_UDID}" \
   CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-

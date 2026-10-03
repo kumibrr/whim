@@ -15,7 +15,10 @@ struct IPhoneRootView: View {
             Group {
                 if model.onboardingCompleted { home(model.settings) }
                 else { OnboardingView(model: model, settings: model.settings) }
-            }.navigationDestination(for: IPhoneRoute.self) { route in
+            }
+            // The stack's root does not inherit insets applied outside NavigationStack.
+            .modifier(IPhoneFailurePresentation(model: model, enabled: path.isEmpty && !model.isHistoryPresented, allowsCollapse: model.onboardingCompleted, morphNamespace: failureNamespace, configureWebhook: openWebhookSettings))
+            .navigationDestination(for: IPhoneRoute.self) { route in
                 switch route {
                 case .settings: if let settings = model.settings { PreferencesView(model: model, settings: settings) }
                 case .settingsSection(let section):
@@ -24,7 +27,6 @@ struct IPhoneRootView: View {
                 }
             }.toolbar(.hidden, for: .navigationBar)
         }
-        .modifier(IPhoneFailurePresentation(model: model, enabled: path.isEmpty && !model.isHistoryPresented, allowsCollapse: model.onboardingCompleted, morphNamespace: failureNamespace, configureWebhook: openWebhookSettings))
         .sheet(isPresented: Binding(
             get: { model.isHistoryPresented },
             set: { presented in if !presented { Task { await model.closeHistory() } } }

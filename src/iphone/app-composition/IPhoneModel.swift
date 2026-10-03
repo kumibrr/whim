@@ -101,7 +101,7 @@ import WhimCore
     /// History shows playback failures on the affected row instead of the error card.
     public func playbackFailure(for id: NoteID) -> String? {
         guard failedPlaybackNoteID == id, error?.recovery.operation == .playback else { return nil }
-        return error?.message
+        return error?.recovery.message
     }
     private func clearPlaybackFailure() {
         failedPlaybackNoteID = nil
@@ -127,7 +127,7 @@ import WhimCore
     public private(set) var settingsError: IPhoneError? { didSet { reconcileCollapsedFailures() } }
     public private(set) var maintenanceError: IPhoneError? { didSet { reconcileCollapsedFailures() } }
     @ObservationIgnored private var maintenanceTask: Task<Void, Never>?
-    @ObservationIgnored private var failedPlaybackNoteID: NoteID?
+    private var failedPlaybackNoteID: NoteID?
     public var captureReady: Bool { startupState != nil }
     public private(set) var isResolvingError = false
     @ObservationIgnored private var lastCaptureCommand = CaptureCommand.start
