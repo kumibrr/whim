@@ -13,10 +13,16 @@
     "test:e2e:watch": "./scripts/test-watch-e2e.sh",
     "test:e2e": "npm run test:e2e:iphone && npm run test:e2e:watch",
     "test:all": "./scripts/test-all.sh",
-    "test:integration:webhook": "npm run test:integration --workspace @whim/reference-webhook"
+    "test:integration:webhook": "npm run test:integration --workspace @whim/reference-webhook",
+    "changeset": "changeset",
+    "release:version": "changeset version && node scripts/sync-app-version.mjs"
   },
   "private": true,
   "workspaces": [
+    "ios",
     "packages/reference-webhook"
-  ]
+  ],
+  "devDependencies": {
+    "@changesets/cli": "^3.0.3"
+  }
 }

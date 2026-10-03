@@ -6,6 +6,7 @@ cd "$whim_root"
 source "$whim_root/scripts/apple-toolchain.sh"
 whim_archive="${WHIM_ARCHIVE_PATH:-$whim_root/ios/build/Whim.xcarchive}"
 ./scripts/check-release-privacy.sh
+./scripts/check-release-metadata.sh
 xcodebuild clean archive -quiet \
   -workspace ios/Whim.xcworkspace -scheme Whim -configuration Release \
   -destination 'generic/platform=iOS' -archivePath "$whim_archive" \
@@ -13,3 +14,4 @@ xcodebuild clean archive -quiet \
 whim_app="$whim_archive/Products/Applications/whim.app"
 ./scripts/check-release-fixtures.sh "$whim_app"
 ./scripts/check-release-privacy.sh "$whim_app"
+./scripts/check-release-metadata.sh "$whim_app"

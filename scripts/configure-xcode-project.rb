@@ -1,8 +1,11 @@
 #!/usr/bin/env ruby
 
+require 'json'
 require 'xcodeproj'
 
 project_path = File.expand_path('../ios/whim.xcodeproj', __dir__)
+# Changesets owns the app version; see scripts/sync-app-version.mjs.
+APP_VERSION = JSON.parse(File.read(File.expand_path('../ios/package.json', __dir__))).fetch('version')
 project = Xcodeproj::Project.open(project_path)
 app_target = project.targets.find { |target| target.name == 'whim' }
 abort 'Expected iPhone target named whim' unless app_target
@@ -29,7 +32,7 @@ def configure_target(target, bundle_identifier, deployment_target)
     settings.delete('OTHER_SWIFT_FLAGS') if ['', '$(inherited)'].include?(settings['OTHER_SWIFT_FLAGS'])
     settings['CODE_SIGN_STYLE'] = 'Automatic'
     settings['CURRENT_PROJECT_VERSION'] = '1'
-    settings['MARKETING_VERSION'] = '1.0.0'
+    settings['MARKETING_VERSION'] = APP_VERSION
     settings['GENERATE_INFOPLIST_FILE'] = 'YES'
     settings['PRODUCT_BUNDLE_IDENTIFIER'] = bundle_identifier
     settings['PRODUCT_NAME'] = '$(TARGET_NAME)'
@@ -58,7 +61,7 @@ watch_sources.each { |source| watch_target.add_file_references([source]) unless 
 configure_target(watch_target, 'app.whim.ios.watchkitapp', '11.0')
 watch_target.build_configurations.each do |configuration|
   settings = configuration.build_settings
-  settings['INFOPLIST_KEY_CFBundleDisplayName'] = 'Whim'
+  settings['INFOPLIST_KEY_CFBundleDisplayName'] = 'whim'
   settings['INFOPLIST_KEY_WKCompanionAppBundleIdentifier'] = 'app.whim.ios'
   settings['INFOPLIST_KEY_NSMicrophoneUsageDescription'] = 'Whim records voice Notes on your Apple Watch.'
   settings.delete('INFOPLIST_KEY_UIBackgroundModes')
@@ -201,7 +204,7 @@ widget_group = virtual_group(project, 'WhimWidgets')
     settings['INFOPLIST_FILE'] = "#{name}-Info.plist"
     settings['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] = '$(inherited) WHIM_WIDGET_EXTENSION'
     settings['CURRENT_PROJECT_VERSION'] = '1'
-    settings['MARKETING_VERSION'] = '1.0.0'
+    settings['MARKETING_VERSION'] = APP_VERSION
     settings['CODE_SIGN_ENTITLEMENTS'] = entitlements
     settings['SKIP_INSTALL'] = 'YES'
     settings['TARGETED_DEVICE_FAMILY'] = platform == :ios ? '1' : '4'

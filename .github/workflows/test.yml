@@ -17,6 +17,7 @@ jobs:
       - run: npm run test:unit:tooling
       - run: npm run test:integration:webhook
       - run: ./scripts/check-release-privacy.sh
+      - run: ./scripts/check-release-metadata.sh
 
   apple:
     runs-on: macos-latest
