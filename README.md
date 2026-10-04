@@ -2,6 +2,10 @@
 
 Whim captures voice Notes on iPhone and Apple Watch, keeps them recoverable locally, and delivers them to a user-controlled webhook. Both apps use SwiftUI; WhimCore owns native recording, persistence, delivery, recovery and device synchronization.
 
+## Receive your audio
+
+Follow the [audio receiver setup guide](docs/receive-audio.md) to run your own server, connect Whim, and retrieve your recordings. It covers a local Wi-Fi setup and a persistent Linux service with HTTPS, authentication, and backups. The server requires Node 24 or newer; no Apple development tools are needed.
+
 ## Development
 
 Requires a complete Xcode installation supporting iOS 18+ and watchOS 11+, Node for repository scripts and the webhook receiver, and Maestro for iPhone end-to-end tests. No CocoaPods, Expo, React Native or Metro setup is needed.
