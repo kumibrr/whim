@@ -21,6 +21,11 @@ async function sourceFixture() {
     await mkdir(join(root, path, '..'), { recursive: true });
     await cp(join(repository, path), join(root, path));
   }
+  // Keep fixture versions stable as the repository advances through releases.
+  const manifestPath = join(root, 'ios/package.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  await writeFile(manifestPath, JSON.stringify({ ...manifest, version: '1.0.0' }, null, 2) + '\n');
+  await syncAppVersion(root);
   return root;
 }
 
