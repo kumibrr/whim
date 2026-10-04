@@ -82,22 +82,12 @@ struct OnboardingView: View {
     private var microphone: some View {
         VStack(alignment: .leading, spacing: 32) {
             OnboardingSymbol(systemName: "mic", caption: "CAPTURE", isLarge: true)
-            OnboardingHeading(title: "Ready when\ninspiration strikes.",
-                detail: "A thought, an idea, a reminder. Allow microphone access and capture it before it slips away.")
-            VStack(alignment: .leading, spacing: 24) {
-                OnboardingBenefit(symbol: "waveform", title: "Only when you record",
-                    detail: "You choose when to start. Whim uses your microphone only during a Recording Session.")
-                OnboardingBenefit(symbol: "iphone", title: "Saved on your device",
-                    detail: "Your Notes are stored locally, even when you’re offline.")
-            }
+            OnboardingHeading(title: "Always ready to record",
+                detail: "Whim uses your microphone only when you record.")
             if microphoneDenied {
-                Label("Microphone access is denied. Enable it in system settings, or finish setup for now.", systemImage: "mic.slash")
-                    .font(.footnote).fixedSize(horizontal: false, vertical: true)
-                    .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(white: 0.1), in: RoundedRectangle(cornerRadius: 16))
-            } else if model.startupState?.microphone == .granted {
-                Label("Microphone access is ready.", systemImage: "checkmark.circle")
+                Label("Enable microphone access in Settings to record.", systemImage: "mic.slash")
                     .font(.footnote).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
