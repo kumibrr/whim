@@ -145,6 +145,7 @@ struct WhimErrorContainer: View {
 
 struct IPhoneStartupShell: View {
     let onboardingCompleted: Bool
+    @Environment(\.dynamicTypeSize) private var textSize
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -152,10 +153,11 @@ struct IPhoneStartupShell: View {
                 Rectangle().fill(.white).frame(height: 1).padding(.horizontal, 24)
                 VStack { Spacer(); ProgressView("Preparing recording…").padding(.bottom, 48) }
             } else {
-                WhimContent {
-                    Text("A place for your thoughts").whimTitle()
-                    Text("Whim stores voice Notes locally on your iPhone and Apple Watch and delivers them directly to your webhook. No account, cloud storage, or analytics.")
-                    ProgressView("Preparing Whim…")
+                OnboardingFrame(step: 0) {
+                    OnboardingWelcome()
+                } actions: {
+                    ProgressView("Preparing Whim…").frame(maxWidth: .infinity, minHeight: 64)
+                    if !textSize.isAccessibilitySize { OnboardingPrivacyText() }
                 }
             }
         }.accessibilityIdentifier(onboardingCompleted ? "whim-home" : "onboarding")

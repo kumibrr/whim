@@ -17,6 +17,7 @@ import WhimCore
     public private(set) var isPending = false
     private let client: any WhimClient
     private var draftBase: [HeaderPatch] = []
+    @ObservationIgnored private var pendingSave: Task<Void, Never>?
     public var isDirty: Bool { !endpoint.isEmpty || bearer.action != .preserve || hmac.action != .preserve || headers != nil || !newName.isEmpty || !newValue.isEmpty }
     public init(client: any WhimClient) { self.client = client }
     public func existingHeaders(_ configuration: WebhookSettingsProjection?) -> [HeaderPatch] {
@@ -37,16 +38,31 @@ import WhimCore
         values.remove(at: index); headers = values
     }
     public func save() async {
-        await perform {
-            let result = try await client.patchWebhook(.init(endpoint: endpoint.isEmpty ? nil : endpoint,
-                bearerToken: bearer, hmacSecret: hmac, customHeaders: pendingHeaders))
-            endpoint = ""; bearer = .init(action: .preserve); hmac = .init(action: .preserve); headers = nil
-            cancelHeader()
-            message = "Webhook saved. Test it to check delivery."
-            offersRetry = result.failedCount + result.setupRequiredCount > 0
+        if let pendingSave { await pendingSave.value; return }
+        guard !isPending else { return }
+        let task = Task { @MainActor in
+            await perform {
+                let result = try await client.patchWebhook(.init(endpoint: endpoint.isEmpty ? nil : endpoint,
+                    bearerToken: bearer, hmacSecret: hmac, customHeaders: pendingHeaders))
+                endpoint = ""; bearer = .init(action: .preserve); hmac = .init(action: .preserve); headers = nil
+                cancelHeader()
+                message = "Webhook saved. Test it to check delivery."
+                offersRetry = result.failedCount + result.setupRequiredCount > 0
+            }
         }
+        pendingSave = task
+        await task.value
+        pendingSave = nil
     }
-    public func test() async {
+    /// A blur and a button tap can request the same save; both await its completion.
+    public func saveIfNeeded() async {
+        if pendingSave != nil || isDirty { await save() }
+    }
+    public func test(saveChanges: Bool = false) async {
+        if saveChanges && (isDirty || pendingSave != nil) {
+            await saveIfNeeded()
+            guard error == nil else { return }
+        }
         guard !isDirty else { return }
         await perform {
             let result = try await client.testWebhook()

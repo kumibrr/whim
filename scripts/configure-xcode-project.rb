@@ -252,9 +252,9 @@ project.targets.select { |target| %w[whim WhimWatch WhimLiveActivity WhimComplic
   end
 end
 
-# Widget surfaces render the app icon waveform as a custom symbol.
+# Onboarding and widget surfaces share the compact Whim artwork.
 widget_assets = file_reference(widget_group, '../src/widgets/app-composition/WidgetAssets.xcassets')
-project.targets.select { |target| %w[WhimLiveActivity WhimComplication WhimSystemSurfaceTests].include?(target.name) }.each do |target|
+project.targets.select { |target| %w[whim WhimLiveActivity WhimComplication WhimSystemSurfaceTests].include?(target.name) }.each do |target|
   unless target.resources_build_phase.files_references.include?(widget_assets)
     target.resources_build_phase.add_file_reference(widget_assets)
   end
