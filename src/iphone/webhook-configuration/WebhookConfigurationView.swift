@@ -12,7 +12,7 @@ struct WebhookConfigurationView: View {
     @FocusState private var focused: Field?
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if let configuration { Text("Current destination: \(destinationLabel(configuration.destination))").font(.footnote).foregroundStyle(.secondary) }
+            if let configuration, editor.endpoint.isEmpty { Text("Current destination: \(destinationLabel(configuration.destination))").font(.footnote).foregroundStyle(.secondary) }
             field("Webhook URL") {
                 TextField(configuration == nil ? "https://your-workflow.example/whim" : "Leave blank to keep current URL", text: $editor.endpoint)
                     .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled().focused($focused, equals: .endpoint).whimInput("Webhook HTTPS URL").accessibilityIdentifier("webhook-url")
@@ -37,7 +37,7 @@ struct WebhookConfigurationView: View {
             else if editor.isDirty { Text("Save changes before testing.").font(.footnote).foregroundStyle(.secondary) }
             if let message = editor.message { Text(message) }
             if let error = editor.error { WhimErrorText(message: error.message) }
-            if editor.offersRetry {
+            if !compact && editor.offersRetry {
                 Button("Retry unsent Notes", systemImage: "arrow.clockwise") { Task { await editor.retryUnsent(); await model.refresh() } }.whimGlassButton()
             }
         }

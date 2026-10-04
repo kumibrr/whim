@@ -30,12 +30,19 @@ appId: app.whim.ios
 - extendedWaitUntil:
     visible: Webhook saved. Test it to check delivery.
     timeout: 10000
-# Leaving the URL field saves it; revisiting setup shows the saved destination.
+# Leaving the URL field saves it without clearing the field or duplicating the destination.
+- assertVisible:
+    id: webhook-url
+    text: https://whim-fixture.invalid/receive
+- assertNotVisible: 'Current destination: .*'
 - tapOn: Continue to microphone
 - assertVisible: Step 3 of 3
 - tapOn:
     id: onboarding-back
-- assertVisible: 'Current destination: https://whim-fixture.invalid/receive'
+- assertVisible:
+    id: webhook-url
+    text: https://whim-fixture.invalid/receive
+- assertNotVisible: 'Current destination: .*'
 - scrollUntilVisible:
     element: Test webhook
     direction: DOWN
@@ -43,6 +50,7 @@ appId: app.whim.ios
 - extendedWaitUntil:
     visible: Test passed. Idempotency confirmed.
     timeout: 15000
+- assertNotVisible: Retry unsent Notes
 - tapOn: Continue to microphone
 - runFlow:
     when:

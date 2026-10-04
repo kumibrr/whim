@@ -1,0 +1,41 @@
+appId: app.whim.ios
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: deny
+- runFlow:
+    when:
+      visible: Open
+    commands:
+      - tapOn: Cancel
+- extendedWaitUntil:
+    visible: Get started
+    timeout: 60000
+- tapOn: Get started
+- tapOn: Skip webhook setup
+- assertVisible: Step 3 of 3
+- tapOn: Open system settings
+# Permission changes can terminate Whim. Grant access and cold-launch without clearing data.
+- stopApp: app.whim.ios
+- launchApp:
+    permissions:
+      all: allow
+- extendedWaitUntil:
+    visible: Start using Whim
+    timeout: 60000
+- assertVisible: Step 3 of 3
+- assertVisible: Always ready to record
+- tapOn: Start using Whim
+- assertVisible:
+    id: whim-home
+- tapOn:
+    id: settings-button
+- scrollUntilVisible:
+    element: Reset Whim
+    direction: DOWN
+    centerElement: true
+- tapOn: Reset Whim
+- tapOn: Confirm reset
+- assertVisible: Get started
+- assertVisible: Step 1 of 3

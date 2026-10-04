@@ -3,6 +3,33 @@ import WhimCore
 @testable import WhimIPhone
 
 @MainActor final class WebhookEditorIntegrationTests: XCTestCase {
+    func testSavingKeepsEndpointEditableWithoutPendingChanges() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let client = harness.makeService()
+        let editor = WebhookEditor(client: client)
+        editor.endpoint = "https://example.com/receive?token=private"
+
+        await editor.saveIfNeeded()
+
+        XCTAssertNil(editor.error)
+        XCTAssertEqual(editor.endpoint, "https://example.com/receive?token=private")
+        XCTAssertFalse(editor.isDirty)
+        let saved = try await client.settings()
+        let revisionID = try XCTUnwrap(saved.webhook).revisionID
+        await editor.saveIfNeeded()
+        let unchanged = try await client.settings()
+        XCTAssertEqual(unchanged.webhook?.revisionID, revisionID)
+
+        editor.endpoint = "https://example.com/updated"
+        XCTAssertTrue(editor.isDirty)
+        await editor.saveIfNeeded()
+        XCTAssertEqual(editor.endpoint, "https://example.com/updated")
+        XCTAssertFalse(editor.isDirty)
+        let updated = try await client.settings()
+        XCTAssertEqual(updated.webhook?.destination.path, "/updated")
+    }
+
     func testEditingPreservesSavedSecretsAndQueryAndClearsExplicitSecret() async throws {
         let harness = try WhimFacadeHarness()
         defer { harness.remove() }

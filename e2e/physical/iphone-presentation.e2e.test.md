@@ -252,8 +252,12 @@ with disposable data.
    on GitHub (repository access is required until it becomes public).
 3. Verify microphone guidance appears at the permission step. Grant access and
    reach capture; repeat with denied access and Continue without microphone.
-   Open system settings, grant access, and return. No speech or notification
-   permission prompt appears during onboarding.
+   Before completing onboarding, use Open system settings, grant access, and
+   return. Expect Step 3 of 3 and Start using Whim, including after force-quitting
+   Whim in Settings and relaunching it. The startup screen must also show the
+   microphone step. Repeat without granting access: expect the same step with
+   permission guidance. No speech or notification permission prompt appears
+   during onboarding. After completion, Reset Whim must start at Step 1 of 3.
 4. Repeat with VoiceOver and the largest Dynamic Type size on a small iPhone.
    Verify headings and step progress are announced, Back and every form field
    remain reachable, and the keyboard does not cover the active field or actions.
@@ -267,7 +271,10 @@ with disposable data.
 
 Closest deterministic coverage: the installed onboarding Maestro journeys cover
 step progress, Back, optional webhook fields, saved configuration, webhook tests,
-and granted/denied completion. Permission commands and persistence are also
+and granted/denied completion. `e2e/iphone/onboarding-resume.e2e.test.yaml` covers
+leaving for Settings, granting access at the simulator boundary, and restoring
+the microphone step after a cold launch, then resetting to the welcome step.
+Permission commands and persistence are also
 covered through the native presentation integration seam. VoiceOver focus,
 haptic perception, and physical keyboard/layout acceptance remain manual.
 
