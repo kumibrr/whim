@@ -157,7 +157,8 @@ struct OnboardingFrame<Content: View, Actions: View>: View {
                     }.buttonStyle(.plain).accessibilityLabel("Back")
                         .accessibilityIdentifier("onboarding-back")
                 } else {
-                    LiveWaveformView(isResting: true).frame(width: 34, height: 24).accessibilityHidden(true)
+                    Image("whim.small").resizable().scaledToFit()
+                        .frame(width: 34, height: 24).accessibilityHidden(true)
                 }
                 Text("whim").font(.title2.weight(.semibold))
                 Spacer()
@@ -179,19 +180,19 @@ struct OnboardingWelcome: View {
     @Environment(\.dynamicTypeSize) private var textSize
     var body: some View {
         VStack(alignment: .leading, spacing: 32) {
-            ZStack {
-                Circle().fill(RadialGradient(colors: [Color(white: 0.12), .black],
-                    center: .center, startRadius: 0, endRadius: 140))
-                Circle().stroke(.white.opacity(0.06), lineWidth: 1).padding(12)
-                Circle().stroke(.white.opacity(0.04), lineWidth: 1).padding(38)
-                LiveWaveformView(isResting: true).frame(height: 100).padding(.horizontal, 12)
-            }
-            .frame(height: textSize.isAccessibilitySize ? 120 : 160)
-            .frame(maxWidth: .infinity).accessibilityHidden(true)
+            LiveWaveformView(isResting: true).frame(height: 100).padding(.horizontal, 12)
+                .frame(height: textSize.isAccessibilitySize ? 120 : 160)
+                .frame(maxWidth: .infinity).accessibilityHidden(true)
             OnboardingHeading(title: "A place for\nyour thoughts.",
                 detail: "Whim stores voice Notes locally on your iPhone and Apple Watch and delivers them directly to your webhook.")
-            OnboardingBenefit(symbol: "lock", title: "Keep it yours",
-                detail: "Local storage. Your destination. You’re in control.")
+            VStack(alignment: .leading, spacing: 24) {
+                OnboardingBenefit(symbol: "lock", title: "Keep it yours",
+                    detail: "Local storage. Your destination. You’re in control.")
+                OnboardingBenefit(symbol: "hand.tap", title: "Convenient",
+                    detail: "Assign the Action Button to Whim, or use its control in Control Center or on the Lock Screen.")
+                OnboardingBenefit(symbol: "applewatch", title: "Apple Watch",
+                    detail: "Use complications, or add Whim to the Smart Stack for hands-free operation.")
+            }
             if textSize.isAccessibilitySize { OnboardingPrivacyText() }
         }
     }
