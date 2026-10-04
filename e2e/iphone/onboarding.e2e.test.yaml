@@ -15,10 +15,12 @@ appId: app.whim.ios
     timeout: 60000
 - assertVisible: .*stores voice Notes locally.*
 - assertVisible: Step 1 of 3
+- assertVisible: .*Use complications, or add Whim to the Smart Stack.*
 - assertNotVisible:
     id: startup-error
 - tapOn: Get started
 - assertVisible: Step 2 of 3
+- assertVisible: (?s).*Your workflow,.*directly.*
 - tapOn:
     id: onboarding-back
 - assertVisible: Get started
@@ -44,6 +46,7 @@ appId: app.whim.ios
     centerElement: true
 - tapOn: Skip webhook setup
 - assertVisible: Step 3 of 3
+- assertVisible: Always ready to record
 - tapOn:
     id: onboarding-back
 - assertVisible: Step 2 of 3

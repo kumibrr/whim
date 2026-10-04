@@ -61,7 +61,6 @@ struct OnboardingView: View {
 
     private var workflow: some View {
         VStack(alignment: .leading, spacing: 28) {
-            OnboardingSymbol(systemName: "server.rack", caption: "CONNECT")
             OnboardingHeading(title: "Your workflow,\ndirectly.",
                 detail: "Send each Note to a destination you control. Your audio goes straight from your device to your webhook.")
             if let settings {
@@ -81,7 +80,6 @@ struct OnboardingView: View {
 
     private var microphone: some View {
         VStack(alignment: .leading, spacing: 32) {
-            OnboardingSymbol(systemName: "mic", caption: "CAPTURE", isLarge: true)
             OnboardingHeading(title: "Always ready to record",
                 detail: "Whim uses your microphone only when you record.")
             if microphoneDenied {
@@ -169,9 +167,6 @@ struct OnboardingWelcome: View {
     @Environment(\.dynamicTypeSize) private var textSize
     var body: some View {
         VStack(alignment: .leading, spacing: 32) {
-            LiveWaveformView(isResting: true).frame(height: 100).padding(.horizontal, 12)
-                .frame(height: textSize.isAccessibilitySize ? 120 : 160)
-                .frame(maxWidth: .infinity).accessibilityHidden(true)
             OnboardingHeading(title: "A place for\nyour thoughts.",
                 detail: "Whim stores voice Notes locally on your iPhone and Apple Watch and delivers them directly to your webhook.")
             VStack(alignment: .leading, spacing: 24) {
@@ -223,20 +218,6 @@ private struct OnboardingBenefit: View {
                 Text(detail).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }.accessibilityElement(children: .combine)
-    }
-}
-
-private struct OnboardingSymbol: View {
-    let systemName: String
-    let caption: String
-    var isLarge = false
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: systemName).font(.system(size: isLarge ? 42 : 28, weight: .light))
-                .frame(width: isLarge ? 112 : 72, height: isLarge ? 112 : 72)
-                .whimGlass(in: RoundedRectangle(cornerRadius: isLarge ? 36 : 24))
-            Text(caption).font(.caption2.weight(.medium)).tracking(3).foregroundStyle(.secondary)
-        }.frame(maxWidth: .infinity).padding(.vertical, isLarge ? 24 : 8).accessibilityHidden(true)
     }
 }
 
