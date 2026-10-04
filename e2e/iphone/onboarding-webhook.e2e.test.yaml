@@ -27,22 +27,18 @@ appId: app.whim.ios
 - assertVisible: https://whim-fixture.invalid/receive
 - tapOn:
     id: webhook-keyboard-done
-# Revisiting setup must preserve the unsaved destination.
+- extendedWaitUntil:
+    visible: Webhook saved. Test it to check delivery.
+    timeout: 10000
+# Leaving the URL field saves it; revisiting setup shows the saved destination.
 - tapOn: Continue to microphone
 - assertVisible: Step 3 of 3
 - tapOn:
     id: onboarding-back
-- assertVisible: https://whim-fixture.invalid/receive
-- scrollUntilVisible:
-    element: Save webhook
-    direction: DOWN
-- tapOn: Save webhook
-- extendedWaitUntil:
-    visible: Webhook saved. Test it to check delivery.
-    timeout: 10000
+- assertVisible: 'Current destination: https://whim-fixture.invalid/receive'
 - scrollUntilVisible:
     element: Test webhook
-    direction: UP
+    direction: DOWN
 - tapOn: Test webhook
 - extendedWaitUntil:
     visible: Test passed. Idempotency confirmed.

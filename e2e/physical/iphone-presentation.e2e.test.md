@@ -230,8 +230,14 @@ with disposable data.
    and direct webhook delivery explained, three-step progress, and a prominent
    Get started button. Startup must retain the same welcome layout while loading.
 2. Proceed to webhook setup. Only the destination is required; expand
-   Authentication & headers to edit optional credentials. Save and test a
-   controlled destination, continue, and use Back to revisit it. Repeat using Skip.
+   Authentication & headers to edit optional credentials. Verify the server icon
+   and absence of a Save webhook button. Enter a controlled destination and leave
+   the field: it saves automatically. Edit a field again and tap Test webhook
+   while it still has focus: the new configuration must save before the test
+   request is sent. An invalid edit must remain visible and prevent testing the
+   old destination. Continue and use Back to revisit the saved destination; repeat
+   using Skip. Set up a server opens the repository's reference receiver guidance
+   on GitHub (repository access is required until it becomes public).
 3. Verify microphone guidance appears at the permission step. Grant access and
    reach capture; repeat with denied access and Continue without microphone.
    Open system settings, grant access, and return. No speech or notification
@@ -240,8 +246,8 @@ with disposable data.
    Verify headings and step progress are announced, Back and every form field
    remain reachable, and the keyboard does not cover the active field or actions.
    While the keyboard is open, tap Continue to microphone and verify it advances
-   immediately. Maestro's cached iOS hierarchy can retain pre-keyboard button
-   coordinates, so the automated draft-preservation journey uses the explicit
+   after any pending save. Maestro's cached iOS hierarchy can retain pre-keyboard button
+   coordinates, so the automated configuration journey uses the explicit
    Done control before this action; it does not establish keyboard-open hit testing.
 5. Repeat with Reduce Motion and Reduce Transparency, and on iOS 18. Expect
    still artwork, no transition animation with Reduce Motion, readable opaque

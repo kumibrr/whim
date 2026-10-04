@@ -61,22 +61,18 @@ struct OnboardingView: View {
 
     private var workflow: some View {
         VStack(alignment: .leading, spacing: 28) {
-            OnboardingSymbol(systemName: "arrow.up.right", caption: "CONNECT")
+            OnboardingSymbol(systemName: "server.rack", caption: "CONNECT")
             OnboardingHeading(title: "Your workflow,\ndirectly.",
                 detail: "Send each Note to a destination you control. Your audio goes straight from your device to your webhook.")
             if let settings {
-                VStack(alignment: .leading, spacing: 20) {
-                    WebhookConfigurationView(model: model, editor: webhook, configuration: settings.webhook, compact: true)
-                    Button("Save webhook", systemImage: "checkmark") {
-                        Task { await webhook.save(); await model.refresh() }
-                    }
-                    .whimProminentGlassButton()
-                    .disabled(!webhook.isDirty || webhook.isPending)
-                }
-                .padding(20)
-                .background(Color(white: 0.055), in: RoundedRectangle(cornerRadius: 24))
-                .overlay(RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.12), lineWidth: 1))
+                WebhookConfigurationView(model: model, editor: webhook, configuration: settings.webhook, compact: true)
+                    .padding(20)
+                    .background(Color(white: 0.055), in: RoundedRectangle(cornerRadius: 24))
+                    .overlay(RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.12), lineWidth: 1))
             } else { ProgressView("Loading webhook settings…") }
+            Link(destination: URL(string: "https://github.com/kumibrr/whim/blob/main/docs/webhook-contract-v1.md#reference-receiver")!) {
+                Label("Set up a server", systemImage: "arrow.up.right")
+            }.whimGlassButton().accessibilityIdentifier("onboarding-server-setup")
             Label("Set this up later. Your Notes stay on your device until a destination is ready.", systemImage: "tray")
                 .font(.footnote).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -110,8 +106,11 @@ struct OnboardingView: View {
         model.startupState?.microphone == .denied || model.startupState?.microphone == .restricted
     }
     private func move(to destination: Int) {
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { step = destination }
-        UIAccessibility.post(notification: .screenChanged, argument: nil)
+        Task {
+            if step == 1 { await webhook.saveIfNeeded(); await model.refresh() }
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { step = destination }
+            UIAccessibility.post(notification: .screenChanged, argument: nil)
+        }
     }
     private func complete(request: Bool) {
         Task { await model.perform {
