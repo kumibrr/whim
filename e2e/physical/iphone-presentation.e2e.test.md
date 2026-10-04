@@ -6,6 +6,18 @@ Task 7 tests; they are not evidence of a release pass.
 Record the build SHA, iPhone model/iOS version, tester, date, result, and a
 non-sensitive evidence path for each execution.
 
+## Settings switch colors
+
+1. Open Settings → On-device titles and enable Transcription. Verify the switch track uses
+   the native system-green background and its thumb remains white.
+2. Disable Transcription. Verify the track returns to the native off appearance.
+3. Open Settings → Webhook and tap Add header. Verify the enabled Secret header
+   switch has the same system-green track. Turn it off and on to check both states,
+   then cancel the header.
+
+Regression: both enabled switches inherited the app's white tint, making the
+track and thumb appear entirely white. Status: not executed.
+
 ## Recording session configuration on iOS 27
 
 Preconditions: a physical iPhone with microphone permission granted. Skip webhook

@@ -30,6 +30,7 @@ struct PendingIPhoneLink { let id = UUID(); let url: URL }
                         } message: { Text("Open iPhone Settings > General > iPhone Storage and remove items you no longer need. Then return to Whim and check again.") }
                 }
             }.preferredColorScheme(.dark).tint(.white).buttonStyle(WhimButtonStyle())
+                .toggleStyle(.switch(tint: Color(uiColor: .systemGreen)))
                 .onOpenURL { pendingLink = PendingIPhoneLink(url: $0) }
         }
     }
