@@ -6,3 +6,7 @@ ios/build/
 build/
 .build/
 .DS_Store
+
+# Xcode user-specific settings
+xcuserdata/
+*.xcuserstate
