@@ -45,6 +45,8 @@ The same acknowledgement with `duplicate: true` is returned for a duplicate. Net
 
 ## Reference receiver
 
+For a walkthrough covering local and Linux server setup, HTTPS, connecting the app, and exporting recordings, see [Receive Whim audio on your own server](receive-audio.md).
+
 Requires Node 24+. The receiver is a separate, self-hosted example; it is not shipped in the apps or operated by Whim.
 
 ```sh
