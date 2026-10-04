@@ -80,6 +80,7 @@ xcodebuild build -quiet \
   CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
 fi
 
+whim_resolve_build_locations "$whim_derived_data" "id=${WHIM_IPHONE_SIMULATOR_UDID}"
 whim_app="$whim_build_products/Debug-iphonesimulator/whim.app"
 xcrun simctl uninstall "$WHIM_IPHONE_SIMULATOR_UDID" "$whim_bundle_id" >/dev/null 2>&1 || true
 xcrun simctl install "$WHIM_IPHONE_SIMULATOR_UDID" "$whim_app"

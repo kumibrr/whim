@@ -5,9 +5,9 @@ import plistlib
 import sys
 from pathlib import Path
 
-build = Path(sys.argv[1]) / 'Build'
-products = build / 'Products'
-intermediates = build / 'Intermediates.noindex/whim.build'
+# Arguments: Xcode BUILD_DIR and PROJECT_TEMP_DIR, which honor custom build locations.
+products = Path(sys.argv[1])
+intermediates = Path(sys.argv[2])
 iphone = products / 'Debug-iphonesimulator/whim.app'
 watch = iphone / 'Watch/WhimWatch.app'
 
