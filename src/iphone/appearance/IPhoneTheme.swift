@@ -1,4 +1,5 @@
 import SwiftUI
+import WhimCore
 extension Color { static let whimAccent = Color.white }
 struct WhimButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -145,6 +146,7 @@ struct WhimErrorContainer: View {
 
 struct IPhoneStartupShell: View {
     let onboardingCompleted: Bool
+    @AppStorage("onboarding.v1.step", store: UserDefaults(suiteName: WhimProductionComposition.appGroupIdentifier)) private var onboardingStep = 0
     @Environment(\.dynamicTypeSize) private var textSize
     var body: some View {
         ZStack {
@@ -153,11 +155,15 @@ struct IPhoneStartupShell: View {
                 Rectangle().fill(.white).frame(height: 1).padding(.horizontal, 24)
                 VStack { Spacer(); ProgressView("Preparing recording…").padding(.bottom, 48) }
             } else {
-                OnboardingFrame(step: 0) {
-                    OnboardingWelcome()
+                OnboardingFrame(step: onboardingStep) {
+                    switch onboardingStep {
+                    case 0: OnboardingWelcome()
+                    case 1: OnboardingWorkflowHeading()
+                    default: OnboardingMicrophoneHeading()
+                    }
                 } actions: {
                     ProgressView("Preparing Whim…").frame(maxWidth: .infinity, minHeight: 64)
-                    if !textSize.isAccessibilitySize { OnboardingPrivacyText() }
+                    if onboardingStep == 0 && !textSize.isAccessibilitySize { OnboardingPrivacyText() }
                 }
             }
         }.accessibilityIdentifier(onboardingCompleted ? "whim-home" : "onboarding")

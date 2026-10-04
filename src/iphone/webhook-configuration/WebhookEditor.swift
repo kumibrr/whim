@@ -17,8 +17,9 @@ import WhimCore
     public private(set) var isPending = false
     private let client: any WhimClient
     private var draftBase: [HeaderPatch] = []
+    private var savedEndpoint = ""
     @ObservationIgnored private var pendingSave: Task<Void, Never>?
-    public var isDirty: Bool { !endpoint.isEmpty || bearer.action != .preserve || hmac.action != .preserve || headers != nil || !newName.isEmpty || !newValue.isEmpty }
+    public var isDirty: Bool { endpoint != savedEndpoint || bearer.action != .preserve || hmac.action != .preserve || headers != nil || !newName.isEmpty || !newValue.isEmpty }
     public init(client: any WhimClient) { self.client = client }
     public func existingHeaders(_ configuration: WebhookSettingsProjection?) -> [HeaderPatch] {
         headers ?? (configuration?.customHeaders.map { header in
@@ -44,7 +45,8 @@ import WhimCore
             await perform {
                 let result = try await client.patchWebhook(.init(endpoint: endpoint.isEmpty ? nil : endpoint,
                     bearerToken: bearer, hmacSecret: hmac, customHeaders: pendingHeaders))
-                endpoint = ""; bearer = .init(action: .preserve); hmac = .init(action: .preserve); headers = nil
+                savedEndpoint = endpoint
+                bearer = .init(action: .preserve); hmac = .init(action: .preserve); headers = nil
                 cancelHeader()
                 message = "Webhook saved. Test it to check delivery."
                 offersRetry = result.failedCount + result.setupRequiredCount > 0

@@ -5,7 +5,7 @@ import WhimIPhone
 struct OnboardingView: View {
     var model: IPhoneModel
     let settings: SettingsProjection?
-    @State private var step = 0
+    @AppStorage("onboarding.v1.step", store: UserDefaults(suiteName: WhimProductionComposition.appGroupIdentifier)) private var step = 0
     @State private var webhook: WebhookEditor
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var textSize
@@ -61,8 +61,7 @@ struct OnboardingView: View {
 
     private var workflow: some View {
         VStack(alignment: .leading, spacing: 28) {
-            OnboardingHeading(title: "Your workflow,\ndirectly.",
-                detail: "Send each Note to a destination you control. Your audio goes straight from your device to your webhook.")
+            OnboardingWorkflowHeading()
             if let settings {
                 WebhookConfigurationView(model: model, editor: webhook, configuration: settings.webhook, compact: true)
                     .padding(20)
@@ -80,8 +79,7 @@ struct OnboardingView: View {
 
     private var microphone: some View {
         VStack(alignment: .leading, spacing: 32) {
-            OnboardingHeading(title: "Always ready to record",
-                detail: "Whim uses your microphone only when you record.")
+            OnboardingMicrophoneHeading()
             if microphoneDenied {
                 Label("Enable microphone access in Settings to record.", systemImage: "mic.slash")
                     .font(.footnote).foregroundStyle(.secondary)
@@ -179,6 +177,20 @@ struct OnboardingWelcome: View {
             }
             if textSize.isAccessibilitySize { OnboardingPrivacyText() }
         }
+    }
+}
+
+struct OnboardingWorkflowHeading: View {
+    var body: some View {
+        OnboardingHeading(title: "Your workflow,\ndirectly.",
+            detail: "Send each Note to a destination you control. Your audio goes straight from your device to your webhook.")
+    }
+}
+
+struct OnboardingMicrophoneHeading: View {
+    var body: some View {
+        OnboardingHeading(title: "Always ready to record",
+            detail: "Whim uses your microphone only when you record.")
     }
 }
 
