@@ -201,7 +201,7 @@ Your own worker can consume `notes` rows as durable work items. Use `note_id` as
 
 ## Keep the inbox recoverable
 
-Keep `/var/lib/whim` on persistent storage and monitor disk space. The inbox, exported files, and backups contain your complete recordings and metadata. The receiver has no automatic retention cleanup. Whim's Retention Policy, Delete, and Reset affect device storage; they do not delete server copies. See [Whim privacy](privacy-v1.md).
+Keep `/var/lib/whim` on persistent storage and monitor disk space. The inbox, exported files, and backups contain your complete recordings and metadata. The receiver has no automatic retention cleanup. Whim's Retention Policy, Delete, and Reset affect device storage; they do not delete server copies. See [Whim privacy](privacy.md).
 
 Use SQLite's backup command to take a consistent snapshot while the receiver runs. On this Linux setup:
 

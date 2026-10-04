@@ -1,6 +1,8 @@
 # Paired-device release acceptance
 
-No physical case below has been executed for this change. Record the exact commit and devices for each run; simulator success is not physical sign-off. Use non-sensitive fixture speech and a controlled webhook. Save only redacted screenshots, timings, request counts, and pass/fail evidence under `evidence/`.
+Physical results below are pending until a tester reports an execution. Record the exact commit and devices for each run; simulator success is not physical sign-off. Use non-sensitive fixture speech and a controlled webhook. Save only redacted screenshots, timings, request counts, and pass/fail evidence under `evidence/`.
+
+The [paired-device test guide](paired-device-test-guide.md) gives setup, numbered procedures, expected results, and a chat reporting template for all 26 matrix rows. Report a case number here to record its result. Missing observations stay pending; an unsupported hardware variant is recorded explicitly rather than counted as a pass.
 
 ## Automated traceability
 
