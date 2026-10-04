@@ -1,0 +1,86 @@
+appId: app.whim.ios
+---
+- evalScript: '${http.post(WHIM_WEBHOOK_RESET_URL, {body: ""})}'
+- launchApp:
+    clearState: true
+    arguments:
+      -WhimFixtureAudio: ${WHIM_FIXTURE_AUDIO}
+      -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
+    permissions:
+      all: allow
+- runFlow:
+    when:
+      visible: Open
+    commands:
+      - tapOn: Cancel
+- extendedWaitUntil:
+    visible: Get started
+    timeout: 60000
+- tapOn: Get started
+- scrollUntilVisible:
+    element:
+      id: webhook-url
+    direction: DOWN
+- tapOn:
+    id: webhook-url
+- inputText: https://whim-fixture.invalid/receive
+- assertVisible: https://whim-fixture.invalid/receive
+- tapOn:
+    id: webhook-keyboard-done
+# Revisiting setup must preserve the unsaved destination.
+- tapOn: Continue to microphone
+- assertVisible: Step 3 of 3
+- tapOn:
+    id: onboarding-back
+- assertVisible: https://whim-fixture.invalid/receive
+- scrollUntilVisible:
+    element: Save webhook
+    direction: DOWN
+- tapOn: Save webhook
+- extendedWaitUntil:
+    visible: Webhook saved. Test it to check delivery.
+    timeout: 10000
+- scrollUntilVisible:
+    element: Test webhook
+    direction: UP
+- tapOn: Test webhook
+- extendedWaitUntil:
+    visible: Test passed. Idempotency confirmed.
+    timeout: 15000
+- tapOn: Continue to microphone
+- runFlow:
+    when:
+      visible: Allow microphone
+    commands:
+      - tapOn: Allow microphone
+      - runFlow:
+          when:
+            visible: Allow
+          commands:
+            - tapOn: Allow
+      - runFlow:
+          when:
+            visible: OK
+          commands:
+            - tapOn: OK
+- runFlow:
+    when:
+      visible: Start using Whim
+    commands:
+      - tapOn: Start using Whim
+- extendedWaitUntil:
+    visible:
+      id: whim-home
+    timeout: 10000
+- tapOn:
+    id: record-button
+- assertVisible:
+    id: recorder-panel
+- tapOn:
+    id: stop-recording
+- assertVisible: Note saved
+- tapOn:
+    id: history-hint
+- extendedWaitUntil:
+    visible: 'Open .*Sent.*'
+    timeout: 15000

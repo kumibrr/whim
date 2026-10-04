@@ -14,11 +14,39 @@ appId: app.whim.ios
     visible: Get started
     timeout: 60000
 - assertVisible: .*stores voice Notes locally.*
+- assertVisible: Step 1 of 3
+- assertNotVisible:
+    id: startup-error
 - tapOn: Get started
+- assertVisible: Step 2 of 3
+- tapOn:
+    id: onboarding-back
+- assertVisible: Get started
+- tapOn: Get started
+- assertNotVisible:
+    id: webhook-bearer-token
+- scrollUntilVisible:
+    element: Authentication & headers
+    direction: DOWN
+- tapOn: Authentication & headers
+- scrollUntilVisible:
+    element:
+      id: webhook-bearer-token
+    direction: DOWN
+- assertVisible:
+    id: webhook-bearer-token
+- tapOn: Authentication & headers
+- assertNotVisible:
+    id: webhook-bearer-token
 - scrollUntilVisible:
     element: Skip webhook setup
     direction: DOWN
     centerElement: true
+- tapOn: Skip webhook setup
+- assertVisible: Step 3 of 3
+- tapOn:
+    id: onboarding-back
+- assertVisible: Step 2 of 3
 - tapOn: Skip webhook setup
 # Some simulator launches leave permission undecided despite the launch override.
 - runFlow:

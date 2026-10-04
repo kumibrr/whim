@@ -6,6 +6,8 @@ struct WebhookConfigurationView: View {
     var model: IPhoneModel
     @Bindable var editor: WebhookEditor
     let configuration: WebhookSettingsProjection?
+    var compact = false
+    @State private var showsAdvancedOptions = false
     @FocusState private var focused: Bool
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -14,6 +16,39 @@ struct WebhookConfigurationView: View {
                 TextField(configuration == nil ? "https://your-workflow.example/whim" : "Leave blank to keep current URL", text: $editor.endpoint)
                     .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled().focused($focused).whimInput("Webhook HTTPS URL").accessibilityIdentifier("webhook-url")
             }
+            if compact {
+                DisclosureGroup("Authentication & headers", isExpanded: $showsAdvancedOptions) {
+                    advancedFields.padding(.top, 12)
+                    addHeaderButton.padding(.top, 12)
+                }.font(.subheadline)
+            } else {
+                advancedFields
+            }
+            HStack(spacing: 12) {
+                if !compact { addHeaderButton }
+                Button("Test webhook", systemImage: "paperplane") { focused = false; Task { await editor.test() } }
+                    .whimGlassButton().disabled(editor.isDirty)
+            }
+            if editor.isDirty { Text("Save changes before testing.").font(.footnote).foregroundStyle(.secondary) }
+            if let message = editor.message { Text(message) }
+            if let error = editor.error { WhimErrorText(message: error.message) }
+            if editor.offersRetry {
+                Button("Retry unsent Notes", systemImage: "arrow.clockwise") { Task { await editor.retryUnsent(); await model.refresh() } }.whimGlassButton()
+            }
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { focused = false }
+                    .accessibilityIdentifier("webhook-keyboard-done")
+            }
+        }
+        .disabled(editor.isPending)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("webhook-configuration")
+    }
+    private var advancedFields: some View {
+        VStack(alignment: .leading, spacing: 16) {
             secret("Bearer token", value: $editor.bearer, exists: configuration?.hasBearerToken == true, id: "webhook-bearer-token")
             secret("HMAC secret", value: $editor.hmac, exists: configuration?.hasHMACSecret == true, id: "webhook-hmac-secret")
             Text("Custom headers").font(.headline).accessibilityAddTraits(.isHeader).padding(.top, 8)
@@ -35,22 +70,11 @@ struct WebhookConfigurationView: View {
                 Toggle("Secret header", isOn: $editor.newSecret)
                 Button("Cancel header", role: .cancel) { editor.cancelHeader() }.whimGlassButton()
             }
-            HStack(spacing: 12) {
-                Button("Add header", systemImage: "plus") { focused = false; editor.addHeader(configuration: configuration) }
-                    .whimGlassButton()
-                Button("Test webhook", systemImage: "paperplane") { focused = false; Task { await editor.test() } }
-                    .whimGlassButton().disabled(editor.isDirty)
-            }
-            if editor.isDirty { Text("Save changes before testing.").font(.footnote).foregroundStyle(.secondary) }
-            if let message = editor.message { Text(message) }
-            if let error = editor.error { WhimErrorText(message: error.message) }
-            if editor.offersRetry {
-                Button("Retry unsent Notes", systemImage: "arrow.clockwise") { Task { await editor.retryUnsent(); await model.refresh() } }.whimGlassButton()
-            }
         }
-        .disabled(editor.isPending)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("webhook-configuration")
+    }
+    private var addHeaderButton: some View {
+        Button("Add header", systemImage: "plus") { focused = false; editor.addHeader(configuration: configuration) }
+            .whimGlassButton()
     }
     private func field<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {

@@ -220,3 +220,41 @@ On 2026-09-23, a fresh `NSUnbufferedIO=YES npm run test:all` completed successfu
 including all ten iPhone E2E flows and Watch E2E. No delivery-code change was needed.
 The earlier stall was not reproduced; its cause remains unconfirmed. Physical
 acceptance cases above remain pending.
+
+## Guided onboarding
+
+Status: pending physical-device execution. Use a fresh install or Reset Whim
+with disposable data.
+
+1. Inspect the welcome: black background, the still Whim waveform, local storage
+   and direct webhook delivery explained, three-step progress, and a prominent
+   Get started button. Startup must retain the same welcome layout while loading.
+2. Proceed to webhook setup. Only the destination is required; expand
+   Authentication & headers to edit optional credentials. Save and test a
+   controlled destination, continue, and use Back to revisit it. Repeat using Skip.
+3. Verify microphone guidance appears at the permission step. Grant access and
+   reach capture; repeat with denied access and Continue without microphone.
+   Open system settings, grant access, and return. No speech or notification
+   permission prompt appears during onboarding.
+4. Repeat with VoiceOver and the largest Dynamic Type size on a small iPhone.
+   Verify headings and step progress are announced, Back and every form field
+   remain reachable, and the keyboard does not cover the active field or actions.
+   While the keyboard is open, tap Continue to microphone and verify it advances
+   immediately. Maestro's cached iOS hierarchy can retain pre-keyboard button
+   coordinates, so the automated draft-preservation journey uses the explicit
+   Done control before this action; it does not establish keyboard-open hit testing.
+5. Repeat with Reduce Motion and Reduce Transparency, and on iOS 18. Expect
+   still artwork, no transition animation with Reduce Motion, readable opaque
+   surfaces with Reduce Transparency, and the native material fallback on iOS 18.
+
+Closest deterministic coverage: the installed onboarding Maestro journeys cover
+step progress, Back, optional webhook fields, saved configuration, webhook tests,
+and granted/denied completion. Permission commands and persistence are also
+covered through the native presentation integration seam. VoiceOver focus,
+haptic perception, and physical keyboard/layout acceptance remain manual.
+
+Simulator visual review, 2026-10-04: inspected all three pages on an iPhone 17 Pro
+running iOS 27 at normal and maximum accessibility text sizes. The progress header
+stays on one line, primary and secondary action labels wrap without truncation,
+and privacy copy moves into the scrolling content at accessibility sizes. The
+physical-device cases above remain pending.

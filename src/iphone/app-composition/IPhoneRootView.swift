@@ -17,7 +17,10 @@ struct IPhoneRootView: View {
                 else { OnboardingView(model: model, settings: model.settings) }
             }
             // The stack's root does not inherit insets applied outside NavigationStack.
-            .modifier(IPhoneFailurePresentation(model: model, enabled: path.isEmpty && !model.isHistoryPresented, allowsCollapse: model.onboardingCompleted, morphNamespace: failureNamespace, configureWebhook: openWebhookSettings))
+            .modifier(IPhoneFailurePresentation(model: model,
+                enabled: path.isEmpty && !model.isHistoryPresented
+                    && (model.onboardingCompleted || model.visibleFailure?.action != .microphoneSettings),
+                allowsCollapse: model.onboardingCompleted, morphNamespace: failureNamespace, configureWebhook: openWebhookSettings))
             .navigationDestination(for: IPhoneRoute.self) { route in
                 switch route {
                 case .settings: if let settings = model.settings { PreferencesView(model: model, settings: settings) }

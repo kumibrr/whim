@@ -87,6 +87,7 @@ whim_flows=(
   "$whim_root/e2e/iphone/history-sheet.e2e.test.yaml"
   "$whim_root/e2e/iphone/playback-error.e2e.test.yaml"
   "$whim_root/e2e/iphone/onboarding.e2e.test.yaml"
+  "$whim_root/e2e/iphone/onboarding-webhook.e2e.test.yaml"
   "$whim_root/e2e/iphone/record-and-review.e2e.test.yaml"
   "$whim_root/e2e/iphone/offline-and-retry.e2e.test.yaml"
   "$whim_root/e2e/iphone/failed-and-retry.e2e.test.yaml"

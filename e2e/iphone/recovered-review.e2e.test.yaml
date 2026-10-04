@@ -32,6 +32,8 @@ appId: app.whim.ios
     timeout: 60000
 - tapOn:
     id: note-row-.*
+- assertVisible:
+    id: note-detail
 - assertVisible: '⚠ Review required'
 - assertVisible: No Attempts yet.
 - assertTrue:
@@ -39,6 +41,8 @@ appId: app.whim.ios
     label: Recovery does not deliver the Note to the configured destination
 - tapOn:
     id: note-play-.*
+    childOf:
+      id: note-detail
 - assertVisible:
     id: note-stop-.*
 - tapOn:
