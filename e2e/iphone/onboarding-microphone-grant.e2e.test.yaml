@@ -1,0 +1,28 @@
+appId: app.whim.ios
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: deny
+      microphone: unset
+- runFlow:
+    when:
+      visible: Open
+    commands:
+      - tapOn: Cancel
+- extendedWaitUntil:
+    visible: Get started
+    timeout: 60000
+- tapOn: Get started
+- tapOn: Skip webhook setup
+- assertVisible: Step 3 of 3
+- tapOn: Continue
+- assertVisible: Don.t Allow
+# iOS versions label the affirmative system action differently.
+- tapOn: Allow|OK
+- extendedWaitUntil:
+    visible:
+      id: whim-home
+    timeout: 10000
+- assertNotVisible:
+    id: startup-error

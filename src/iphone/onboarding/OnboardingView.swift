@@ -16,7 +16,7 @@ struct OnboardingView: View {
     }
 
     var body: some View {
-        OnboardingFrame(step: step, back: step == 0 ? nil : { move(to: step - 1) }) {
+        OnboardingFrame(step: step, back: step == 0 || (step >= 2 && model.startupState?.microphone == .notDetermined) ? nil : { move(to: step - 1) }) {
             Group {
                 switch step {
                 case 0: OnboardingWelcome()
@@ -37,19 +37,21 @@ struct OnboardingView: View {
                     .buttonStyle(OnboardingSecondaryButtonStyle())
             default:
                 if model.startupState?.microphone == .notDetermined {
-                    Button("Allow microphone", systemImage: "mic") { complete(request: true) }
-                        .buttonStyle(OnboardingPrimaryButtonStyle())
-                } else if microphoneDenied {
-                    Button("Open system settings", systemImage: "arrow.up.right") {
-                        Task { await model.perform { try await model.client.openSystemSettings() } }
-                    }.buttonStyle(OnboardingPrimaryButtonStyle())
-                }
-                if model.startupState?.microphone == .granted {
-                    Button("Start using Whim") { complete(request: false) }
+                    Button("Continue", systemImage: "arrow.right") { complete(request: true) }
                         .buttonStyle(OnboardingPrimaryButtonStyle())
                 } else {
-                    Button("Continue without microphone") { complete(request: false) }
-                        .buttonStyle(OnboardingSecondaryButtonStyle())
+                    if microphoneDenied {
+                        Button("Open system settings", systemImage: "arrow.up.right") {
+                            Task { await model.perform { try await model.client.openSystemSettings() } }
+                        }.buttonStyle(OnboardingPrimaryButtonStyle())
+                    }
+                    if model.startupState?.microphone == .granted {
+                        Button("Start using Whim") { complete(request: false) }
+                            .buttonStyle(OnboardingPrimaryButtonStyle())
+                    } else {
+                        Button("Continue") { complete(request: false) }
+                            .buttonStyle(OnboardingSecondaryButtonStyle())
+                    }
                 }
             }
         }
