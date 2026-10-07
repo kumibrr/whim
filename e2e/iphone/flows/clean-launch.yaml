@@ -24,9 +24,9 @@ appId: app.whim.ios
 - tapOn: Skip webhook setup
 - runFlow:
     when:
-      visible: Allow microphone
+      visible: Continue
     commands:
-      - tapOn: Allow microphone
+      - tapOn: Continue
       - runFlow:
           when:
             visible: Allow

@@ -116,7 +116,7 @@ struct WatchCaptureView: View {
                     .font(.caption)
                     .multilineTextAlignment(.center)
                 if model.permission == .notDetermined {
-                    Button("Allow microphone") { Task { await model.requestPermission() } }
+                    Button("Continue") { Task { await model.requestPermission() } }
 
                 }
             }

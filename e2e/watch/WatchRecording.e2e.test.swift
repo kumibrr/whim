@@ -156,6 +156,18 @@ extension WatchRecordingUITests {
         wait(for: [captureIsFullPage], timeout: 5)
     }
 
+    func testUndecidedMicrophoneUsesNeutralContinueAction() {
+        let app = XCUIApplication()
+        // Use the real permission boundary; fixture launches pre-grant microphone access.
+        app.resetAuthorizationStatus(for: .microphone)
+        app.launch()
+        defer { app.terminate() }
+
+        XCTAssertTrue(app.buttons["Continue"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Allow microphone"].exists)
+        XCTAssertFalse(app.buttons["watch-stop"].exists)
+    }
+
     func testDeniedMicrophoneShowsExplanationWithoutStartingCapture() {
         let app = XCUIApplication()
         app.launchArguments = WatchUITestConfiguration.arguments + ["-WhimWatchMicrophoneDenied"]

@@ -96,3 +96,15 @@ Closest deterministic coverage: WhimCore LiveWaveform tests cover the resting
 logo, the silent flat line, the voice trace and the travel between them;
 WatchModel integration tests cover loudness and tone propagation and their
 reset between Recording Sessions.
+
+## Microphone permission explanation
+
+Status: pending physical-device execution.
+
+With microphone permission undecided, launch Whim. Verify the capture screen
+explains why access is required and presents a neutral Continue action. Tap
+Continue and verify the watchOS system permission prompt appears. Repeat from
+undecided permission with both grant and denial. Denial must leave recording
+blocked with the existing Settings guidance; granting access must allow capture.
+The installed Watch UI regression resets system microphone authorization and
+checks the neutral action without the debug permission adapter.

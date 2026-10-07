@@ -247,11 +247,17 @@ with disposable data.
    the field: it saves automatically. Edit a field again and tap Test webhook
    while it still has focus: the new configuration must save before the test
    request is sent. An invalid edit must remain visible and prevent testing the
-   old destination. Continue and use Back to revisit the saved destination; repeat
-   using Skip. Set up a server opens the repository's reference receiver guidance
+   old destination. With microphone permission already granted, Continue and use
+   Back to revisit the saved destination; repeat using Skip. Set up a server
+   opens the repository's reference receiver guidance
    on GitHub (repository access is required until it becomes public).
-3. Verify microphone guidance appears at the permission step. Grant access and
-   reach capture; repeat with denied access and Continue without microphone.
+3. On a fresh install with microphone permission undecided, verify the explanation
+   has a single Continue action, with no Back or custom opt-out. Tap Continue:
+   the system microphone prompt must appear before capture opens. Grant access
+   and reach capture; repeat from undecided permission and choose Don't Allow in
+   the system prompt. Onboarding must still finish with recording blocked and
+   actionable Settings guidance. If permission was already denied before
+   onboarding, Continue must finish without repeating the system prompt.
    Before completing onboarding, use Open system settings, grant access, and
    return. Expect Step 3 of 3 and Start using Whim, including after force-quitting
    Whim in Settings and relaunching it. The startup screen must also show the
@@ -271,7 +277,10 @@ with disposable data.
 
 Closest deterministic coverage: the installed onboarding Maestro journeys cover
 step progress, Back, optional webhook fields, saved configuration, webhook tests,
-and granted/denied completion. `e2e/iphone/onboarding-resume.e2e.test.yaml` covers
+and granted/denied completion through the real system microphone prompt.
+`e2e/iphone/onboarding-microphone-grant.e2e.test.yaml` covers granting access;
+`e2e/iphone/onboarding.e2e.test.yaml` covers denial and Settings guidance.
+`e2e/iphone/onboarding-resume.e2e.test.yaml` covers
 leaving for Settings, granting access at the simulator boundary, and restoring
 the microphone step after a cold launch, then resetting to the welcome step.
 Permission commands and persistence are also
