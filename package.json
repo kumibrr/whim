@@ -15,7 +15,8 @@
     "test:all": "./scripts/test-all.sh",
     "test:integration:webhook": "npm run test:integration --workspace @whim/reference-webhook",
     "changeset": "changeset",
-    "release:version": "node scripts/prepare-release-version.mjs"
+    "release:version": "node scripts/prepare-release-version.mjs",
+    "release": "node scripts/release.mjs"
   },
   "private": true,
   "workspaces": [
