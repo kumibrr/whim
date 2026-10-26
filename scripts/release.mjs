@@ -49,6 +49,7 @@ export async function release(root = process.cwd(), { run = runCommand, platform
   let committed = false;
   let commitVerified = false;
   let tagged = false;
+  let tagVerified = false;
   let pushed = false;
   let notesPath;
   let releaseCommit;
@@ -106,6 +107,7 @@ export async function release(root = process.cwd(), { run = runCommand, platform
     tagged = true;
     tagObject = (await execute('git', ['rev-parse', `refs/tags/${tag}`], true)).trim();
     if ((await execute('git', ['rev-parse', `${tag}^{}`], true)).trim() !== releaseCommit) throw new Error('The tag changed before publication.');
+    tagVerified = true;
     await execute('git', ['push', '--atomic', pushURLs[0], `${releaseCommit}:refs/heads/main`, `${tagObject}:refs/tags/${tag}`]);
     pushed = true;
     const url = await execute('gh', ['release', 'create', tag, '--repo', repository, '--verify-tag', '--title', `whim ${version}`, '--notes-file', notesPath], true);
@@ -116,6 +118,7 @@ export async function release(root = process.cwd(), { run = runCommand, platform
     if (pushed) recovery = `The tag ${tag} is already pushed and has triggered Xcode Cloud. Check whether the GitHub Release exists, then recover publication only:\ngh release view ${tag} --repo ${repository}\n${publishCommand()}\nDo not run versioning again.`;
     else if (committed && !commitVerified) recovery = `The local release commit is preserved but was not fully verified. Do not publish it. Inspect git show ${releaseCommit} and git status, preserve concurrent work, repair the commit, and rerun npm run test:all and npm run verify:release before any manual publication.`;
     else if (committed && !tagged) recovery = `The local release commit is preserved. Tag creation failed. Inspect the commit and check that the tag is absent locally and remotely:\ngit show --stat ${releaseCommit}\ngit tag --list ${tag}\ngit ls-remote origin refs/tags/${tag}\nResolve the tagging failure, then only if the tag is absent create it:\ngit tag -a ${tag} -m ${shellQuote(`whim ${version}`)} ${releaseCommit}\nDo not move an existing tag. Then run:\n${pushCommand()}\n${publishCommand()}\nDo not run versioning again.`;
+    else if (committed && !tagVerified) recovery = `The release commit and tag are preserved, but the tag target could not be verified. Do not publish this tag or move an existing tag. Inspect git show ${releaseCommit} and git show ${tag}, then resolve the mismatch before any manual publication.`;
     else if (committed) recovery = `The local release commit and any tag are preserved. Inspect local and remote refs before retrying; a connection failure can hide a successful push:\ngit ls-remote origin refs/heads/main refs/tags/${tag}\n${pushCommand()}\nThen publish: ${publishCommand()}\nDo not run versioning again.`;
     else if (prepared) recovery = `The prepared files are preserved. Review git diff, resolve the failure, and rerun npm run test:all and npm run verify:release. Finish the reviewed commit/tag/push using the recovery procedure in README.md; do not run versioning again.${notesPath ? `\nRelease notes: ${notesPath}` : ''}`;
     throw new Error(`${error.message}\n${recovery}`, { cause: error });

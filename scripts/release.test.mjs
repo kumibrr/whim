@@ -263,3 +263,18 @@ test('an unverified local commit never receives recovery instructions to push it
     return true;
   });
 });
+
+test('a tag changed before verification never receives recovery instructions to push it', async t => {
+  const fixture = await releaseFixture(t);
+  await assert.rejects(release(fixture, { run: async (executable, args, opts) => {
+    const result = await fixture.run(executable, args, opts);
+    if (executable === 'git' && args[0] === 'tag' && args[1] === '-a') command(fixture.root, 'git', ['update-ref', 'refs/tags/v1.0.1', fixture.initial]);
+    return result;
+  } }), error => {
+    assert.match(error.message, /tag changed/);
+    assert.match(error.message, /Do not publish/i);
+    assert.doesNotMatch(error.message, /git push --atomic/);
+    return true;
+  });
+  assert.equal(command(fixture.root, 'git', ['--git-dir', fixture.remote, 'rev-parse', 'main']).trim(), fixture.initial);
+});
