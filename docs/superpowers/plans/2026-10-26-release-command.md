@@ -1,6 +1,6 @@
 # Release Command Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Provide one local command for validated app versioning and publication to GitHub, handing the version tag to Xcode Cloud.
 
@@ -51,7 +51,7 @@
 - [x] Implement the smallest successful command flow.
 - [x] Add and run failing cases in vertical slices for dirty/detached/diverged checkout, platform/dependency/auth failures, no Changesets, reused tag, invalid version, failed tests/archive, concurrent edits/main movement, and rejected push/publication recovery. Implement each guard after observing its failure.
 - [x] Document prerequisites, successful flow, failure recovery, cloud handoff, and manual acceptance/submission.
-- [ ] Run `npm run test:unit:tooling`; expect all passing. Run `npm run test:all` with external build storage; expect all suites passing. Verify a clean Release archive with the existing archive command.
+- [x] Run `npm run test:unit:tooling`; expect all passing. Run `npm run test:all` with external build storage; expect all suites passing. Verify a clean Release archive with the existing archive command.
 - [x] Commit the command and documentation.
 
 ### Task 3: Final review
@@ -59,5 +59,13 @@
 **Files:** Review the complete branch against the design. Verification exposed fixes in `scripts/terminate-process-tree.mjs` and its companion test, `scripts/restart-e2e-simulator.mjs` and its companion test, `scripts/test-iphone-e2e.sh`, `e2e/iphone/flows/clean-launch.yaml`, and `e2e/iphone/onboarding.e2e.test.yaml`. These address interrupted-run cleanup, fresh simulator readiness, and an impossible fixed-footer centering requirement; app behavior is unchanged.
 
 - [x] Obtain the fresh whole-branch review required by executing-plans, carrying the spec, plan, and review focus.
-- [ ] Reproduce material findings with failing companion tests, fix, and rerun affected checks; rerun full checks if implementation changes.
-- [ ] Confirm no real version bump, tag, or GitHub release was created, inspect the final diff, and report the command and verification results.
+- [x] Reproduce material findings with failing companion tests, fix, and rerun affected checks; rerun full checks if implementation changes.
+- [x] Confirm no real version bump, tag, or GitHub release was created, inspect the final diff, and report the command and verification results.
+
+
+## Verification record — 2026-10-27
+
+- `npm run test:all` passed: 75 tooling tests, all Swift unit/integration and native platform checks, 18 iPhone E2E journeys, and 18 Watch E2E tests. No Watch tests were skipped.
+- The exact `npm run verify:release` entry point passed with an external archive destination: clean unsigned archive, approved fixture checks, privacy manifests, and release metadata across the embedded targets.
+- All three independent review findings were reproduced and fixed with companion regression tests. Verification also exposed and fixed process-tree cleanup and iPhone test setup issues; no app behavior changed.
+- App version remains 1.1.2. Implementing this command did not create an app release, version tag, or App Store submission. Live cloud distribution will be verified on the next real release tag.
