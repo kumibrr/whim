@@ -20,7 +20,7 @@ appId: app.whim.ios
 - scrollUntilVisible:
     element: Skip webhook setup
     direction: DOWN
-    centerElement: true
+    centerElement: false
 - tapOn: Skip webhook setup
 - runFlow:
     when:

@@ -52,11 +52,11 @@
 - [x] Add and run failing cases in vertical slices for dirty/detached/diverged checkout, platform/dependency/auth failures, no Changesets, reused tag, invalid version, failed tests/archive, concurrent edits/main movement, and rejected push/publication recovery. Implement each guard after observing its failure.
 - [x] Document prerequisites, successful flow, failure recovery, cloud handoff, and manual acceptance/submission.
 - [ ] Run `npm run test:unit:tooling`; expect all passing. Run `npm run test:all` with external build storage; expect all suites passing. Verify a clean Release archive with the existing archive command.
-- [ ] Commit the command and documentation.
+- [x] Commit the command and documentation.
 
 ### Task 3: Final review
 
-**Files:** Review the complete branch against the design; no new implementation scope.
+**Files:** Review the complete branch against the design. Verification exposed fixes in `scripts/terminate-process-tree.mjs` and its companion test, `scripts/restart-e2e-simulator.mjs` and its companion test, `scripts/test-iphone-e2e.sh`, `e2e/iphone/flows/clean-launch.yaml`, and `e2e/iphone/onboarding.e2e.test.yaml`. These address interrupted-run cleanup, fresh simulator readiness, and an impossible fixed-footer centering requirement; app behavior is unchanged.
 
 - [x] Obtain the fresh whole-branch review required by executing-plans, carrying the spec, plan, and review focus.
 - [ ] Reproduce material findings with failing companion tests, fix, and rerun affected checks; rerun full checks if implementation changes.

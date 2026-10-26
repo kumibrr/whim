@@ -44,7 +44,7 @@ appId: app.whim.ios
 - scrollUntilVisible:
     element: Skip webhook setup
     direction: DOWN
-    centerElement: true
+    centerElement: false
 - tapOn: Skip webhook setup
 - assertVisible: Step 3 of 3
 - assertVisible: Always ready to record

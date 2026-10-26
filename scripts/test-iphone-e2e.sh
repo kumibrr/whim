@@ -84,6 +84,7 @@ whim_resolve_build_locations "$whim_derived_data" "id=${WHIM_IPHONE_SIMULATOR_UD
 whim_app="$whim_build_products/Debug-iphonesimulator/whim.app"
 xcrun simctl uninstall "$WHIM_IPHONE_SIMULATOR_UDID" "$whim_bundle_id" >/dev/null 2>&1 || true
 xcrun simctl install "$WHIM_IPHONE_SIMULATOR_UDID" "$whim_app"
+node "$whim_root/scripts/restart-e2e-simulator.mjs" "$WHIM_IPHONE_SIMULATOR_UDID"
 whim_flows=(
   "$whim_root/e2e/iphone/history-sheet.e2e.test.yaml"
   "$whim_root/e2e/iphone/playback-error.e2e.test.yaml"
