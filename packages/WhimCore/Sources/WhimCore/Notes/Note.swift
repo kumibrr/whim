@@ -51,8 +51,10 @@ public struct Note: Codable, Equatable, Sendable {
     public let delivery: Delivery
     public let localError: LocalAudioError?
     public let audioExpiredAt: Date?
+    public let audioSynchronization: AudioSynchronization?
+    public let audioSynchronizationRetries: [AudioSynchronizationRetry]?
 
-    public var isDeliveryEligible: Bool { !requiresReview && localError == nil && delivery.receipt == nil }
+    public var isDeliveryEligible: Bool { audioSynchronization == nil && !requiresReview && localError == nil && delivery.receipt == nil }
 
     public init(
         id: NoteID,
@@ -68,7 +70,9 @@ public struct Note: Codable, Equatable, Sendable {
         workflowID: String = WorkflowDefinition.default.id,
         delivery: Delivery = .pending,
         localError: LocalAudioError? = nil,
-        audioExpiredAt: Date? = nil
+        audioExpiredAt: Date? = nil,
+        audioSynchronization: AudioSynchronization? = nil,
+        audioSynchronizationRetries: [AudioSynchronizationRetry]? = nil
     ) {
         self.id = id
         self.recordingSessionID = recordingSessionID
@@ -84,6 +88,8 @@ public struct Note: Codable, Equatable, Sendable {
         self.delivery = delivery
         self.localError = localError
         self.audioExpiredAt = audioExpiredAt
+        self.audioSynchronization = audioSynchronization
+        self.audioSynchronizationRetries = audioSynchronizationRetries
     }
 }
 
@@ -136,6 +142,7 @@ public struct NoteProjection: Codable, Equatable, Sendable {
     public let hasLocalAudio: Bool
     public let localError: LocalAudioError?
     public let workflowError: DeliveryWorkflowError?
+    public let audioSynchronization: AudioSynchronization?
 
     public init(note: Note, hasLocalAudio: Bool = true) {
         schemaVersion = WhimCoreVersion.schema
@@ -146,14 +153,22 @@ public struct NoteProjection: Codable, Equatable, Sendable {
         source = note.source
         status = note.localError != nil && note.delivery.receipt == nil ? .failed : note.delivery.status
         requiresReview = note.requiresReview
-        self.hasLocalAudio = hasLocalAudio && note.localError == nil && note.audioExpiredAt == nil
+        self.hasLocalAudio = hasLocalAudio && note.localError == nil && note.audioExpiredAt == nil && note.audioSynchronization == nil
+        audioSynchronization = note.audioSynchronization
         localError = note.localError
         workflowError = note.delivery.workflowError
     }
 
+    public func matches(_ filter: NoteFilter) -> Bool {
+        if filter == .all || filter.rawValue == status.rawValue { return true }
+        if filter == .failed { return audioSynchronization?.status == .failed }
+        if filter == .queued, let synchronization = audioSynchronization { return synchronization.status != .failed }
+        return false
+    }
+
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, id, title, createdAt, durationSeconds, source, status
-        case requiresReview, hasLocalAudio, localError, workflowError
+        case requiresReview, hasLocalAudio, localError, workflowError, audioSynchronization
     }
 
     public init(from decoder: Decoder) throws {
@@ -173,6 +188,7 @@ public struct NoteProjection: Codable, Equatable, Sendable {
         hasLocalAudio = try values.decode(Bool.self, forKey: .hasLocalAudio)
         localError = try values.decodeIfPresent(LocalAudioError.self, forKey: .localError)
         workflowError = try values.decodeIfPresent(DeliveryWorkflowError.self, forKey: .workflowError)
+        audioSynchronization = try values.decodeIfPresent(AudioSynchronization.self, forKey: .audioSynchronization)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -185,5 +201,6 @@ public struct NoteProjection: Codable, Equatable, Sendable {
         try values.encode(hasLocalAudio, forKey: .hasLocalAudio)
         try values.encode(localError, forKey: .localError)
         try values.encode(workflowError, forKey: .workflowError)
+        try values.encodeIfPresent(audioSynchronization, forKey: .audioSynchronization)
     }
 }

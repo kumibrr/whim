@@ -55,7 +55,11 @@ public actor SQLiteWhimStore: WhimStore {
             duration: recording.duration, source: recording.source, captureOutcome: recording.captureOutcome,
             requiresReview: recording.requiresReview, audioURL: recording.audioURL, delivery: delivery,
             localError: try String.fetchOne(db, sql: "SELECT local_error FROM notes WHERE id = ?", arguments: [id.rawValue.uuidString]).flatMap(LocalAudioError.init(rawValue:)),
-            audioExpiredAt: try Double.fetchOne(db, sql: "SELECT audio_expired_at FROM notes WHERE id = ?", arguments: [id.rawValue.uuidString]).map(Date.init(timeIntervalSince1970:)))
+            audioExpiredAt: try Double.fetchOne(db, sql: "SELECT audio_expired_at FROM notes WHERE id = ?", arguments: [id.rawValue.uuidString]).map(Date.init(timeIntervalSince1970:)),
+            audioSynchronization: try Data.fetchOne(db, sql: "SELECT audio_synchronization FROM notes WHERE id = ?", arguments: [id.rawValue.uuidString])
+                .map { try JSONDecoder().decode(AudioSynchronization.self, from: $0) },
+            audioSynchronizationRetries: try Data.fetchOne(db, sql: "SELECT audio_synchronization_retries FROM notes WHERE id = ?", arguments: [id.rawValue.uuidString])
+                .map { try JSONDecoder().decode([AudioSynchronizationRetry].self, from: $0) })
     }
 
     public func markAudioExpired(noteID: NoteID, at date: Date) async throws -> Bool {
@@ -74,12 +78,57 @@ public actor SQLiteWhimStore: WhimStore {
         }
     }
 
-    private static func insertFinalized(_ finalized: FinalizedRecording, db: Database) throws -> Note {
+    public func savePendingPeerNote(_ recording: FinalizedRecording) async throws -> Note {
+        try await database.write { db in
+            try Self.insertFinalized(recording, synchronization: .init(), db: db)
+        }
+    }
+
+    public func setAudioSynchronization(_ value: AudioSynchronization?, noteID: NoteID) async throws {
+        let time = now()
+        try await database.write { db in
+            let previous = try Data.fetchOne(db, sql: "SELECT audio_synchronization FROM notes WHERE id = ?", arguments: [noteID.rawValue.uuidString])
+                .map { try JSONDecoder().decode(AudioSynchronization.self, from: $0) }
+            try Self.writeAudioSynchronization(value, replacing: previous, noteID: noteID, at: time, db: db)
+        }
+    }
+
+    public func replaceAudioSynchronization(_ expected: AudioSynchronization, with value: AudioSynchronization, noteID: NoteID) async throws -> Bool {
+        let time = now()
+        return try await database.write { db in
+            guard let data = try Data.fetchOne(db, sql: "SELECT audio_synchronization FROM notes WHERE id = ?", arguments: [noteID.rawValue.uuidString]),
+                  try JSONDecoder().decode(AudioSynchronization.self, from: data) == expected else { return false }
+            try Self.writeAudioSynchronization(value, replacing: expected, noteID: noteID, at: time, db: db)
+            return true
+        }
+    }
+
+    private static func writeAudioSynchronization(_ value: AudioSynchronization?, replacing previous: AudioSynchronization?,
+                                                  noteID: NoteID, at time: Date, db: Database) throws {
+        var retries = try Data.fetchOne(db, sql: "SELECT audio_synchronization_retries FROM notes WHERE id = ?", arguments: [noteID.rawValue.uuidString])
+            .map { try JSONDecoder().decode([AudioSynchronizationRetry].self, from: $0) } ?? []
+        if let requestID = previous?.requestID,
+           let index = retries.firstIndex(where: { $0.id == requestID && $0.outcome == .waiting }),
+           value?.requestID != requestID {
+            if value == nil { retries[index].outcome = .synced }
+            else if value?.status == .failed || (value?.transferCount ?? 0) > (previous?.transferCount ?? 0) {
+                retries[index].outcome = .failed
+            } else { retries[index].outcome = .superseded }
+        }
+        if let requestID = value?.requestID, !retries.contains(where: { $0.id == requestID }) {
+            retries.append(.init(id: requestID, startedAt: time))
+        }
+        try db.execute(sql: "UPDATE notes SET audio_synchronization = ?, audio_synchronization_retries = ? WHERE id = ?",
+            arguments: [try value.map { try JSONEncoder().encode($0) }, try JSONEncoder().encode(retries), noteID.rawValue.uuidString])
+    }
+
+    private static func insertFinalized(_ finalized: FinalizedRecording, synchronization: AudioSynchronization? = nil, db: Database) throws -> Note {
         guard try !Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM tombstones WHERE note_id = ?)", arguments: [finalized.id.rawValue.uuidString])! else { throw WhimStoreError.deletedNote }
         if let existing = try Self.readNote(id: finalized.id, db: db) { return existing }
-        try db.execute(sql: "INSERT INTO notes (id, session_id, created_at, metadata) VALUES (?, ?, ?, ?)", arguments: [
+        try db.execute(sql: "INSERT INTO notes (id, session_id, created_at, metadata, audio_synchronization) VALUES (?, ?, ?, ?, ?)", arguments: [
             finalized.id.rawValue.uuidString, finalized.recordingSessionID.rawValue.uuidString,
             finalized.createdAt.timeIntervalSince1970, try JSONEncoder().encode(finalized),
+            try synchronization.map { try JSONEncoder().encode($0) },
         ])
         try db.execute(sql: "INSERT INTO deliveries (note_id) VALUES (?)", arguments: [finalized.id.rawValue.uuidString])
         for step in WorkflowDefinition.default.steps {
@@ -233,7 +282,7 @@ public actor SQLiteWhimStore: WhimStore {
             try String.fetchAll(db, sql: "SELECT id FROM notes ORDER BY created_at DESC, id ASC").compactMap { rawID in
                 guard let note = try Self.readNote(id: NoteID(rawValue: UUID(uuidString: rawID)!), db: db, time: time, connected: connected) else { return nil }
                 let projection = NoteProjection(note: note)
-                guard filter == .all || filter.rawValue == projection.status.rawValue else { return nil }
+                guard projection.matches(filter) else { return nil }
                 return projection
             }
         }

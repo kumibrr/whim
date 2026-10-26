@@ -1,0 +1,42 @@
+appId: app.whim.ios
+---
+- runFlow: flows/clean-launch.yaml
+- stopApp
+- launchApp:
+    arguments:
+      -WhimFixtureAudio: ${WHIM_PEER_FIXTURE_AUDIO}
+      -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
+      -WhimPeerScenario: pending-sent
+- tapOn:
+    id: history-hint
+- extendedWaitUntil:
+    visible: Waiting for Watch audio
+    timeout: 15000
+- assertVisible: '✓ Sent'
+- tapOn:
+    id: note-row-09000000-0000-0000-0000-000000000003
+- tapOn:
+    id: note-delete
+# A Watch Receipt does not make deleting its only remaining audio copy harmless.
+- assertVisible: Delete this Note?
+- tapOn: Cancel
+- assertVisible: Waiting for Watch audio
+- assertVisible: '✓ Sent'
+- tapOn:
+    id: note-delete
+- assertVisible: Delete this Note?
+- tapOn: Confirm delete
+- assertVisible: No Notes here yet. Capture a thought.
+- stopApp
+- launchApp:
+    arguments:
+      -WhimFixtureAudio: ${WHIM_PEER_FIXTURE_AUDIO}
+      -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
+      -WhimPeerScenario: resend-interrupted
+- tapOn:
+    id: history-hint
+- assertVisible: No Notes here yet. Capture a thought.
+- assertNotVisible: 'Open Interrupted Watch Note,.*'
+- assertTrue:
+    condition: ${json(http.get(WHIM_WEBHOOK_TEST_URL.replace('/receive', '/state')).body).received.length === 0}
+    label: Deletion prevents late Watch audio from creating a local Delivery

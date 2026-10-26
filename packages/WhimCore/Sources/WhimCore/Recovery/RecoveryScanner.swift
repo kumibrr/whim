@@ -42,7 +42,7 @@ public struct RecoveryScanner: Sendable {
             try Task.checkCancellation()
             guard let ownership = try files.claimOwnership(noteID: id) else { continue }
             defer { withExtendedLifetime(ownership) {} }
-            guard let note = try await store.note(id: id), note.localError == nil else { continue }
+            guard let note = try await store.note(id: id), note.localError == nil, note.audioSynchronization == nil else { continue }
             if note.audioExpiredAt != nil {
                 try files.delete(noteID: id)
                 continue

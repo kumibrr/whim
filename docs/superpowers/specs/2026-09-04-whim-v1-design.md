@@ -131,6 +131,8 @@ The Watch and iPhone are both allowed to attempt delivery with the same Note ID.
 
 The iPhone imports Watch files and state idempotently in either arrival order, generates a title locally, and synchronizes the resulting title and status to Watch. Watch itself does not perform transcription in v1. It uses a timestamp title for any direct webhook delivery.
 
+Watch metadata creates a visible iPhone Note even before its audio arrives. Its explicit local Audio Synchronization state does not claim playable local audio exists and prevents local playback, title enrichment, Delivery and retention until valid audio is durable. Audio Synchronization is independent of Delivery: a Watch Receipt remains Sent while iPhone shows pending or failed synchronization. A corrupt transfer allows at most three total transfers per cycle, including the first, before showing Sync failed. Waiting or disconnection does not consume the budget; duplicate replies and process restarts do not advance it. Retry sync starts a new cycle of up to three transfers. Pending and failed synchronization can be deleted with confirmation, using the same paired-device tombstones. See the [audio synchronization design](2026-10-26-watch-audio-synchronization-design.md).
+
 Watch recording continues through wrist-down until Stop, an audio interruption, or the five-minute limit. This behavior is a release-blocking physical-device acceptance criterion.
 
 ## Cross-device configuration and state

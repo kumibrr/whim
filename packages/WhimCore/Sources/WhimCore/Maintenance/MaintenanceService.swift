@@ -23,7 +23,7 @@ public struct MaintenanceService: Sendable {
             guard let ownership = try files.claimOwnership(noteID: projection.id) else { continue }
             defer { withExtendedLifetime(ownership) {} }
             guard let note = try await store.note(id: projection.id),
-                  let receipt = note.delivery.receipt, !note.requiresReview else { continue }
+                  let receipt = note.delivery.receipt, !note.requiresReview, note.audioSynchronization == nil else { continue }
             let deadline = policy == .never ? nil : receipt.receivedAt.addingTimeInterval(Double(policy.rawValue) * 86_400)
             if !noteIDs.contains(note.id), note.audioExpiredAt != nil || deadline.map({ $0 <= now }) == true {
                 if try await store.markAudioExpired(noteID: note.id, at: now) {

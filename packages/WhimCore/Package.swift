@@ -20,6 +20,7 @@ let productionSources = [
     "Recording/LiveWaveform.swift",
     "Recording/LiveWaveformView.swift",
     "DeviceSync/ConnectivityEnvelope.swift",
+    "DeviceSync/AudioSynchronization.swift",
     "DeviceSync/ConnectivityInbox.swift",
     "DeviceSync/PeerTransport.swift",
     "DeviceSync/ReceivedPeerFileStore.swift",

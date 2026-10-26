@@ -20,6 +20,8 @@ public struct ConnectivityEnvelope: Codable, Equatable, Sendable {
         case reset
         case configuration(ConfigurationRevision)
         case acknowledgement(AcknowledgementTransfer)
+        case audioRequest(AudioTransferRequest)
+        case audioUnavailable(AudioTransferUnavailable)
     }
     public func encoded() throws -> Data { try PropertyListEncoder().encode(self) }
     public static func decode(_ data: Data) throws -> Self {
@@ -31,6 +33,18 @@ public struct ConnectivityEnvelope: Codable, Equatable, Sendable {
 
 public enum ConnectivityError: Error { case unsupportedSchema, invalidFile, invalidConfiguration, inactiveSession }
 
+public struct AudioTransferRequest: Codable, Equatable, Sendable {
+    public let noteID: NoteID
+    public let requestID: UUID
+    public init(noteID: NoteID, requestID: UUID) { self.noteID = noteID; self.requestID = requestID }
+}
+
+public struct AudioTransferUnavailable: Codable, Equatable, Sendable {
+    public let noteID: NoteID
+    public let requestID: UUID?
+    public init(noteID: NoteID, requestID: UUID? = nil) { self.noteID = noteID; self.requestID = requestID }
+}
+
 public struct NoteTransfer: Codable, Equatable, Sendable {
     public let id: NoteID
     public let recordingSessionID: RecordingSessionID
@@ -41,18 +55,20 @@ public struct NoteTransfer: Codable, Equatable, Sendable {
     public let source: CaptureSource
     public let captureOutcome: CaptureOutcome
     public let requiresReview: Bool
+    public let audioRequestID: UUID?
 
     public init(id: NoteID, recordingSessionID: RecordingSessionID, title: String, titleSource: TitleSource,
                 createdAt: Date, duration: TimeInterval, source: CaptureSource,
-                captureOutcome: CaptureOutcome, requiresReview: Bool) {
+                captureOutcome: CaptureOutcome, requiresReview: Bool, audioRequestID: UUID? = nil) {
         self.id = id; self.recordingSessionID = recordingSessionID; self.title = title
         self.titleSource = titleSource; self.createdAt = createdAt; self.duration = duration
         self.source = source; self.captureOutcome = captureOutcome; self.requiresReview = requiresReview
+        self.audioRequestID = audioRequestID
     }
-    public init(_ note: Note) {
+    public init(_ note: Note, audioRequestID: UUID? = nil) {
         self.init(id: note.id, recordingSessionID: note.recordingSessionID, title: note.title,
             titleSource: note.titleSource, createdAt: note.createdAt, duration: note.duration,
-            source: note.source, captureOutcome: note.captureOutcome, requiresReview: note.requiresReview)
+            source: note.source, captureOutcome: note.captureOutcome, requiresReview: note.requiresReview, audioRequestID: audioRequestID)
     }
     func finalized(audioURL: URL) -> FinalizedRecording {
         .init(id: id, recordingSessionID: recordingSessionID, title: title, titleSource: titleSource,
@@ -84,6 +100,8 @@ extension ConnectivityEnvelope.Payload {
         case .receipt(let r): r.noteID
         case .title(let t): t.noteID
         case .deletion(let id): id
+        case .audioRequest(let request): request.noteID
+        case .audioUnavailable(let response): response.noteID
         case .reset, .acknowledgement, .configuration: nil
         }
     }
@@ -99,6 +117,7 @@ public struct ResetGeneration: Codable, Equatable, Comparable, Sendable {
     }
 }
 public enum AcknowledgementTransfer: Codable, Equatable, Sendable {
+    case audio(NoteID)
     case deletion(NoteID, AttemptDevice)
     case reset(AttemptDevice)
     case configuration(ConfigurationRevisionID)

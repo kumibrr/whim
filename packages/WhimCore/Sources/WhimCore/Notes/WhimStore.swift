@@ -27,6 +27,10 @@ public protocol WhimStore: Sendable {
     func deliveryAttempts(noteID: NoteID) async throws -> [Attempt]
     func listNotes(filter: NoteFilter) async throws -> [NoteProjection]
     func saveFinalized(_ finalized: FinalizedRecording) async throws -> Note
+    /// Metadata is durable, but playable audio has not yet arrived on this device.
+    func savePendingPeerNote(_ recording: FinalizedRecording) async throws -> Note
+    func setAudioSynchronization(_ value: AudioSynchronization?, noteID: NoteID) async throws
+    func replaceAudioSynchronization(_ expected: AudioSynchronization, with value: AudioSynchronization, noteID: NoteID) async throws -> Bool
     func updateTitle(noteID: NoteID, title: String, source: TitleSource) async throws
     func apply(_ event: DeliveryEvent, to noteID: NoteID) async throws -> Delivery
     func acquireLease(
@@ -41,6 +45,9 @@ public protocol WhimStore: Sendable {
 }
 
 public extension WhimStore {
+    func savePendingPeerNote(_ recording: FinalizedRecording) async throws -> Note { throw WhimStoreError.unsupportedOperation }
+    func setAudioSynchronization(_ value: AudioSynchronization?, noteID: NoteID) async throws { throw WhimStoreError.unsupportedOperation }
+    func replaceAudioSynchronization(_ expected: AudioSynchronization, with value: AudioSynchronization, noteID: NoteID) async throws -> Bool { throw WhimStoreError.unsupportedOperation }
     func markAudioExpired(noteID: NoteID, at date: Date) async throws -> Bool { throw WhimStoreError.unsupportedOperation }
     func latestConfigurationRevision() async throws -> ConfigurationRevision? { nil }
     func reset() async throws { throw WhimStoreError.unsupportedOperation }

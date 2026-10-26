@@ -1205,6 +1205,63 @@ private actor BlockingFacadePreferences: PreferenceStoring {
 }
 
 final class CrossDeviceRaceTests: XCTestCase {
+    func testInitiallyUnreadableWatchAudioSurvivesImmediateRetentionAndMetadataAcknowledgement() async throws {
+        let h = try WhimFacadeHarness(); defer { h.remove() }
+        try await h.preferences.save(.init(retentionPolicy: .immediately,
+            transcriptionEnabled: false, transcriptionLocaleIdentifier: nil))
+        let transport = RetentionPeerTransport(); transport.connect()
+        let merge = try ConnectivityMergeService(store: h.store, files: h.files, databaseURL: h.databaseURL,
+            root: h.root.appendingPathComponent("Peer"), device: .appleWatch, transport: transport)
+        let id = NoteID()
+        let source = h.files.audioURL(for: id)
+        try Data("unreadable Watch audio".utf8).write(to: source)
+        _ = try await h.store.saveFinalized(.init(id: id, recordingSessionID: RecordingSessionID(),
+            title: "Preserve until accepted", titleSource: .timestamp, createdAt: h.clock.now, duration: 1,
+            source: .appleWatch, captureOutcome: .completed, requiresReview: false, audioURL: source))
+        _ = try await h.store.apply(.receipt(.init(attemptID: AttemptID(), noteID: id,
+            receivedAt: h.clock.now, statusCode: 204)), to: id)
+        try await merge.queueNote(id)
+        let unavailable = try XCTUnwrap(transport.states.first { if case .audioUnavailable = $0.payload { true } else { false } })
+        let client = h.makeService(peer: merge)
+        try await client.receivePeer(.message(.init(payload: .acknowledgement(.durable(unavailable.messageID)))))
+        try await client.maintain()
+        XCTAssertEqual(h.files.audioError(at: source), .unreadable, "Retention preserves the source even when it cannot currently be read")
+        let pending = try await merge.pendingAudioNoteIDs()
+        XCTAssertEqual(pending, [id])
+        let note = try await h.store.note(id: id)
+        XCTAssertNil(note?.audioExpiredAt)
+    }
+
+    func testPendingWatchNoteCanRetrySynchronizationAndBeDeletedWithoutDeliveryOrResurrection() async throws {
+        let h = try WhimFacadeHarness(); defer { h.remove() }
+        _ = try await h.configuration.save(.init(endpoint: "https://example.com/receive"))
+        let merge = try ConnectivityMergeService(store: h.store, files: h.files, databaseURL: h.databaseURL,
+            root: h.root.appendingPathComponent("Peer"), device: .iphone)
+        let client = h.makeService(peer: merge)
+        let id = NoteID()
+        let metadata = ConnectivityEnvelope(payload: .noteMetadata(.init(id: id, recordingSessionID: RecordingSessionID(),
+            title: "Waiting on Watch", titleSource: .timestamp, createdAt: h.clock.now, duration: 1,
+            source: .appleWatch, captureOutcome: .completed, requiresReview: false)))
+        try await client.receivePeer(.message(metadata))
+        try await h.store.setAudioSynchronization(.init(status: .failed, transferCount: 3), noteID: id)
+
+        let failed = try await client.listNotes(filter: .failed)
+        XCTAssertEqual(failed.map(\.id), [id])
+        try await client.retry(noteID: id)
+        let retrying = try await client.listNotes(filter: .all).first
+        XCTAssertEqual(retrying?.audioSynchronization?.status, .retrying)
+        XCTAssertEqual(retrying?.audioSynchronization?.transferCount, 1)
+        let requests = await h.transport.requestCount
+        XCTAssertEqual(requests, 0, "Sync retry must never attempt Delivery with absent audio")
+
+        try await client.delete(noteID: id)
+        let fixture = Bundle.module.url(forResource: "configuration-test-fixture", withExtension: "m4a", subdirectory: "Fixtures")!
+        try await client.receivePeer(.file(fixture, metadata))
+        try await client.receivePeer(.message(metadata))
+        let remaining = try await client.listNotes(filter: .all)
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
     func testRetentionPreservesPendingWatchHandoffUntilDurableAcknowledgement() async throws {
         let h = try WhimFacadeHarness(); defer { h.remove() }
         let transport = RetentionPeerTransport()
@@ -1442,12 +1499,14 @@ private final class RetentionPeerTransport: PeerTransport, @unchecked Sendable {
     private let lock = NSLock()
     private var available = false
     private var transferred: [ConnectivityEnvelope] = []
+    private var messages: [ConnectivityEnvelope] = []
     var isAvailable: Bool { lock.withLock { available } }
     var isActivated: Bool { true }
     var files: [ConnectivityEnvelope] { lock.withLock { transferred } }
+    var states: [ConnectivityEnvelope] { lock.withLock { messages } }
     func connect() { lock.withLock { available = true } }
     func activate(receive: @escaping @Sendable (PeerEvent) -> Void) {}
-    func transfer(_ envelope: ConnectivityEnvelope) throws {}
+    func transfer(_ envelope: ConnectivityEnvelope) throws { lock.withLock { messages.append(envelope) } }
     func transferFile(at url: URL, metadata: ConnectivityEnvelope) throws {
         _ = try Data(contentsOf: url)
         lock.withLock { transferred.append(metadata) }

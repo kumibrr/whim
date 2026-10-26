@@ -43,6 +43,22 @@ counts and screenshots for each case. Do not enable DEBUG fixture switches.
    is stalled, start/stop another recording, then Delete or Reset. Capture stays
    responsive; local work is canceled/joined and late peer messages cannot resurrect
    data. A request already accepted by the receiver cannot be revoked.
+7. **Interrupted handoff recovery:** record on Watch while iPhone changes between
+   Wi-Fi and cellular, then terminate iPhone during background handoff. Relaunch
+   iPhone and record another Note on Watch. Background recovery must finish and the
+   new Note must arrive, play and deliver without Reset Whim. If Watch resends the
+   interrupted Note, confirm playable audio and a single logical Note at the
+   receiver after another relaunch. Delete the interrupted Note on Watch while
+   disconnected, reconnect, and confirm delayed transfers cannot resurrect it.
+   Repeat while iPhone is locked after first unlock. A simulator fixture covers
+   persisted truncated pending audio, recovery, resend and Delivery;
+   real suspension timing and Watch Connectivity still require these devices.
+   Confirm iPhone shows the Note while waiting for its audio, disables playback,
+   and leaves any Watch Receipt Sent. For reproducible corruption, confirm the
+   first transfer plus at most two automatic resends precede Sync failed; time
+   spent disconnected does not consume transfers. Retry sync starts a fresh
+   three-transfer cycle. Delete a pending Note on iPhone with confirmation and
+   reconnect Watch: it disappears on both devices and delayed audio stays deleted.
 
-All six cases block release until evidence is recorded. Simulator passes do not
+All seven cases block release until evidence is recorded. Simulator passes do not
 satisfy real transferFile, locked-device background execution, or paired race acceptance.
