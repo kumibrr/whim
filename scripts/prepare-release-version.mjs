@@ -3,9 +3,9 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { syncAppVersion } from './sync-app-version.mjs';
 
-export function runCommand(command, args, { cwd, capture = false } = {}) {
+export function runCommand(command, args, { cwd, capture = false, env } = {}) {
   return new Promise((resolveCommand, reject) => {
-    const child = spawn(command, args, { cwd, stdio: ['ignore', capture ? 'pipe' : 'inherit', 'inherit'] });
+    const child = spawn(command, args, { cwd, env, stdio: ['ignore', capture ? 'pipe' : 'inherit', 'inherit'] });
     let stdout = '';
     child.stdout?.on('data', data => { stdout += data; });
     child.on('error', reject);

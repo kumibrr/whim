@@ -170,3 +170,96 @@ test('CLI help is read-only and unsupported arguments fail instead of releasing'
   assert.equal(unknown.status, 1);
   assert.match(unknown.stderr, /Unsupported argument/);
 });
+
+test('tag creation failure offers missing-tag recovery without rerunning versioning', async t => {
+  const fixture = await releaseFixture(t);
+  await assert.rejects(release(fixture, { run: async (executable, args, opts) => {
+    if (executable === 'git' && args[0] === 'tag' && args[1] === '-a') throw new Error('Tag signing failed');
+    return fixture.run(executable, args, opts);
+  } }), error => {
+    assert.match(error.message, /release commit.*preserved/s);
+    assert.match(error.message, /tag.*not created|tag.*creation failed/i);
+    assert.match(error.message, /git tag -a v1\.0\.1/);
+    assert.match(error.message, /Do not.*existing tag/i);
+    return true;
+  });
+  assert.notEqual(command(fixture.root, 'git', ['rev-parse', 'HEAD']).trim(), fixture.initial);
+  assert.equal(command(fixture.root, 'git', ['tag', '--list']), '');
+  assert.equal(command(fixture.root, 'git', ['--git-dir', fixture.remote, 'rev-parse', 'main']).trim(), fixture.initial);
+  assert.deepEqual(fixture.publications, []);
+});
+
+for (const multiple of [false, true]) {
+  test(`preflight rejects ${multiple ? 'multiple push destinations' : 'a separate push destination'} before preparation`, async t => {
+    const fixture = await releaseFixture(t);
+    const other = `${fixture.remote}-other`;
+    t.after(() => rm(other, { recursive: true, force: true }));
+    command(fixture.root, 'git', ['init', '--bare', other]);
+    if (multiple) command(fixture.root, 'git', ['config', '--add', 'remote.origin.pushurl', fixture.remote]);
+    command(fixture.root, 'git', ['config', '--add', 'remote.origin.pushurl', other]);
+    await assert.rejects(release(fixture), /push destination|push URL/i);
+    assert.equal(command(fixture.root, 'git', ['rev-parse', 'HEAD']).trim(), fixture.initial);
+    assert.equal(JSON.parse(await readFile(`${fixture.root}/ios/package.json`, 'utf8')).version, '1.0.0');
+    assert.equal(command(fixture.root, 'git', ['--git-dir', other, 'rev-list', '--all']), '');
+    assert.deepEqual(fixture.publications, []);
+  });
+}
+
+for (const edit of ['manifest edit', 'unrelated staged file']) {
+  test(`${edit} introduced during the final fetch cannot enter a release commit`, async t => {
+    const fixture = await releaseFixture(t);
+    let fetches = 0;
+    await assert.rejects(release(fixture, { run: async (executable, args, opts) => {
+      const result = await fixture.run(executable, args, opts);
+      if (executable === 'git' && args[0] === 'fetch' && ++fetches === 2) {
+        if (edit === 'manifest edit') await writeFile(`${fixture.root}/ios/package.json`, '{"version":"9.0.0"}');
+        else {
+          await writeFile(`${fixture.root}/unvalidated.txt`, 'Keep staged user work.');
+          command(fixture.root, 'git', ['add', 'unvalidated.txt']);
+        }
+      }
+      return result;
+    } }), /changed|unexpected|concurrent/i);
+    assert.equal(command(fixture.root, 'git', ['rev-parse', 'HEAD']).trim(), fixture.initial);
+    assert.equal(command(fixture.root, 'git', ['--git-dir', fixture.remote, 'rev-parse', 'main']).trim(), fixture.initial);
+    assert.deepEqual(fixture.publications, []);
+  });
+}
+
+test('a commit hook changing the staged tree cannot publish unvalidated content', async t => {
+  const fixture = await releaseFixture(t);
+  const hook = `${fixture.root}/.git/hooks/pre-commit`;
+  await writeFile(hook, '#!/bin/sh\nprintf unvalidated > hook-edit.txt\ngit add hook-edit.txt\n');
+  await chmod(hook, 0o755);
+  await assert.rejects(release(fixture), /validated tree|unexpected|changed/i);
+  assert.equal(command(fixture.root, 'git', ['--git-dir', fixture.remote, 'rev-parse', 'main']).trim(), fixture.initial);
+  assert.deepEqual(fixture.publications, []);
+});
+
+test('publication stays pinned to the verified release commit if HEAD moves after tagging', async t => {
+  const fixture = await releaseFixture(t);
+  let validated;
+  await release(fixture, { run: async (executable, args, opts) => {
+    const result = await fixture.run(executable, args, opts);
+    if (executable === 'git' && args[0] === 'tag' && args[1] === '-a') {
+      validated = command(fixture.root, 'git', ['rev-parse', 'HEAD']).trim();
+      command(fixture.root, 'git', ['-c', 'core.hooksPath=/dev/null', 'commit', '--allow-empty', '-m', 'Later local work']);
+    }
+    return result;
+  } });
+  assert.equal(command(fixture.root, 'git', ['--git-dir', fixture.remote, 'rev-parse', 'main']).trim(), validated);
+  assert.equal(command(fixture.root, 'git', ['--git-dir', fixture.remote, 'rev-parse', 'v1.0.1^{}']).trim(), validated);
+});
+
+test('an unverified local commit never receives recovery instructions to push it', async t => {
+  const fixture = await releaseFixture(t);
+  const hook = `${fixture.root}/.git/hooks/pre-commit`;
+  await writeFile(hook, '#!/bin/sh\nprintf bad > hook-edit.txt\ngit add hook-edit.txt\n');
+  await chmod(hook, 0o755);
+  await assert.rejects(release(fixture), error => {
+    assert.match(error.message, /validated tree/);
+    assert.match(error.message, /Do not publish/i);
+    assert.doesNotMatch(error.message, /git push --atomic/);
+    return true;
+  });
+});

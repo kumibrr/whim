@@ -35,3 +35,13 @@ test('a failed Changesets command preserves the project and propagates its failu
 test('the process boundary rejects a nonzero exit', async () => {
   await assert.rejects(runCommand(process.execPath, ['-e', 'process.exit(7)']), /exit 7/);
 });
+
+test('the process boundary passes the isolated index environment to Git', async t => {
+  const root = await versionFixture(t);
+  const index = join(root, 'isolated-index');
+  await runCommand('git', ['add', 'ios/package.json'], { cwd: root, env: { ...process.env, GIT_INDEX_FILE: index } });
+  const isolated = await runCommand('git', ['ls-files'], { cwd: root, capture: true, env: { ...process.env, GIT_INDEX_FILE: index } });
+  const regular = await runCommand('git', ['ls-files'], { cwd: root, capture: true });
+  assert.equal(isolated.trim(), 'ios/package.json');
+  assert.equal(regular, '');
+});

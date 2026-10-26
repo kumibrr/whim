@@ -28,8 +28,8 @@ export async function versionFixture(t) {
   return root;
 }
 
-export function command(root, executable, args) {
-  const result = spawnSync(executable, args, { cwd: root, encoding: 'utf8', env: { ...process.env, npm_config_offline: 'true' } });
+export function command(root, executable, args, options = {}) {
+  const result = spawnSync(executable, args, { cwd: root, encoding: 'utf8', env: { ...process.env, npm_config_offline: 'true', ...options.env } });
   if (result.status !== 0) throw new Error(`${executable} ${args.join(' ')}: ${result.stderr}\n${result.stdout}`);
   return result.stdout;
 }
@@ -66,11 +66,13 @@ export async function releaseFixture(t) {
       throw new Error(`Unexpected GitHub command: ${args.join(' ')}`);
     }
     if (executable === 'git' && args.join(' ') === 'remote get-url origin') return 'git@github.com:fixture/whim.git\n';
+    if (executable === 'git' && args.join(' ') === 'remote get-url --push --all origin') return command(root, executable, args).split('\n').filter(Boolean).map(url => url === remote ? 'git@github.com:fixture/whim.git' : 'git@github.com:elsewhere/whim.git').join('\n') + '\n';
     if (executable === 'npm' && ['test:all', 'verify:release'].includes(args[1])) {
       validations.push(args[1]);
       return '';
     }
-    return command(root, executable, args);
+    if (executable === 'git' && args[0] === 'push' && args[2] === 'git@github.com:fixture/whim.git') args = [...args.slice(0, 2), remote, ...args.slice(3)];
+    return command(root, executable, args, options);
   }
   return { root, remote, initial, publications, validations, messages, run, options: { run, platform: 'darwin', log: message => messages.push(message) } };
 }
