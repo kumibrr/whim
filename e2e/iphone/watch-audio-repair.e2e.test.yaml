@@ -1,0 +1,100 @@
+appId: app.whim.ios
+---
+- runFlow: flows/clean-launch.yaml
+- tapOn: Settings
+- tapOn:
+    id: settings-webhook
+- tapOn:
+    id: webhook-url
+- inputText: https://whim-fixture.invalid/receive
+- tapOn: Save settings
+- extendedWaitUntil:
+    visible: Webhook saved. Test it to check delivery.
+    timeout: 10000
+- stopApp
+- launchApp:
+    arguments:
+      -WhimFixtureAudio: ${WHIM_PEER_FIXTURE_AUDIO}
+      -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
+      -WhimPeerScenario: pending-audio
+- tapOn:
+    id: history-hint
+- extendedWaitUntil:
+    visible: Waiting for Watch audio
+    timeout: 15000
+- assertNotVisible: Audio expired
+- tapOn:
+    id: note-row-09000000-0000-0000-0000-000000000003
+- assertVisible:
+    id: note-play-.*
+    enabled: false
+- assertVisible: Retry sync
+- stopApp
+- launchApp:
+    arguments:
+      -WhimFixtureAudio: ${WHIM_PEER_FIXTURE_AUDIO}
+      -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
+      -WhimPeerScenario: sync-failure
+- tapOn:
+    id: history-hint
+- extendedWaitUntil:
+    visible: Sync failed
+    timeout: 15000
+- assertNotVisible:
+    text: Queued
+    below:
+      id: note-row-09000000-0000-0000-0000-000000000003
+- assertVisible:
+    text: Sync failed
+    rightOf:
+      text: Apple Watch · 0:10
+- assertNotVisible: Try sync.*
+- assertNotVisible: Retry sync
+- tapOn: Failed filter
+- assertNotVisible: Try sync.*
+- assertNotVisible: Retry sync
+- assertNotVisible: Retry all failed Notes
+- tapOn:
+    id: note-row-09000000-0000-0000-0000-000000000003
+- assertNotVisible: Sync failed after 3 transfers.
+- assertVisible: Retry sync
+- assertNotVisible: Queued
+- assertVisible:
+    id: note-sync-retry-row-1
+    below:
+      text: Delivery details
+- assertVisible:
+    id: note-sync-retry-row-2
+    below:
+      id: note-sync-retry-row-1
+- assertNotVisible: No Attempts yet.
+- assertTrue:
+    condition: ${json(http.get(WHIM_WEBHOOK_TEST_URL.replace('/receive', '/state')).body).received.length === 0}
+    label: Missing Watch audio cannot be delivered from iPhone
+# Restart preserves failure; only the user starts a new retry cycle.
+- stopApp
+- launchApp:
+    arguments:
+      -WhimFixtureAudio: ${WHIM_PEER_FIXTURE_AUDIO}
+      -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
+      -WhimPeerScenario: sync-repair
+- tapOn:
+    id: history-hint
+- assertVisible: Sync failed
+- tapOn:
+    id: note-row-09000000-0000-0000-0000-000000000003
+- tapOn: Retry sync
+- extendedWaitUntil:
+    visible: '✓ Sent'
+    timeout: 30000
+- assertNotVisible: Sync failed
+- assertNotVisible: Retry sync
+- tapOn:
+    id: note-play-.*
+    childOf:
+      id: note-detail
+- assertVisible:
+    id: note-stop-.*
+- assertTrue:
+    condition: ${json(http.get(WHIM_WEBHOOK_TEST_URL.replace('/receive', '/state')).body).received.length === 1}
+    label: A repaired Note delivers once after manual synchronization retry

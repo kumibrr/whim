@@ -24,6 +24,10 @@ _Avoid_: Task, action, job
 The logical requirement to submit one Note to its Workflow destination.
 _Avoid_: Upload, request
 
+**Audio Synchronization**:
+Making a playable copy of a Note's audio available on the paired device. It is independent of Delivery to the Workflow destination.
+_Avoid_: Delivery, webhook retry
+
 **Attempt**:
 One device's HTTP request made toward satisfying a Delivery. A Delivery may have multiple sequential or concurrent Attempts.
 _Avoid_: Delivery, retry

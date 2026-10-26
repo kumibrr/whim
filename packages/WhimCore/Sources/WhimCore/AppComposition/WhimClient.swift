@@ -136,6 +136,8 @@ public struct NoteDetailProjection: Codable, Equatable, Sendable {
     public let hasLocalAudio: Bool
     public let localError: LocalAudioError?
     public let workflowError: DeliveryWorkflowError?
+    public let audioSynchronization: AudioSynchronization?
+    public let audioSynchronizationRetries: [AudioSynchronizationRetry]?
     public let attempts: [AttemptProjection]
 
     public init(note: Note, hasLocalAudio: Bool = true, deliveryAttempts: [Attempt]? = nil) {
@@ -145,6 +147,8 @@ public struct NoteDetailProjection: Codable, Equatable, Sendable {
         source = summary.source; status = summary.status; requiresReview = summary.requiresReview
         self.hasLocalAudio = summary.hasLocalAudio; localError = summary.localError
         workflowError = summary.workflowError
+        audioSynchronization = summary.audioSynchronization
+        audioSynchronizationRetries = note.audioSynchronizationRetries
         let sourceAttempts = deliveryAttempts
             ?? (note.delivery.activeAttempts + note.delivery.failedAttempts.map(\.attempt))
         let values = sourceAttempts.compactMap { attempt -> AttemptProjection? in
@@ -172,7 +176,7 @@ public struct NoteDetailProjection: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, id, title, createdAt, durationSeconds, source, status
-        case requiresReview, hasLocalAudio, localError, workflowError, attempts
+        case requiresReview, hasLocalAudio, localError, workflowError, audioSynchronization, audioSynchronizationRetries, attempts
     }
     public func encode(to encoder: Encoder) throws {
         var values = encoder.container(keyedBy: CodingKeys.self)
@@ -182,6 +186,8 @@ public struct NoteDetailProjection: Codable, Equatable, Sendable {
         try values.encode(status, forKey: .status); try values.encode(requiresReview, forKey: .requiresReview)
         try values.encode(hasLocalAudio, forKey: .hasLocalAudio); try values.encode(localError, forKey: .localError)
         try values.encode(workflowError, forKey: .workflowError)
+        try values.encodeIfPresent(audioSynchronization, forKey: .audioSynchronization)
+        try values.encodeIfPresent(audioSynchronizationRetries, forKey: .audioSynchronizationRetries)
         try values.encode(attempts, forKey: .attempts)
     }
 }

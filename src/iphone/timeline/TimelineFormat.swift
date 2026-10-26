@@ -16,5 +16,12 @@ public enum TimelineFormat {
         }
     }
     public static func date(_ date: Date) -> String { date.formatted(date: .numeric, time: .standard) }
+    public static func synchronization(_ value: AudioSynchronization) -> String {
+        switch value.status {
+        case .waiting: "Waiting for Watch audio"
+        case .retrying: "Syncing from Watch (\(value.transferCount) of \(AudioSynchronization.maximumTransfers))"
+        case .failed: "Sync failed"
+        }
+    }
     public static func source(_ source: CaptureSource) -> String { source == .iphone ? "iPhone" : "Apple Watch" }
 }

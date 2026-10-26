@@ -371,7 +371,17 @@ public actor WhimService: WhimClient {
     }
 
     public func retry(noteID: NoteID) async throws {
+        _ = try await prepareCapture()
+        if try await retryPendingAudio(noteID) { return }
         try await runManualDelivery(noteID: noteID, recovered: false)
+    }
+
+    private func retryPendingAudio(_ noteID: NoteID) async throws -> Bool {
+        await beginCommand(); defer { endCommand() }
+        guard let peer, try await store.note(id: noteID)?.audioSynchronization != nil else { return false }
+        try await peer.retryAudio(noteID)
+        try await publishCurrent(noteID)
+        return true
     }
 
     public func retryAllFailed() async throws -> Int {
@@ -624,6 +634,7 @@ public actor WhimService: WhimClient {
     }
 
     private func startWorkflow(_ note: Note) {
+        guard note.audioSynchronization == nil else { return }
         let token = UUID()
         let title = title
         let delivery = delivery
@@ -875,7 +886,10 @@ public enum WhimProductionComposition {
         let peerFixtureFlags = ["-WhimPeerScenario", "-WhimFixtureAudio", "-WhimFixtureWebhookURL", "-WhimWatchTestID"]
         if arguments.contains(where: peerFixtureFlags.contains),
            let debugPeer = try DebugPeerTransport.from(arguments: arguments,
-                fixture: configurationTestFixtureURL(bundle: bundle)) { peerTransport = debugPeer }
+                fixture: configurationTestFixtureURL(bundle: bundle)) {
+            try debugPeer.prepare(root: root)
+            peerTransport = debugPeer
+        }
         #endif
         let peer = try ConnectivityMergeService(store: store, files: files,
             databaseURL: root.appendingPathComponent("whim.sqlite"), root: root.appendingPathComponent("Peer"),

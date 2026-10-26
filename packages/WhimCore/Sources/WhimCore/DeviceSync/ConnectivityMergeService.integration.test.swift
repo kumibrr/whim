@@ -4,6 +4,395 @@ import GRDB
 @testable import WhimCore
 
 final class ConnectivityMergeTests: XCTestCase {
+    func testManualRetrySupersedesAnOfflineRequestWithoutRecordingAFailure() async throws {
+        let h = try SyncHarness(); defer { h.remove() }
+        let transport = SyncTransport(); transport.active = true; transport.available = false
+        let metadata = NoteTransfer(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "Waiting for Watch",
+            titleSource: .timestamp, createdAt: Date(), duration: 1, source: .appleWatch,
+            captureOutcome: .completed, requiresReview: false)
+        let merge = try h.merge(transport: transport)
+        _ = try await merge.apply(.init(payload: .noteMetadata(metadata)))
+        try await merge.retryAudio(metadata.id)
+        let waiting = try await h.store.note(id: metadata.id)
+        XCTAssertEqual(waiting?.audioSynchronizationRetries?.map(\.outcome), [.waiting])
+        try await merge.recover()
+        try await merge.retryAudio(metadata.id)
+        let replaced = try await h.store.note(id: metadata.id)
+        XCTAssertEqual(replaced?.audioSynchronizationRetries?.map(\.outcome), [.superseded, .waiting])
+        XCTAssertEqual(replaced?.audioSynchronization?.transferCount, 1)
+    }
+
+    func testLegacyAcceptedTransferDoesNotBecomeANewRetentionHoldOnUpgrade() async throws {
+        let h = try SyncHarness(); defer { h.remove() }
+        let transport = SyncTransport(); transport.active = true
+        let id = NoteID()
+        let source = h.files.audioURL(for: id)
+        try FileManager.default.copyItem(at: h.fixture, to: source)
+        _ = try await h.store.saveFinalized(.init(id: id, recordingSessionID: RecordingSessionID(),
+            title: "Already accepted", titleSource: .timestamp, createdAt: Date(), duration: 1,
+            source: .appleWatch, captureOutcome: .completed, requiresReview: false, audioURL: source))
+        let prior = try h.merge(transport: transport, device: .appleWatch)
+        try await prior.queueNote(id)
+        let accepted = try XCTUnwrap(transport.fileEnvelopes.first)
+        _ = try await prior.apply(.init(payload: .acknowledgement(.durable(accepted.messageID))))
+        // Older builds persist accepted file transfers but have no independent hold table.
+        let legacy = try DatabaseQueue(path: h.root.appendingPathComponent("whim.sqlite").path)
+        try await legacy.write { db in try db.execute(sql: "DROP TABLE peer_audio_handoffs") }
+        let upgraded = try h.merge(transport: transport, device: .appleWatch)
+        try await upgraded.queueNote(id)
+        let pending = try await upgraded.pendingAudioNoteIDs()
+        XCTAssertTrue(pending.isEmpty, "Upgrading cannot undo an already accepted handoff")
+    }
+
+    func testUnreadableSourceHandoffHoldIsRemovedByDeleteOrReset() async throws {
+        for reset in [false, true] {
+            let h = try SyncHarness(); defer { h.remove() }
+            let id = NoteID()
+            let source = h.files.audioURL(for: id)
+            try Data("unreadable source".utf8).write(to: source)
+            _ = try await h.store.saveFinalized(.init(id: id, recordingSessionID: RecordingSessionID(),
+                title: "Pending handoff", titleSource: .timestamp, createdAt: Date(), duration: 1,
+                source: .appleWatch, captureOutcome: .completed, requiresReview: false, audioURL: source))
+            let watch = try h.merge(device: .appleWatch)
+            try await watch.queueNote(id)
+            let before = try await watch.pendingAudioNoteIDs()
+            XCTAssertEqual(before, [id])
+            if reset { _ = try await watch.apply(watch.prepareReset()) }
+            else { try await h.store.delete(noteID: id); try await watch.queueDeletion(id) }
+            let after = try await watch.pendingAudioNoteIDs()
+            XCTAssertTrue(after.isEmpty)
+        }
+    }
+
+    func testSuspendedMetadataSnapshotCannotRetireANewManualRequest() async throws {
+        let h = try SyncHarness(); defer { h.remove() }
+        let transport = SyncTransport(); transport.active = true; transport.available = false
+        let commands = try h.merge(transport: transport)
+        let metadata = NoteTransfer(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "Concurrent metadata",
+            titleSource: .timestamp, createdAt: Date(), duration: 1, source: .appleWatch,
+            captureOutcome: .completed, requiresReview: false)
+        _ = try await h.store.savePendingPeerNote(metadata.finalized(audioURL: h.files.audioURL(for: metadata.id)))
+        let paused = expectation(description: "Another process suspends after its real SQLite snapshot")
+        let scheduling = PausingSynchronizationStore(base: h.store, paused: paused)
+        defer { Task { await scheduling.resume() } }
+        let incoming = try ConnectivityMergeService(store: scheduling, files: h.files, databaseURL: h.root.appendingPathComponent("whim.sqlite"),
+            root: h.root.appendingPathComponent("Peer"), device: .iphone, transport: transport)
+        let importTask = Task { try await incoming.apply(.init(payload: .noteMetadata(metadata))) }
+        await fulfillment(of: [paused], timeout: 2)
+        try await commands.retryAudio(metadata.id)
+        await scheduling.resume()
+        _ = try await importTask.value
+        transport.available = true
+        try await commands.activated()
+        XCTAssertEqual(transport.audioRequests.count, 1, "A stale SQLite snapshot cannot retire a newer request")
+    }
+
+    func testValidResendRepairsARejectedFileBeforeOrdinaryMetadataArrives() async throws {
+        let h = try SyncHarness(); defer { h.remove() }
+        let transport = SyncTransport(); transport.active = true
+        let metadata = NoteTransfer(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "File before control",
+            titleSource: .timestamp, createdAt: Date(), duration: 1, source: .appleWatch,
+            captureOutcome: .completed, requiresReview: false)
+        let corrupted = h.root.appendingPathComponent("corrupt.m4a")
+        try Data("broken".utf8).write(to: corrupted)
+        let merge = try h.merge(transport: transport)
+        _ = try await merge.receiveFile(at: corrupted, metadata: .init(payload: .noteMetadata(metadata)))
+        try await merge.flush()
+        let request = try XCTUnwrap(transport.audioRequests.last)
+        let reply = ConnectivityEnvelope(payload: .noteMetadata(.init(id: metadata.id,
+            recordingSessionID: metadata.recordingSessionID, title: metadata.title, titleSource: metadata.titleSource,
+            createdAt: metadata.createdAt, duration: metadata.duration, source: metadata.source,
+            captureOutcome: metadata.captureOutcome, requiresReview: false, audioRequestID: request.requestID)))
+        _ = try await merge.receiveFile(at: h.fixture, metadata: reply)
+        let repaired = try await h.store.listNotes(filter: .all).first
+        XCTAssertNil(repaired?.audioSynchronization)
+        XCTAssertTrue(try XCTUnwrap(repaired).hasLocalAudio)
+        _ = try await merge.apply(.init(payload: .noteMetadata(metadata)))
+        let later = try await h.store.listNotes(filter: .all)
+        XCTAssertEqual(later.count, 1)
+        XCTAssertEqual(later.first?.id, metadata.id)
+    }
+
+    func testRecoveringRejectedFileNeverAcknowledgesAudioOrReleasesWatchSource() async throws {
+        let phone = try SyncHarness(); defer { phone.remove() }
+        let watch = try SyncHarness(); defer { watch.remove() }
+        let outgoing = SyncTransport(); outgoing.active = true
+        let incoming = SyncTransport(); incoming.active = true
+        let metadata = NoteTransfer(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "Keep the source",
+            titleSource: .timestamp, createdAt: Date(), duration: 1, source: .appleWatch,
+            captureOutcome: .completed, requiresReview: false)
+        let source = watch.files.audioURL(for: metadata.id)
+        try FileManager.default.copyItem(at: watch.fixture, to: source)
+        _ = try await watch.store.saveFinalized(metadata.finalized(audioURL: source))
+        let sender = try watch.merge(transport: outgoing, device: .appleWatch)
+        try await sender.queueNote(metadata.id)
+        let fileEnvelope = try XCTUnwrap(outgoing.fileEnvelopes.first)
+        let corrupted = phone.root.appendingPathComponent("corrupt.m4a")
+        try Data("broken audio".utf8).write(to: corrupted)
+        _ = try await phone.merge(transport: incoming).receiveFile(at: corrupted, metadata: fileEnvelope)
+        let restarted = try phone.merge(transport: incoming)
+        try await restarted.recover()
+        try await restarted.flush()
+        XCTAssertFalse(incoming.sent.contains { $0.payload == .acknowledgement(.durable(fileEnvelope.messageID)) })
+        for message in incoming.sent {
+            if case .acknowledgement = message.payload { _ = try await sender.apply(message) }
+        }
+        let held = try await sender.pendingAudioNoteIDs()
+        XCTAssertEqual(held, [metadata.id])
+        let note = try await phone.store.note(id: metadata.id)
+        XCTAssertFalse(try XCTUnwrap(note).isDeliveryEligible)
+    }
+
+    func testInitialUnavailableWatchSourceStartsBoundedRepairEvenWhenFailurePrecedesMetadata() async throws {
+        for failureFirst in [false, true] {
+            let phone = try SyncHarness(); defer { phone.remove() }
+            let watch = try SyncHarness(); defer { watch.remove() }
+            let outgoing = SyncTransport(); outgoing.active = true
+            let incoming = SyncTransport(); incoming.active = true
+            let metadata = NoteTransfer(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "Source went missing",
+                titleSource: .timestamp, createdAt: Date(), duration: 1, source: .appleWatch,
+                captureOutcome: .completed, requiresReview: false)
+            let source = watch.files.audioURL(for: metadata.id)
+            try FileManager.default.copyItem(at: watch.fixture, to: source)
+            _ = try await watch.store.saveFinalized(metadata.finalized(audioURL: source))
+            try FileManager.default.removeItem(at: source)
+            try await watch.merge(transport: outgoing, device: .appleWatch).queueNote(metadata.id)
+            let failure = outgoing.sent.first { if case .audioUnavailable = $0.payload { true } else { false } }
+            XCTAssertNotNil(failure, "Initial handoff reports unavailable audio rather than waiting indefinitely")
+            guard let failure else { continue }
+            let control = try XCTUnwrap(outgoing.sent.first { if case .noteMetadata = $0.payload { true } else { false } })
+            let receiver = try phone.merge(transport: incoming)
+            for message in failureFirst ? [failure, control] : [control, failure] { _ = try await receiver.apply(message) }
+            try await receiver.flush()
+            let pending = try await phone.store.note(id: metadata.id)
+            XCTAssertEqual(pending?.audioSynchronization?.status, .retrying)
+            XCTAssertEqual(pending?.audioSynchronization?.transferCount, 2)
+            XCTAssertEqual(incoming.audioRequests.count, 1)
+        }
+    }
+
+    func testUnavailableWatchAudioRespondsAndExhaustsThreeTransfersWhileOfflineDoesNot() async throws {
+        for missing in [false, true] {
+            let phone = try SyncHarness(); defer { phone.remove() }
+            let watch = try SyncHarness(); defer { watch.remove() }
+            let phoneTransport = SyncTransport(); phoneTransport.available = false
+            let watchTransport = SyncTransport(); watchTransport.active = true
+            let metadata = NoteTransfer(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "Unavailable source",
+                titleSource: .timestamp, createdAt: Date(), duration: 1, source: .appleWatch,
+                captureOutcome: .completed, requiresReview: false)
+            let source = watch.files.audioURL(for: metadata.id)
+            try FileManager.default.copyItem(at: watch.fixture, to: source)
+            _ = try await watch.store.saveFinalized(metadata.finalized(audioURL: source))
+            if missing { try FileManager.default.removeItem(at: source) } else { try watch.truncate(source) }
+            let sender = try watch.merge(transport: watchTransport, device: .appleWatch)
+            let receiver = try phone.merge(transport: phoneTransport)
+            _ = try await receiver.apply(.init(payload: .noteMetadata(metadata)))
+            try await receiver.retryAudio(metadata.id)
+            try await receiver.recover()
+            try await receiver.activated()
+            let offline = try await phone.store.note(id: metadata.id)
+            XCTAssertEqual(offline?.audioSynchronization?.transferCount, 1)
+            XCTAssertTrue(phoneTransport.audioRequests.isEmpty)
+
+            phoneTransport.active = true; phoneTransport.available = true
+            try await receiver.activated()
+            var lastUnavailable: ConnectivityEnvelope?
+            for _ in 1...3 {
+                let request = try XCTUnwrap(phoneTransport.sent.last { if case .audioRequest = $0.payload { true } else { false } })
+                _ = try await sender.apply(request)
+                try await sender.flush()
+                let reply = try XCTUnwrap(watchTransport.sent.last { if case .audioUnavailable = $0.payload { true } else { false } })
+                guard case .audioUnavailable(let unavailable) = reply.payload else { return XCTFail("Expected unavailable response") }
+                XCTAssertEqual(unavailable.requestID, request.messageID)
+                _ = try await receiver.apply(reply)
+                try await receiver.flush()
+                lastUnavailable = reply
+            }
+            let failed = try await phone.store.note(id: metadata.id)
+            XCTAssertEqual(failed?.audioSynchronization?.status, .failed)
+            XCTAssertEqual(failed?.audioSynchronization?.transferCount, 3)
+            XCTAssertEqual(phoneTransport.audioRequests.count, 3, "Manual sync starts a fresh three-transfer cycle")
+            XCTAssertTrue(watchTransport.files.isEmpty)
+
+            try await receiver.retryAudio(metadata.id)
+            _ = try await receiver.apply(.init(payload: try XCTUnwrap(lastUnavailable).payload))
+            let fresh = try await phone.store.note(id: metadata.id)
+            XCTAssertEqual(fresh?.audioSynchronization?.status, .retrying)
+            XCTAssertEqual(fresh?.audioSynchronization?.transferCount, 1, "Old-cycle replies cannot consume a fresh cycle")
+        }
+    }
+
+    func testConcurrentDuplicateFailuresAdvanceOnlyOneSynchronizationRetry() async throws {
+        let h = try SyncHarness(); defer { h.remove() }
+        let metadata = NoteTransfer(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "Concurrent replies",
+            titleSource: .timestamp, createdAt: Date(), duration: 1, source: .appleWatch,
+            captureOutcome: .completed, requiresReview: false)
+        _ = try await h.store.savePendingPeerNote(metadata.finalized(audioURL: h.files.audioURL(for: metadata.id)))
+        var synchronization = AudioSynchronization(status: .retrying, transferCount: 2)
+        let requestID = UUID(); synchronization.requestID = requestID
+        try await h.store.setAudioSynchronization(synchronization, noteID: metadata.id)
+        let transport = SyncTransport(); transport.active = true
+        let merge = try h.merge(transport: transport)
+        let reply = ConnectivityEnvelope(payload: .audioUnavailable(.init(noteID: metadata.id, requestID: requestID)))
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0..<12 { group.addTask { _ = try await merge.apply(reply) } }
+            try await group.waitForAll()
+        }
+        try await merge.flush()
+        let note = try await h.store.note(id: metadata.id)
+        XCTAssertEqual(note?.audioSynchronization?.transferCount, 3)
+        XCTAssertEqual(transport.audioRequests.count, 1, "Duplicate concurrent replies cannot create competing resends")
+    }
+
+    func testWatchResendsRequestedAudioAndReleasesHandoffOnlyAfterValidAcceptance() async throws {
+        let phone = try SyncHarness(); defer { phone.remove() }
+        let watch = try SyncHarness(); defer { watch.remove() }
+        let phoneTransport = SyncTransport(); phoneTransport.active = true
+        let watchTransport = SyncTransport(); watchTransport.active = true
+        let metadata = NoteTransfer(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "Repair me",
+            titleSource: .timestamp, createdAt: Date(), duration: 1, source: .appleWatch,
+            captureOutcome: .completed, requiresReview: false)
+        let source = watch.files.audioURL(for: metadata.id)
+        try FileManager.default.copyItem(at: watch.fixture, to: source)
+        _ = try await watch.store.saveFinalized(metadata.finalized(audioURL: source))
+        let sender = try watch.merge(transport: watchTransport, device: .appleWatch)
+        let receiver = try phone.merge(transport: phoneTransport)
+        try await sender.queueNote(metadata.id)
+        let initial = try XCTUnwrap(watchTransport.fileEnvelopes.first)
+        _ = try await receiver.apply(.init(payload: .noteMetadata(metadata)))
+        let corrupt = phone.root.appendingPathComponent("corrupt.m4a")
+        try Data("broken".utf8).write(to: corrupt)
+        _ = try await receiver.receiveFile(at: corrupt, metadata: initial)
+        try await receiver.flush()
+        let held = try await sender.pendingAudioNoteIDs()
+        XCTAssertEqual(held, [metadata.id], "Corrupt audio is never acknowledged as a durable handoff")
+
+        let request = try XCTUnwrap(phoneTransport.sent.last { if case .audioRequest = $0.payload { true } else { false } })
+        _ = try await sender.apply(request)
+        try await sender.flush()
+        XCTAssertEqual(watchTransport.fileEnvelopes.count, 2)
+        let reply = try XCTUnwrap(watchTransport.fileEnvelopes.last)
+        guard case .noteMetadata(let response) = reply.payload else { return XCTFail("Expected file metadata") }
+        XCTAssertEqual(try XCTUnwrap(response.audioRequestID), request.messageID)
+        _ = try await receiver.receiveFile(at: source, metadata: reply)
+        try await receiver.flush()
+        let repaired = try await phone.store.note(id: metadata.id)
+        XCTAssertNil(repaired?.audioSynchronization)
+        XCTAssertNil(phone.files.audioError(at: try XCTUnwrap(repaired).audioURL))
+        for message in phoneTransport.sent { _ = try await sender.apply(message) }
+        let remaining = try await sender.pendingAudioNoteIDs()
+        XCTAssertTrue(remaining.isEmpty, "A valid durable copy releases both original and repair transfers")
+    }
+
+    func testThreeCorruptTransfersFailSynchronizationWithoutRegressingWatchReceipt() async throws {
+        let h = try SyncHarness(); defer { h.remove() }
+        let transport = SyncTransport(); transport.active = true
+        let metadata = NoteTransfer(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "Sent on Watch",
+            titleSource: .timestamp, createdAt: Date(), duration: 10, source: .appleWatch,
+            captureOutcome: .completed, requiresReview: false)
+        let original = ConnectivityEnvelope(payload: .noteMetadata(metadata))
+        let corrupted = h.root.appendingPathComponent("corrupt.m4a")
+        try Data("not playable audio".utf8).write(to: corrupted)
+        let first = try h.merge(transport: transport)
+        _ = try await first.apply(original)
+        _ = try await first.apply(.init(payload: .receipt(.init(attemptID: AttemptID(), noteID: metadata.id,
+            receivedAt: Date(), statusCode: 204))))
+        _ = try await first.receiveFile(at: corrupted, metadata: original)
+        try await first.flush()
+
+        for retry in 1...2 {
+            let request = try XCTUnwrap(transport.audioRequests.last)
+            let reply = ConnectivityEnvelope(payload: .noteMetadata(.init(id: metadata.id,
+                recordingSessionID: metadata.recordingSessionID, title: metadata.title, titleSource: metadata.titleSource,
+                createdAt: metadata.createdAt, duration: metadata.duration, source: metadata.source,
+                captureOutcome: metadata.captureOutcome, requiresReview: false, audioRequestID: request.requestID)))
+            let restarted = try h.merge(transport: transport)
+            _ = try await restarted.receiveFile(at: corrupted, metadata: reply)
+            _ = try await restarted.receiveFile(at: corrupted, metadata: reply) // duplicate OS callback
+            try await restarted.recover()
+            try await restarted.flush()
+            let note = try await h.store.note(id: metadata.id)
+            XCTAssertEqual(note?.audioSynchronization?.transferCount, min(3, retry + 2))
+            XCTAssertEqual(note?.audioSynchronization?.status, retry == 2 ? .failed : .retrying)
+            XCTAssertEqual(note?.delivery.status, .sent)
+        }
+        XCTAssertEqual(transport.audioRequests.count, 2, "The initial corrupt transfer plus two resends exhausts the cycle")
+        let exhausted = try h.merge(transport: transport)
+        try await exhausted.recover()
+        try await exhausted.activated()
+        XCTAssertEqual(transport.audioRequests.count, 2, "Relaunch cannot revive exhausted resend requests")
+        let summary = try await h.store.listNotes(filter: .all).first
+        XCTAssertEqual(summary?.status, .sent)
+        XCTAssertFalse(try XCTUnwrap(summary).hasLocalAudio)
+
+        // Retry history is a presentation contract, independent of webhook Attempts.
+        func retryOutcomes(_ note: Note) throws -> [String]? {
+            let encoded = try JSONEncoder().encode(NoteDetailProjection(note: note))
+            let detail = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+            return (detail["audioSynchronizationRetries"] as? [[String: Any]])?
+                .compactMap { $0["outcome"] as? String }
+        }
+        let failedNote = try await h.store.note(id: metadata.id)
+        XCTAssertEqual(try retryOutcomes(XCTUnwrap(failedNote)), ["failed", "failed"])
+        try await exhausted.retryAudio(metadata.id)
+        let retryingNote = try await h.store.note(id: metadata.id)
+        XCTAssertEqual(try retryOutcomes(XCTUnwrap(retryingNote)), ["failed", "failed", "waiting"])
+        let request = try XCTUnwrap(transport.audioRequests.last)
+        let validReply = ConnectivityEnvelope(payload: .noteMetadata(.init(id: metadata.id,
+            recordingSessionID: metadata.recordingSessionID, title: metadata.title, titleSource: metadata.titleSource,
+            createdAt: metadata.createdAt, duration: metadata.duration, source: metadata.source,
+            captureOutcome: metadata.captureOutcome, requiresReview: false, audioRequestID: request.requestID)))
+        _ = try await exhausted.receiveFile(at: h.fixture, metadata: validReply)
+        let reopened = try SQLiteWhimStore.open(at: h.root.appendingPathComponent("whim.sqlite"))
+        let repairedNote = try await reopened.note(id: metadata.id)
+        XCTAssertNil(repairedNote?.audioSynchronization)
+        XCTAssertEqual(try retryOutcomes(XCTUnwrap(repairedNote)), ["failed", "failed", "synced"])
+    }
+
+    func testCorruptPendingAudioRequestsRepairWithoutConsumingRetriesOnRecovery() async throws {
+        let h = try SyncHarness(); defer { h.remove() }
+        let metadata = NoteTransfer(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "Interrupted transfer",
+            titleSource: .timestamp, createdAt: Date(), duration: 10, source: .appleWatch,
+            captureOutcome: .completed, requiresReview: false)
+        let envelope = ConnectivityEnvelope(payload: .noteMetadata(metadata))
+        _ = try await h.merge().receiveFile(at: h.fixture, metadata: envelope)
+        try h.truncate(try h.pendingAudio(metadata.id))
+        let transport = SyncTransport(); transport.active = true
+        func merge() throws -> ConnectivityMergeService { try h.merge(transport: transport) }
+        _ = try await merge().apply(envelope)
+        try await merge().recover()
+        try await merge().recover()
+        try await merge().flush()
+
+        let note = try await h.store.note(id: metadata.id)
+        XCTAssertEqual(note?.audioSynchronization?.status, .retrying)
+        XCTAssertEqual(note?.audioSynchronization?.transferCount, 2)
+        let requests = transport.sent.compactMap { envelope -> AudioTransferRequest? in
+            if case .audioRequest(let request) = envelope.payload { return request }; return nil
+        }
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests.first?.noteID, metadata.id)
+    }
+
+    func testWatchMetadataCreatesVisibleUnplayableNoteBeforeAudioArrives() async throws {
+        let h = try SyncHarness(); defer { h.remove() }
+        let metadata = NoteTransfer(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "On the way",
+            titleSource: .timestamp, createdAt: Date(), duration: 10, source: .appleWatch,
+            captureOutcome: .completed, requiresReview: false)
+        _ = try await h.merge().apply(.init(payload: .noteMetadata(metadata)))
+
+        let notes = try await h.store.listNotes(filter: .all)
+        XCTAssertEqual(notes.count, 1, "Watch metadata is visible even before local audio exists")
+        guard let summary = notes.first else { return }
+        XCTAssertEqual(summary.id, metadata.id)
+        XCTAssertFalse(summary.hasLocalAudio)
+        let note = try await h.store.note(id: metadata.id)
+        XCTAssertFalse(try XCTUnwrap(note).isDeliveryEligible)
+        try await h.merge().recover()
+        let afterRestart = try await h.store.listNotes(filter: .all)
+        XCTAssertEqual(afterRestart, notes)
+    }
+
     func testActivatedSessionWithoutCompanionDefersSyncUntilCompanionIsAvailable() async throws {
         let h = try SyncHarness(); defer { h.remove() }
         let credentials = SyncCredentials()
@@ -386,7 +775,7 @@ final class ConnectivityMergeTests: XCTestCase {
             if fileFirst { _ = try await first.receiveFile(at: harness.fixture, metadata: .init(payload: .noteMetadata(metadata))) }
             else { _ = try await first.apply(.init(payload: .noteMetadata(metadata))) }
             let premature = try await harness.store.listNotes(filter: .all)
-            XCTAssertTrue(premature.isEmpty, "Neither metadata nor an unpaired file claims durable Note audio")
+            XCTAssertTrue(premature.allSatisfy { !$0.hasLocalAudio }, "Metadata alone never claims playable local audio")
             let restarted = try harness.merge()
             if fileFirst { _ = try await restarted.apply(.init(payload: .noteMetadata(metadata))) }
             else { _ = try await restarted.receiveFile(at: harness.fixture, metadata: .init(payload: .noteMetadata(metadata))) }
@@ -417,8 +806,8 @@ final class ConnectivityMergeTests: XCTestCase {
                 _ = try await restarted.apply(envelope)
                 try await restarted.recover()
                 let notes = try await h.store.listNotes(filter: .all)
-                XCTAssertTrue(notes.isEmpty, "A truncated transfer is skipped instead of failing every recovery")
-                _ = try h.pendingAudio(metadata.id) // kept for a transient read error; the resend replaces it
+                XCTAssertEqual(notes.count, 1, "A truncated transfer remains visible without blocking recovery")
+                XCTAssertFalse(try XCTUnwrap(notes.first).hasLocalAudio)
                 _ = try await restarted.receiveFile(at: h.fixture, metadata: envelope)
             }
             let note = try await h.store.note(id: metadata.id)
@@ -446,6 +835,58 @@ final class ConnectivityMergeTests: XCTestCase {
     }
 }
 
+/// Scheduling fault injection only: every value and mutation comes from the real
+/// SQLite store. Pause one already-read snapshot to model suspension of a process.
+private actor PausingSynchronizationStore: WhimStore {
+    let base: SQLiteWhimStore
+    let paused: XCTestExpectation
+    var reads = 0
+    var released = false
+    var continuation: CheckedContinuation<Void, Never>?
+    init(base: SQLiteWhimStore, paused: XCTestExpectation) { self.base = base; self.paused = paused }
+    func note(id: NoteID) async throws -> Note? {
+        let snapshot = try await base.note(id: id)
+        reads += 1
+        if reads == 2 && !released {
+            await withCheckedContinuation { continuation in
+                self.continuation = continuation
+                paused.fulfill()
+            }
+        }
+        return snapshot
+    }
+    func resume() { released = true; continuation?.resume(); continuation = nil }
+    func markAudioExpired(noteID: NoteID, at date: Date) async throws -> Bool { try await base.markAudioExpired(noteID: noteID, at: date) }
+    func latestConfigurationRevision() async throws -> ConfigurationRevision? { try await base.latestConfigurationRevision() }
+    func deliveryAttempts(noteID: NoteID) async throws -> [Attempt] { try await base.deliveryAttempts(noteID: noteID) }
+    func beginRetryCycle(noteID: NoteID) async throws -> Bool { try await base.beginRetryCycle(noteID: noteID) }
+    func markExhaustionNotified(noteID: NoteID, retryCycle: Int) async throws -> Bool { try await base.markExhaustionNotified(noteID: noteID, retryCycle: retryCycle) }
+    func reset() async throws { try await base.reset() }
+    func recordLocalError(_ error: LocalAudioError, noteID: NoteID) async throws { try await base.recordLocalError(error, noteID: noteID) }
+    func saveRecoveryError(_ recording: FinalizedRecording, error: LocalAudioError) async throws { try await base.saveRecoveryError(recording, error: error) }
+    func send(noteID: NoteID) async throws { try await base.send(noteID: noteID) }
+    func saveRecordingSession(_ session: RecordingSession) async throws { try await base.saveRecordingSession(session) }
+    func recordingSessions() async throws -> [RecordingSession] { try await base.recordingSessions() }
+    func discardRecordingSession(sessionID: RecordingSessionID) async throws { try await base.discardRecordingSession(sessionID: sessionID) }
+    func recordSessionError(_ error: LocalAudioError, sessionID: RecordingSessionID) async throws { try await base.recordSessionError(error, sessionID: sessionID) }
+    func delete(noteID: NoteID) async throws { try await base.delete(noteID: noteID) }
+    func acknowledgeDeletion(noteID: NoteID, endpoint: AttemptDevice) async throws { try await base.acknowledgeDeletion(noteID: noteID, endpoint: endpoint) }
+    func deletions() async throws -> [DeletionTombstone] { try await base.deletions() }
+    func saveConfigurationRevision(_ revision: ConfigurationRevision) async throws { try await base.saveConfigurationRevision(revision) }
+    func configurationRevision(for noteID: NoteID) async throws -> ConfigurationRevision? { try await base.configurationRevision(for: noteID) }
+    func listNotes(filter: NoteFilter) async throws -> [NoteProjection] { try await base.listNotes(filter: filter) }
+    func saveFinalized(_ recording: FinalizedRecording) async throws -> Note { try await base.saveFinalized(recording) }
+    func savePendingPeerNote(_ recording: FinalizedRecording) async throws -> Note { try await base.savePendingPeerNote(recording) }
+    func setAudioSynchronization(_ value: AudioSynchronization?, noteID: NoteID) async throws { try await base.setAudioSynchronization(value, noteID: noteID) }
+    func replaceAudioSynchronization(_ expected: AudioSynchronization, with value: AudioSynchronization, noteID: NoteID) async throws -> Bool {
+        try await base.replaceAudioSynchronization(expected, with: value, noteID: noteID)
+    }
+    func updateTitle(noteID: NoteID, title: String, source: TitleSource) async throws { try await base.updateTitle(noteID: noteID, title: title, source: source) }
+    func apply(_ event: DeliveryEvent, to noteID: NoteID) async throws -> Delivery { try await base.apply(event, to: noteID) }
+    func acquireLease(_ kind: LeaseKind, noteID: NoteID, owner: UUID, until: Date) async throws -> Bool { try await base.acquireLease(kind, noteID: noteID, owner: owner, until: until) }
+    func releaseLease(_ kind: LeaseKind, noteID: NoteID, owner: UUID) async throws { try await base.releaseLease(kind, noteID: noteID, owner: owner) }
+}
+
 private struct SyncHarness {
     let root: URL
     let store: SQLiteWhimStore
@@ -457,8 +898,8 @@ private struct SyncHarness {
         store = try .open(at: root.appendingPathComponent("whim.sqlite"))
         files = try .init(root: root.appendingPathComponent("Audio"), closeWriter: { _ in })
     }
-    func merge() throws -> ConnectivityMergeService {
-        try .init(store: store, files: files, databaseURL: root.appendingPathComponent("whim.sqlite"), root: root.appendingPathComponent("Peer"), device: .iphone)
+    func merge(transport: (any PeerTransport)? = nil, device: AttemptDevice = .iphone) throws -> ConnectivityMergeService {
+        try .init(store: store, files: files, databaseURL: root.appendingPathComponent("whim.sqlite"), root: root.appendingPathComponent("Peer"), device: device, transport: transport)
     }
     func remove() { try? FileManager.default.removeItem(at: root) }
     func pendingAudio(_ id: NoteID) throws -> URL {
@@ -489,6 +930,9 @@ private final class SyncTransport: PeerTransport, @unchecked Sendable {
     var sent: [ConnectivityEnvelope] = []
     var files: [URL] = []
     var fileEnvelopes: [ConnectivityEnvelope] = []
+    var audioRequests: [AudioTransferRequest] {
+        sent.compactMap { if case .audioRequest(let value) = $0.payload { value } else { nil } }
+    }
     var isAvailable: Bool { available }
     var isActivated: Bool { active }
     func activate(receive: @escaping @Sendable (PeerEvent) -> Void) {}

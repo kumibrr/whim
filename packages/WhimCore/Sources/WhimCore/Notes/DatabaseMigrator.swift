@@ -65,6 +65,16 @@ enum WhimDatabaseMigrator {
                 table.add(column: "audio_expired_at", .double)
             }
         }
+        migrator.registerMigration("v5-peer-audio-synchronization") { db in
+            try db.alter(table: "notes") { table in
+                table.add(column: "audio_synchronization", .blob)
+            }
+        }
+        migrator.registerMigration("v6-peer-audio-retry-history") { db in
+            try db.alter(table: "notes") { table in
+                table.add(column: "audio_synchronization_retries", .blob)
+            }
+        }
         try migrator.migrate(queue)
     }
 }

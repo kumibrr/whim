@@ -8,10 +8,9 @@ struct TimelineView: View {
     @State private var filter = "All"
     private var visible: [NoteProjection] {
         model.notes.filter { note in
-            filter == "All"
-                || (filter == "Queued"
-                    ? [.queued, .setupRequired, .sending].contains(note.status)
-                    : note.status.rawValue == filter.lowercased())
+            guard let selected = NoteFilter(rawValue: filter.lowercased()) else { return true }
+            return note.matches(selected)
+                || (selected == .queued && [.queued, .setupRequired, .sending].contains(note.status))
         }
     }
     var body: some View {
@@ -20,7 +19,7 @@ struct TimelineView: View {
                 HStack { filters }
                 VStack(alignment: .leading) { filters }
             }
-            if filter == "Failed" && visible.contains(where: { !$0.requiresReview }) {
+            if filter == "Failed" && visible.contains(where: { !$0.requiresReview && $0.audioSynchronization == nil }) {
                 Button("Retry all failed Notes") {
                     Task { await model.perform { _ = try await model.client.retryAllFailed() } }
                 }

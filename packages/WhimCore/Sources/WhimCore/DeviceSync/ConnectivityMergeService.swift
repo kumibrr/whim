@@ -44,6 +44,17 @@ public actor ConnectivityMergeService {
         if case .deletion = envelope.payload {} else { try acknowledgeDurable(envelope) }
         guard envelope.generation == state.generation else { return nil }
         switch envelope.payload {
+        case .audioRequest(let request):
+            guard device == .appleWatch else { return nil }
+            try await sendRequestedAudio(request, generation: envelope.generation)
+            return nil
+        case .audioUnavailable(let request):
+            guard device == .iphone else { return nil }
+            try await rejectAudio(request.noteID, respondingTo: request.requestID)
+            return try await mergeState(request.noteID)
+        case .acknowledgement(.audio(let id)):
+            try journal.acknowledgeAudio(id, generation: envelope.generation)
+            return nil
         case .acknowledgement(.durable(let id)):
             try journal.acknowledge(id, durableOnly: true)
             return nil
@@ -92,8 +103,14 @@ public actor ConnectivityMergeService {
         guard envelope.schemaVersion == 1 else { throw ConnectivityError.unsupportedSchema }
         guard envelope.generation >= (try journal.resetState().generation) else { return nil }
         guard case .noteMetadata(let metadata) = envelope.payload,
-              files.audioError(at: url) == nil else { throw ConnectivityError.invalidFile }
+              FileManager.default.fileExists(atPath: url.path) else { throw ConnectivityError.invalidFile }
         guard !(try await store.deletions()).contains(where: { $0.noteID == metadata.id }) else { return nil }
+        if files.audioError(at: url) != nil {
+            guard envelope.generation == (try generation()), device == .iphone, metadata.source == .appleWatch else { return nil }
+            _ = try await store.savePendingPeerNote(metadata.finalized(audioURL: files.audioURL(for: metadata.id)))
+            try await rejectAudio(metadata.id, respondingTo: metadata.audioRequestID)
+            return try await mergeState(metadata.id)
+        }
         let destination = pendingFile(metadata.id, generation: envelope.generation)
         try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
         // A resend after an interrupted copy must replace the truncated file, not keep it.
@@ -111,6 +128,11 @@ public actor ConnectivityMergeService {
         try durability.synchronizeDirectory(at: root)
         try acknowledgeDurable(envelope)
         guard envelope.generation == (try generation()) else { return nil }
+        try journal.enqueue(.init(generation: envelope.generation, payload: .acknowledgement(.audio(metadata.id))))
+        if let existing = try await store.note(id: metadata.id) {
+            _ = try await importNote(.init(existing))
+            return try await mergeState(metadata.id)
+        }
         for message in try journal.inbox() where message.generation == envelope.generation {
             if case .noteMetadata(let value) = message.payload, value.id == metadata.id {
                 _ = try await importNote(value)
@@ -124,20 +146,85 @@ public actor ConnectivityMergeService {
         guard !(try await store.deletions()).contains(where: { $0.noteID == metadata.id }) else {
             try removePendingFile(metadata.id); return nil
         }
-        if try await store.note(id: metadata.id) != nil { try removePendingFile(metadata.id); return metadata.id }
+        let existing = try await store.note(id: metadata.id)
+        if let existing, existing.audioSynchronization == nil {
+            try journal.reconcileAudioRequest(metadata.id, generation: generation())
+            try removePendingFile(metadata.id)
+            return metadata.id
+        }
         let pending = pendingFile(metadata.id)
-        guard FileManager.default.fileExists(atPath: pending.path) else { return nil }
+        if device == .iphone, metadata.source == .appleWatch, existing == nil {
+            _ = try await store.savePendingPeerNote(metadata.finalized(audioURL: files.audioURL(for: metadata.id)))
+        }
+        if try await store.note(id: metadata.id)?.audioSynchronization != nil {
+            try journal.reconcileAudioRequest(metadata.id, generation: generation())
+        }
+        guard FileManager.default.fileExists(atPath: pending.path) else { return existing?.id ?? (device == .iphone && metadata.source == .appleWatch ? metadata.id : nil) }
         // Throwing here would fail every later recovery pass and block all peer sync.
         // Keep the file instead: a resend replaces it, and a transient read error retries on the next pass.
-        guard files.audioError(at: pending) == nil else { return nil }
+        guard files.audioError(at: pending) == nil else {
+            try await requestAudioRepair(metadata.id)
+            return metadata.id
+        }
         let destination = files.audioURL(for: metadata.id)
         if files.audioError(at: destination) != nil {
             try copyReplacing(destination, from: pending, staging: pending.appendingPathExtension("partial"))
         }
         guard try files.durableAudio(noteID: metadata.id) != nil else { throw ConnectivityError.invalidFile }
-        _ = try await store.saveFinalized(metadata.finalized(audioURL: destination))
+        if try await store.note(id: metadata.id)?.audioSynchronization != nil {
+            try await store.setAudioSynchronization(nil, noteID: metadata.id)
+            try journal.reconcileAudioRequest(metadata.id, generation: generation())
+        } else {
+            _ = try await store.saveFinalized(metadata.finalized(audioURL: destination))
+        }
         try removePendingFile(metadata.id)
         return metadata.id
+    }
+
+    private func requestAudioRepair(_ id: NoteID) async throws {
+        try await rejectAudio(id, respondingTo: nil)
+    }
+
+    private func rejectAudio(_ id: NoteID, respondingTo requestID: UUID?) async throws {
+        guard var synchronization = try await store.note(id: id)?.audioSynchronization,
+              synchronization.status != .failed else { return }
+        let previous = synchronization
+        // Only the current logical resend can fail. Replays and stale replies are harmless.
+        if let requestID {
+            guard synchronization.requestID == requestID else { return }
+        } else {
+            guard synchronization.status == .waiting else { return }
+        }
+        if synchronization.transferCount == AudioSynchronization.maximumTransfers {
+            synchronization.status = .failed
+            synchronization.requestID = nil
+        } else {
+            synchronization.status = .retrying
+            synchronization.transferCount += 1
+            synchronization.requestID = UUID()
+        }
+        guard try await store.replaceAudioSynchronization(previous, with: synchronization, noteID: id) else { return }
+        try journal.reconcileAudioRequest(id, generation: generation())
+    }
+
+    private func sendRequestedAudio(_ request: AudioTransferRequest, generation: ResetGeneration) async throws {
+        if try await store.deletions().contains(where: { $0.noteID == request.noteID }) {
+            try await queueDeletion(request.noteID)
+            return
+        }
+        let source = try await store.note(id: request.noteID)
+        if let source, source.source == .appleWatch, source.audioExpiredAt == nil {
+            try journal.beginAudioHandoff(request.noteID, generation: generation)
+        }
+        guard let note = source, note.source == .appleWatch,
+              note.audioSynchronization == nil, files.audioError(at: note.audioURL) == nil else {
+            try journal.enqueue(.init(generation: generation,
+                payload: .audioUnavailable(.init(noteID: request.noteID, requestID: request.requestID))))
+            return
+        }
+        let metadata = ConnectivityEnvelope(messageID: request.requestID, generation: generation,
+            payload: .noteMetadata(.init(note, audioRequestID: request.requestID)))
+        try journal.enqueue(metadata, file: note.audioURL)
     }
 
     private func mergeState(_ id: NoteID) async throws -> NoteID? {
@@ -148,6 +235,8 @@ public actor ConnectivityMergeService {
             switch message.payload {
             case .attempt(let attempt): _ = try await store.apply(attempt.event, to: id)
             case .receipt(let receipt): _ = try await store.apply(.receipt(receipt), to: id)
+            case .audioUnavailable(let response) where device == .iphone:
+                try await rejectAudio(id, respondingTo: response.requestID)
             default: break
             }
         }
@@ -200,6 +289,12 @@ public actor ConnectivityMergeService {
             if case .reset = envelope.payload { continue }
             _ = try await applyNew(envelope)
         }
+        // Rejected file metadata never enters the ordinary inbox: replaying it as
+        // a control message would falsely acknowledge the rejected file as durable.
+        // Its metadata-only Note is enough to reconstruct interrupted repair intent.
+        for projection in try await store.listNotes(filter: .all) where projection.audioSynchronization != nil {
+            if let note = try await store.note(id: projection.id) { _ = try await importNote(.init(note)) }
+        }
         for deletion in try await store.deletions() {
             try files.delete(noteID: deletion.noteID)
             if Set(deletion.acknowledgedEndpoints).count < 2 { try await queueDeletion(deletion.noteID) }
@@ -209,11 +304,19 @@ public actor ConnectivityMergeService {
     public func queueNote(_ id: NoteID) async throws {
         guard try journal.resetState().complete else { return }
         guard let note = try await store.note(id: id) else { return }
+        guard note.audioSynchronization == nil else { return }
         let current = try generation()
+        if device == .appleWatch, note.source == .appleWatch, note.audioExpiredAt == nil {
+            try journal.beginAudioHandoff(id, generation: current)
+        }
         let metadata = ConnectivityEnvelope(generation: current, payload: .noteMetadata(.init(note)))
         try journal.enqueue(metadata)
-        if device == .appleWatch, note.source == .appleWatch, files.audioError(at: note.audioURL) == nil {
-            try journal.enqueue(.init(generation: current, payload: metadata.payload), file: note.audioURL)
+        if device == .appleWatch, note.source == .appleWatch {
+            if files.audioError(at: note.audioURL) == nil {
+                try journal.enqueue(.init(generation: current, payload: metadata.payload), file: note.audioURL)
+            } else {
+                try journal.enqueue(.init(generation: current, payload: .audioUnavailable(.init(noteID: id))))
+            }
         }
         for attempt in try await store.deliveryAttempts(noteID: id) {
             if let failure = note.delivery.failedAttempts.first(where: { $0.attempt.id == attempt.id }) {
@@ -232,6 +335,15 @@ public actor ConnectivityMergeService {
 
     /// Keep the source file until the companion confirms its durable handoff.
     public func pendingAudioNoteIDs() throws -> Set<NoteID> { try journal.pendingAudioNoteIDs() }
+
+    public func retryAudio(_ id: NoteID) async throws {
+        guard let previous = try await store.note(id: id)?.audioSynchronization else { return }
+        var synchronization = AudioSynchronization(status: .retrying, transferCount: 1)
+        synchronization.requestID = UUID()
+        guard try await store.replaceAudioSynchronization(previous, with: synchronization, noteID: id) else { return }
+        try journal.reconcileAudioRequest(id, generation: generation())
+        try await flush()
+    }
 
     public func queueDeletion(_ id: NoteID) async throws {
         try journal.enqueue(.init(generation: generation(), payload: .deletion(id)))

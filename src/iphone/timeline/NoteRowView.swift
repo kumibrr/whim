@@ -14,6 +14,7 @@ protocol NoteCardPresentation {
     var hasLocalAudio: Bool { get }
     var localError: LocalAudioError? { get }
     var workflowError: DeliveryWorkflowError? { get }
+    var audioSynchronization: AudioSynchronization? { get }
 }
 
 extension NoteProjection: NoteCardPresentation {
@@ -35,8 +36,16 @@ struct NoteRowView: View {
     let retry: (() -> Void)?
     let togglePlayback: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
-    private var status: String { note.requiresReview ? "⚠ Review required" : TimelineFormat.status(note.status) }
-    private var audio: String? { note.hasLocalAudio ? nil : note.localError == nil ? "Audio expired" : "Audio unavailable" }
+    private var synchronizationFailed: Bool { note.audioSynchronization?.status == .failed }
+    private var status: String {
+        if synchronizationFailed { return "Sync failed" }
+        return note.requiresReview ? "⚠ Review required" : TimelineFormat.status(note.status)
+    }
+    private var audio: String? {
+        if synchronizationFailed { return nil }
+        if let synchronization = note.audioSynchronization { return TimelineFormat.synchronization(synchronization) }
+        return note.hasLocalAudio ? nil : note.localError == nil ? "Audio expired" : "Audio unavailable"
+    }
     private var id: String { note.cardID }
     private var isPlaying: Bool { playback?.noteID == id && playback?.isPlaying == true }
     private var progress: Double {
@@ -58,15 +67,19 @@ struct NoteRowView: View {
                 Text("\(TimelineFormat.source(note.source)) · \(TimelineFormat.duration(seconds: note.cardDuration))")
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 4)
-                Text(status).fontWeight(note.status == .failed || note.requiresReview ? .semibold : .regular)
+                Text(status)
+                    .fontWeight(synchronizationFailed || note.status == .failed || note.requiresReview ? .semibold : .regular)
+                    .foregroundStyle(synchronizationFailed ? .red : .primary)
             }.font(.caption2)
-            if let audio { Text(audio).font(.caption).foregroundStyle(.secondary) }
+            if let audio {
+                Text(audio).font(.caption).foregroundStyle(.secondary)
+            }
             if let playbackFailure {
                 WhimErrorText(message: playbackFailure).font(.caption)
                     .accessibilityIdentifier("note-playback-error-\(id)")
             }
             if note.workflowError != nil { Label("Delivery needs attention", systemImage: "exclamationmark.circle").font(.caption) }
-            if note.status == .failed && !note.requiresReview, let retry {
+            if note.audioSynchronization == nil, note.status == .failed && !note.requiresReview, let retry {
                 Button("Retry", action: retry).accessibilityLabel("Retry \(note.title)")
                     .font(.footnote).frame(minHeight: 48)
             }
