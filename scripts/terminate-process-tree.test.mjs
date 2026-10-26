@@ -53,3 +53,17 @@ test('terminates both a spawned parent and its descendant', async (t) => {
   assert.equal(isAlive(parent.pid), false);
   assert.equal(isAlive(childProcessID), false);
 });
+
+test('captures descendants before an ancestor exit can reparent them', async () => {
+  const alive = new Set([10, 20, 30]);
+  const descendants = new Map([[10, [20]], [20, [30]], [30, []]]);
+  await terminateProcessTree(10, {
+    childProcessIDsFn: async pid => alive.has(pid) ? descendants.get(pid) : [],
+    terminateFn: pid => {
+      alive.delete(pid);
+      // A shell's termination can also exit its intermediate child before lookup.
+      if (pid === 10) alive.delete(20);
+    },
+  });
+  assert.equal(alive.has(30), false, 'the reparented grandchild must not survive cleanup');
+});

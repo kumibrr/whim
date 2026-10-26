@@ -31,13 +31,13 @@ export async function terminateProcessTree(
   processID,
   { childProcessIDsFn = childProcessIDs, terminateFn = terminate } = {},
 ) {
-  const children = await childProcessIDsFn(processID);
-  terminateFn(processID);
-  await Promise.all(
-    children.map((childProcessID) =>
-      terminateProcessTree(childProcessID, { childProcessIDsFn, terminateFn }),
-    ),
-  );
+  // Snapshot the whole tree before any signal can exit a shell and reparent children.
+  async function descendantsBeforeParents(pid) {
+    const children = await childProcessIDsFn(pid);
+    const descendants = await Promise.all(children.map(descendantsBeforeParents));
+    return [...descendants.flat(), pid];
+  }
+  for (const pid of await descendantsBeforeParents(processID)) terminateFn(pid);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
