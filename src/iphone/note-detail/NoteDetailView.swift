@@ -26,12 +26,14 @@ struct NoteDetailView: View {
                     Button {
                         Task { await model.retry(); await root.refresh() }
                     } label: {
-                        HStack(spacing: 10) {
+                        HStack(spacing: 8) {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 15, weight: .medium))
-                                .frame(width: 32, height: 32).whimGlass(in: Circle())
                             Text("Retry sync").font(.subheadline)
-                        }.frame(minHeight: 48).contentShape(Rectangle())
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .whimGlass(in: Capsule())
+                        .frame(minHeight: 48).contentShape(Rectangle())
                     }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Retry sync")
