@@ -399,6 +399,51 @@ final class ConnectivityMergeTests: XCTestCase {
         }
         XCTAssertEqual(projections[0], projections[1])
     }
+
+    func testInterruptedPendingCopyNeitherBlocksRecoveryNorSurvivesResend() async throws {
+        for resendBeforeMetadata in [false, true] {
+            let h = try SyncHarness(); defer { h.remove() }
+            let metadata = NoteTransfer(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "Watch recording",
+                titleSource: .timestamp, createdAt: Date(), duration: 1, source: .appleWatch,
+                captureOutcome: .completed, requiresReview: false)
+            let envelope = ConnectivityEnvelope(payload: .noteMetadata(metadata))
+            _ = try await h.merge().receiveFile(at: h.fixture, metadata: envelope)
+            try h.truncate(try h.pendingAudio(metadata.id))
+            let restarted = try h.merge()
+            if resendBeforeMetadata {
+                _ = try await restarted.receiveFile(at: h.fixture, metadata: envelope)
+                _ = try await restarted.apply(envelope)
+            } else {
+                _ = try await restarted.apply(envelope)
+                try await restarted.recover()
+                let notes = try await h.store.listNotes(filter: .all)
+                XCTAssertTrue(notes.isEmpty, "A truncated transfer is skipped instead of failing every recovery")
+                _ = try h.pendingAudio(metadata.id) // kept for a transient read error; the resend replaces it
+                _ = try await restarted.receiveFile(at: h.fixture, metadata: envelope)
+            }
+            let note = try await h.store.note(id: metadata.id)
+            XCTAssertNil(h.files.audioError(at: try XCTUnwrap(note).audioURL))
+            try await h.merge().recover()
+        }
+    }
+
+    func testTruncatedNoteAudioFromInterruptedImportIsReplaced() async throws {
+        let h = try SyncHarness(); defer { h.remove() }
+        let metadata = NoteTransfer(id: NoteID(), recordingSessionID: RecordingSessionID(), title: "Watch recording",
+            titleSource: .timestamp, createdAt: Date(), duration: 1, source: .appleWatch,
+            captureOutcome: .completed, requiresReview: false)
+        let envelope = ConnectivityEnvelope(payload: .noteMetadata(metadata))
+        _ = try await h.merge().receiveFile(at: h.fixture, metadata: envelope)
+        let audio = h.files.audioURL(for: metadata.id)
+        try FileManager.default.createDirectory(at: audio.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: h.fixture, to: audio)
+        try h.truncate(audio)
+        let restarted = try h.merge()
+        _ = try await restarted.apply(envelope)
+        let note = try await h.store.note(id: metadata.id)
+        XCTAssertNil(h.files.audioError(at: try XCTUnwrap(note).audioURL))
+        try await restarted.recover()
+    }
 }
 
 private struct SyncHarness {
@@ -416,6 +461,17 @@ private struct SyncHarness {
         try .init(store: store, files: files, databaseURL: root.appendingPathComponent("whim.sqlite"), root: root.appendingPathComponent("Peer"), device: .iphone)
     }
     func remove() { try? FileManager.default.removeItem(at: root) }
+    func pendingAudio(_ id: NoteID) throws -> URL {
+        let peer = root.appendingPathComponent("Peer")
+        let generations = try FileManager.default.contentsOfDirectory(at: peer, includingPropertiesForKeys: nil)
+        return try XCTUnwrap(generations.map { $0.appendingPathComponent(id.rawValue.uuidString + ".m4a") }
+            .first { FileManager.default.fileExists(atPath: $0.path) })
+    }
+    /// Leaves what an interrupted copy leaves: the start of the file under the final name.
+    func truncate(_ url: URL) throws {
+        let data = try Data(contentsOf: url)
+        try data.prefix(data.count / 3).write(to: url)
+    }
 }
 
 private actor SyncCredentials: CredentialStore {

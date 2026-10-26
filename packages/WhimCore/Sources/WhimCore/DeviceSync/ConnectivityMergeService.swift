@@ -96,8 +96,9 @@ public actor ConnectivityMergeService {
         guard !(try await store.deletions()).contains(where: { $0.noteID == metadata.id }) else { return nil }
         let destination = pendingFile(metadata.id, generation: envelope.generation)
         try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if !FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.copyItem(at: url, to: destination)
+        // A resend after an interrupted copy must replace the truncated file, not keep it.
+        if files.audioError(at: destination) != nil {
+            try copyReplacing(destination, from: url, staging: destination.appendingPathExtension("partial"))
         }
         let durability = SystemFileDurability()
         let sidecar = destination.appendingPathExtension("plist")
@@ -126,9 +127,12 @@ public actor ConnectivityMergeService {
         if try await store.note(id: metadata.id) != nil { try removePendingFile(metadata.id); return metadata.id }
         let pending = pendingFile(metadata.id)
         guard FileManager.default.fileExists(atPath: pending.path) else { return nil }
+        // Throwing here would fail every later recovery pass and block all peer sync.
+        // Keep the file instead: a resend replaces it, and a transient read error retries on the next pass.
+        guard files.audioError(at: pending) == nil else { return nil }
         let destination = files.audioURL(for: metadata.id)
-        if !FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.copyItem(at: pending, to: destination)
+        if files.audioError(at: destination) != nil {
+            try copyReplacing(destination, from: pending, staging: pending.appendingPathExtension("partial"))
         }
         guard try files.durableAudio(noteID: metadata.id) != nil else { throw ConnectivityError.invalidFile }
         _ = try await store.saveFinalized(metadata.finalized(audioURL: destination))
@@ -334,12 +338,23 @@ public actor ConnectivityMergeService {
 
     private func removePendingFile(_ id: NoteID) throws {
         let audio = pendingFile(id)
-        for file in [audio, audio.appendingPathExtension("plist")] where FileManager.default.fileExists(atPath: file.path) {
+        for file in [audio, audio.appendingPathExtension("plist"), audio.appendingPathExtension("partial")]
+        where FileManager.default.fileExists(atPath: file.path) {
             try FileManager.default.removeItem(at: file)
         }
         if FileManager.default.fileExists(atPath: audio.deletingLastPathComponent().path) {
             try SystemFileDurability().synchronizeDirectory(at: audio.deletingLastPathComponent())
         }
+    }
+
+    /// Copy to a staging file and move it into place, so an interrupted copy never
+    /// leaves a truncated file under the final name. Staging stays in the peer folder,
+    /// which pending-file removal and reset already clean up.
+    private func copyReplacing(_ destination: URL, from source: URL, staging: URL) throws {
+        if FileManager.default.fileExists(atPath: staging.path) { try FileManager.default.removeItem(at: staging) }
+        try FileManager.default.copyItem(at: source, to: staging)
+        if FileManager.default.fileExists(atPath: destination.path) { try FileManager.default.removeItem(at: destination) }
+        try FileManager.default.moveItem(at: staging, to: destination)
     }
 
     private func pendingFile(_ id: NoteID, generation: ResetGeneration? = nil) -> URL {
