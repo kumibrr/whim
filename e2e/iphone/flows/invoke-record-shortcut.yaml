@@ -1,0 +1,9 @@
+appId: app.whim.ios
+---
+# DEBUG fixture-only route executes the same app-process intent as the Action button.
+- openLink: whim://record-shortcut
+- runFlow:
+    when:
+      visible: Open
+    commands:
+      - tapOn: Open

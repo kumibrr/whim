@@ -1,0 +1,48 @@
+appId: app.whim.ios
+---
+- runFlow: flows/clean-launch.yaml
+- tapOn: Settings
+- tapOn:
+    id: settings-webhook
+- tapOn:
+    id: webhook-url
+- inputText: https://whim-fixture.invalid/receive
+- tapOn: Save settings
+- extendedWaitUntil:
+    visible: Webhook saved. Test it to check delivery.
+    timeout: 10000
+- tapOn:
+    id: BackButton
+- tapOn:
+    id: BackButton
+- runFlow: flows/invoke-record-shortcut.yaml
+- extendedWaitUntil:
+    visible:
+      id: recorder-panel
+    timeout: 10000
+- runFlow: flows/invoke-record-shortcut.yaml
+- extendedWaitUntil:
+    notVisible:
+      id: recorder-panel
+    timeout: 10000
+- assertNotVisible:
+    id: history-sheet
+- tapOn:
+    id: history-hint
+- extendedWaitUntil:
+    visible: 'Open .*Sent.*'
+    timeout: 15000
+- tapOn:
+    id: note-play-.*
+- assertVisible:
+    id: note-stop-.*
+- tapOn: Close history
+# A third invocation starts a fresh session instead of resending the saved Note.
+- runFlow: flows/invoke-record-shortcut.yaml
+- extendedWaitUntil:
+    visible:
+      id: recorder-panel
+    timeout: 10000
+- tapOn: Discard recording
+- assertNotVisible:
+    id: recorder-panel

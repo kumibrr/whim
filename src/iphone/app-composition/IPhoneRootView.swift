@@ -53,6 +53,13 @@ struct IPhoneRootView: View {
                 guard let url = pendingLink?.url else { return }
                 guard ["whim", "app.whim.ios"].contains(url.scheme ?? "") else { return }
                 await model.closeHistory()
+                #if DEBUG
+                // Installed journeys exercise the production shortcut with fixture audio.
+                if url.host == "record-shortcut", ProcessInfo.processInfo.arguments.contains("-WhimFixtureAudio") {
+                    await model.perform { _ = try await RecordWhimIntent(runtime: .shared).perform() }
+                    return
+                }
+                #endif
                 guard await model.prepareForNavigation() else { return }
                 let parts = ([url.host].compactMap { $0 } + url.pathComponents.filter { $0 != "/" })
                 if parts.first == "settings" {
