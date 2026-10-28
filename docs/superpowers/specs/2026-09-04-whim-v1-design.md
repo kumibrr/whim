@@ -113,7 +113,7 @@ Active and unsent files use data protection compatible with Lock Screen capture 
 
 Recordings use a speech-oriented bitrate. The maximum duration is five minutes and is defined in one internal configuration location so a future release can change it without rewriting recording behavior. Whim warns shortly before the limit and stops safely at the limit.
 
-There is no pause action. Stop saves and sends; Discard immediately destroys the current Recording Session without confirmation. Its button is red with an enlarged tap target. On iOS 26 and watchOS 26 or later, its glass capsule morphs from the Record/Stop control; Reduce Motion disables the morph. Invoking Record while the same device is already recording focuses the active recorder instead of toggling or starting another session.
+There is no pause action. Stop saves and sends; Discard immediately destroys the current Recording Session without confirmation. Its button is red with an enlarged tap target. On iOS 26 and watchOS 26 or later, its glass capsule morphs from the Record/Stop control; Reduce Motion disables the morph. Direct in-app Record and Watch entry points focus an existing local recorder. On iPhone, invoking the “Record a Whim” App Shortcut or Lock Screen control during capture instead stops, saves, and starts Delivery, as updated by the approved 2026-10-27 Action-button behavior.
 
 Audio interruptions stop and safely finalize playable audio as an interrupted Note, which follows normal automatic delivery. Whim never resumes microphone capture without a new user action.
 
@@ -291,13 +291,13 @@ The WidgetKit complication shows the Whim mark while idle, elapsed recording tim
 
 ## App Intents, Lock Screen control, Action button, and Live Activity
 
-Whim defines separate "Record a Whim" and "Stop Whim Recording" App Shortcuts. The recording intent conforms to `AudioRecordingIntent`; starting it creates and maintains the required Live Activity for the full recording. A second Record invocation focuses the active recorder rather than toggling state.
+Whim defines separate "Record a Whim" and "Stop Whim Recording" App Shortcuts. The recording intent conforms to `AudioRecordingIntent`; starting it creates and maintains the required Live Activity for the full recording. On iPhone, a second Record invocation stops the active Recording Session and runs the normal save-and-send workflow; a subsequent invocation starts a new session. On Watch, repeated Record focuses the active recorder. The separate Stop shortcut remains idempotent.
 
 On iPhone, the Live Activity displays elapsed time and Stop on the Lock Screen and Dynamic Island. The activity appears in the paired Watch Smart Stack where supported. Missing permission routes into Whim with an explanation instead of silently failing.
 
 On iOS 18 and later, Whim provides a “Record a Whim” WidgetKit control that the user can add to the Lock Screen. It invokes the same recording intent to start capture while the iPhone remains locked, after microphone permission has been granted. It is available before a Recording Session exists; the Live Activity supplies elapsed time and Stop after capture starts.
 
-On supported iPhones, the user can assign the “Record a Whim” App Shortcut to the Action button in system Settings. Activating it starts capture while locked or unlocked. Repeated Lock Screen or Action-button invocation preserves the existing Recording Session and never toggles it off. Both routes use the same local recorder and required Live Activity lifecycle as other intent entry points. Missing permission routes into Whim with an explanation; any required system authentication is respected. Locked recording is a physical-device acceptance requirement, not satisfied by merely opening the app.
+On supported iPhones, the user can assign the “Record a Whim” App Shortcut to the Action button in system Settings. Activating it starts capture while locked or unlocked. Repeating the Action button, Siri shortcut, or Lock Screen control during capture stops the active Recording Session, ends its Live Activity, saves one Note, and begins Delivery. Offline Notes remain Queued; missing configuration leaves the saved Note in Setup required. Both routes use the same local recorder and required Live Activity lifecycle as other intent entry points. Missing permission routes into Whim with an explanation; any required system authentication is respected. Locked recording is a physical-device acceptance requirement, not satisfied by merely opening the app.
 
 No informational iPhone widget ships in v1. The recording control is the explicit exception to the previous exclusion of separate iPhone widgets.
 
@@ -404,7 +404,7 @@ Required iPhone E2E journeys include:
 - Observe a failed row, inspect its reason, update configuration, and retry
 - Review and explicitly send a recovered Note
 - Change retention and reset all local data
-- Start through the Lock Screen recording control and App Shortcuts, and stop through the Live Activity where simulator automation permits; cover the shared Action-button intent through the same automated seam
+- Start through the Lock Screen recording control and App Shortcuts, repeat the shared iPhone Action-button intent to stop and send, and stop through the Live Activity where simulator automation permits
 
 Required Watch E2E journeys include:
 
@@ -428,7 +428,7 @@ Every pull request runs unit, integration, iPhone E2E, and Watch E2E suites. A f
 A paired physical iPhone and Apple Watch must verify:
 
 - Capture from the app, iPhone Lock Screen recording control, complication, App Shortcut, Siri, and supported Action-button entry points
-- On a supported physical iPhone, configure the Lock Screen control and Action-button shortcut; start from each while locked, repeat Record without creating another session or stopping, and stop through the Live Activity
+- On a supported physical iPhone, configure the Lock Screen control and Action-button shortcut; start from each while locked, repeat Record to stop and send exactly one Note, start a new session with the next invocation, and independently stop through the Live Activity
 - Repeat both iPhone routes with the app not running, with microphone permission missing, and with Live Activities unavailable; verify permission guidance and that activity-start failure leaves no intent-owned capture running
 - Locked-iPhone, wrist-down Watch, and five-minute recording
 - Live Activity, Dynamic Island, Smart Stack, and Stop intent

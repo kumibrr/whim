@@ -3,7 +3,13 @@ import WhimCore
 
 struct RecordWhimIntent: AudioRecordingIntent {
     static let title: LocalizedStringResource = "Record a Whim"
-    static let description = IntentDescription("Start a Recording Session in Whim.")
+    static var description: IntentDescription {
+        #if os(iOS)
+        IntentDescription("Start a Recording Session, or stop and send the active recording in Whim.")
+        #else
+        IntentDescription("Start a Recording Session in Whim.")
+        #endif
+    }
     static var openAppWhenRun: Bool {
         #if os(watchOS)
         true
@@ -30,9 +36,16 @@ struct RecordWhimIntent: AudioRecordingIntent {
         let result: CaptureEntryResult
         do {
             let client = try await runtime.service()
-            result = try await CaptureEntryService(client: client, source: captureSource).record()
+            let entry = CaptureEntryService(client: client, source: captureSource)
+            #if os(iOS)
+            if try await client.activeRecording() != nil {
+                _ = try await entry.stop()
+                return .result()
+            }
+            #endif
+            result = try await entry.record()
         } catch {
-            throw needsToContinueInForegroundError("Recording could not start. Open Whim to check microphone access and Live Activity settings.")
+            throw needsToContinueInForegroundError("Whim could not update the recording. Open Whim to check microphone access and Live Activity settings.")
         }
         if case .openAppForMicrophonePermission = result {
             throw needsToContinueInForegroundError("Open Whim to allow microphone access and start recording.")

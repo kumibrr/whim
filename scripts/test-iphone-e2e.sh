@@ -104,6 +104,7 @@ whim_flows=(
   "$whim_root/e2e/iphone/watch-audio-delete.e2e.test.yaml"
   "$whim_root/e2e/iphone/cold-links.e2e.test.yaml"
   "$whim_root/e2e/iphone/shortcuts-and-live-activity.e2e.test.yaml"
+  "$whim_root/e2e/iphone/action-button-stop-and-send.e2e.test.yaml"
 )
 if [[ -n "${WHIM_IPHONE_E2E_FLOW:-}" ]]; then
   whim_flows=("$whim_root/e2e/iphone/$WHIM_IPHONE_E2E_FLOW")

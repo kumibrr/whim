@@ -13,6 +13,6 @@ struct RecordWhimControl: ControlWidget {
             ControlWidgetButton(action: action) { Label("Record a Whim", image: Self.symbolName) }
         }
         .displayName("Record a Whim")
-        .description("Start a voice Note in Whim.")
+        .description("Start a voice Note, or stop and send the active recording in Whim.")
     }
 }

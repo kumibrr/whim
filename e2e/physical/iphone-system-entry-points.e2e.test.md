@@ -22,15 +22,15 @@ Evidence: external video showing lock state, activation, elapsed time, Stop, and
 
 ## AB-1 — Start with the Action button
 
-With the assigned shortcut, press and hold the physical Action button as required by iOS. Repeat while unlocked and while locked with Face ID covered. Speak, then use the Live Activity's Stop control and play the Note.
+With the assigned shortcut, press and hold the physical Action button as required by iOS. Repeat while unlocked and while locked with Face ID covered. Speak, then press and hold the Action button again and play the resulting Note.
 
-Expected: same recording and activity behavior as LS-1. Repeat after ordinary process termination and offline. Capture external video that includes the hardware press; simulator intent execution is insufficient evidence.
+Expected: the first invocation starts capture and its Live Activity. The second invocation stops capture, ends the activity, saves exactly one playable Note, and starts Delivery without opening Whim. A configured, reachable webhook receives the Note and Whim shows Sent. Repeat after ordinary process termination, offline (Queued), and without configuration (Setup required). Capture external video that includes both hardware presses; simulator intent execution is insufficient evidence.
 
 ## RP-1 — Repeated and alternating entry points
 
-Start using the Lock Screen control, then invoke the Action button twice. Reverse the order on another run. Open Whim during recording and return to the Lock Screen.
+Start using the Lock Screen control, then invoke the Action button to stop and send. Invoke the Action button again to start a new session, then use the Lock Screen control to stop it. Repeat using Siri's Record shortcut as the second invocation. Start in Whim and stop using the Action button on another run. Open Whim during recording and return to the Lock Screen.
 
-Expected: the original elapsed timer continues; no second session, unexpected Stop, or Discard occurs. Stop once; exactly one Note is finalized. Repeat Stop through its App Shortcut and verify it does not create a Note or begin another capture.
+Expected: each active-session invocation stops and finalizes exactly one Note; each idle invocation starts a fresh session with a new elapsed timer. Saved audio is preserved and Delivery begins through the normal workflow. On a separate run, stop through the Live Activity; repeat Stop through its App Shortcut and verify it does not create a Note or begin another capture. Watch repeated Record continues to focus its existing local session.
 
 ## PM-1 — Permission recovery
 
@@ -61,5 +61,5 @@ Expected: Smart Stack Stop addresses the iPhone Recording Session. The complicat
 - `WhimSystemSurfaceTests` executes the production Record/Stop intents and control action with real WhimService, SQLite, and audio files; only platform boundaries are fixtures.
 - `scripts/verify-system-surfaces.py` checks built extension embedding, App Groups, Live Activity support, and extracted shortcut metadata.
 - `ComplicationLaunchUITests` supplies a DEBUG-only launch context to the installed Watch app and verifies capture and invalid-route behavior. watchOS 27 Simulator rejected both XCTest URL opening (no process ID) and `simctl openurl` (LSApplicationWorkspace error 115), even with the registered scheme. Warm URL reentry is covered through WatchModel; actual face taps require WS-1.
-- `shortcuts-and-live-activity.e2e.test.yaml` exercises installed Live Activity Stop where the simulator exposes the surface. Lock Screen customization and a physical Action button remain cases LS-1/AB-1.
+- `shortcuts-and-live-activity.e2e.test.yaml` exercises installed Live Activity Stop where the simulator exposes the surface. `action-button-stop-and-send.e2e.test.yaml` invokes the production Record intent through a DEBUG fixture-only link and verifies capture, repeat-to-send, playback, and a fresh session. This link does not prove OS shortcut dispatch or locked execution. Lock Screen customization and a physical Action button remain cases LS-1/AB-1.
 - Activity lifecycle and reconciliation, permission/activity failure, attention projection, and DEBUG-only latency have deterministic companion tests. Hardware latency figures must be captured on the physical devices; fixture timings are not product performance claims.
