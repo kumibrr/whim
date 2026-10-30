@@ -41,10 +41,26 @@ export function selectCompatibleRuntimes(runtimes) {
   );
 }
 
+export function selectCompatibleDeviceType(types, family, runtime) {
+  const [major, minor = 0, patch = 0] = runtime.version.split('.').map(Number);
+  const version = major * 65536 + minor * 256 + patch;
+  const match = types.find(type => type.productFamily === family
+    && Number.isFinite(type.minRuntimeVersion) && Number.isFinite(type.maxRuntimeVersion)
+    && type.minRuntimeVersion <= version && version <= type.maxRuntimeVersion);
+  if (!match) throw new Error(`No compatible ${family} simulator device type for runtime ${runtime.version}.`);
+  return match;
+}
+
 async function main() {
   const runtimeList = JSON.parse(await readFile(process.argv[2], 'utf8'));
   const selection = selectCompatibleRuntimes(runtimeList.runtimes ?? []);
-  process.stdout.write(`${selection.ios.identifier}|${selection.watch.identifier}`);
+  const identifiers = [selection.ios.identifier, selection.watch.identifier];
+  if (process.argv[3]) {
+    const { devicetypes } = JSON.parse(await readFile(process.argv[3], 'utf8'));
+    identifiers.push(selectCompatibleDeviceType(devicetypes, 'iPhone', selection.ios).identifier,
+      selectCompatibleDeviceType(devicetypes, 'Apple Watch', selection.watch).identifier);
+  }
+  process.stdout.write(identifiers.join('|'));
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

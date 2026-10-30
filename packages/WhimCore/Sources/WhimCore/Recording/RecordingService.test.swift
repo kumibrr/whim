@@ -254,7 +254,7 @@ final class RecordingServiceTests: XCTestCase {
     }
 
     // Break: overlapping Stop and interruption calls close the encoder twice or create two Notes.
-    func testOverlappingStopAndInterruptionShareOneFinalization() async throws {
+    func testStopAndInterruptionRacePreservesOneFinalizedNote() async throws {
         let harness = RecordingHarness()
         _ = try await harness.service.start(source: .iphone)
         let stopping = Task { try await harness.service.stop() }
@@ -267,8 +267,27 @@ final class RecordingServiceTests: XCTestCase {
         let second = try await interrupted.value
         let stopCount = await harness.recorder.readStopCount()
         let noteCount = await harness.store.noteCount
-        XCTAssertEqual(first?.id, second?.id)
-        XCTAssertEqual(first?.captureOutcome, .completed)
+        // The interruption task may enter after Stop has completed. In that
+        // valid ordering there is no active Recording Session and it returns nil.
+        let finalized = try XCTUnwrap(first)
+        if let second { XCTAssertEqual(finalized.id, second.id) }
+        XCTAssertEqual(finalized.captureOutcome, .completed)
+        XCTAssertEqual(stopCount, 1)
+        XCTAssertEqual(noteCount, 1)
+    }
+
+    // Break: a late interruption re-finalizes a Note after Stop has completed.
+    func testInterruptionAfterStopCompletionDoesNotCreateAnotherNote() async throws {
+        let harness = RecordingHarness()
+        _ = try await harness.service.start(source: .iphone)
+        await harness.recorder.completeOnStop(duration: 8, peakPowerDBFS: -20)
+        let stopped = try await harness.service.stop()
+        let interrupted = try await harness.service.handleInterruption()
+
+        XCTAssertNotNil(stopped)
+        XCTAssertNil(interrupted)
+        let stopCount = await harness.recorder.stopCount
+        let noteCount = await harness.store.noteCount
         XCTAssertEqual(stopCount, 1)
         XCTAssertEqual(noteCount, 1)
     }

@@ -11,16 +11,6 @@ xcrun simctl list runtimes --json > "$whim_simulator_data/runtimes.json"
 xcrun simctl list devicetypes --json > "$whim_simulator_data/device-types.json"
 xcrun simctl list devices --json > "$whim_simulator_data/devices.json"
 
-whim_device_type() {
-  WHIM_PRODUCT_FAMILY="$1" node - "$whim_simulator_data/device-types.json" <<'NODE'
-const fs = require('node:fs');
-const types = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')).devicetypes;
-const match = types.find((type) => type.productFamily === process.env.WHIM_PRODUCT_FAMILY);
-if (!match) process.exit(1);
-process.stdout.write(match.identifier);
-NODE
-}
-
 whim_existing_device() {
   WHIM_DEVICE_NAME="$1" WHIM_RUNTIME_ID="$2" node - "$whim_simulator_data/devices.json" <<'NODE'
 const fs = require('node:fs');
@@ -32,20 +22,11 @@ if (match) process.stdout.write(match.udid);
 NODE
 }
 
-whim_runtime_selection="$(node "$whim_root/scripts/select-apple-runtimes.mjs" "$whim_simulator_data/runtimes.json")" || {
+whim_runtime_selection="$(node "$whim_root/scripts/select-apple-runtimes.mjs" "$whim_simulator_data/runtimes.json" "$whim_simulator_data/device-types.json")" || {
   echo "Install a compatible simulator pair in Xcode at $DEVELOPER_DIR." >&2
   exit 1
 }
-whim_ios_runtime="${whim_runtime_selection%%|*}"
-whim_watch_runtime="${whim_runtime_selection#*|}"
-whim_iphone_type="$(whim_device_type iPhone)" || {
-  echo "No iPhone simulator device type is installed." >&2
-  exit 1
-}
-whim_watch_type="$(whim_device_type 'Apple Watch')" || {
-  echo "No Apple Watch simulator device type is installed." >&2
-  exit 1
-}
+IFS='|' read -r whim_ios_runtime whim_watch_runtime whim_iphone_type whim_watch_type <<< "$whim_runtime_selection"
 
 whim_iphone_name="Whim CI iPhone"
 whim_watch_name="Whim CI Watch"
