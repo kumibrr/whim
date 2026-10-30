@@ -27,6 +27,8 @@ whim_runtime_selection="$(node "$whim_root/scripts/select-apple-runtimes.mjs" "$
   exit 1
 }
 IFS='|' read -r whim_ios_runtime whim_watch_runtime whim_iphone_type whim_watch_type <<< "$whim_runtime_selection"
+echo "Selected iPhone simulator: $whim_iphone_type on $whim_ios_runtime" >&2
+echo "Selected Watch simulator: $whim_watch_type on $whim_watch_runtime" >&2
 
 whim_iphone_name="Whim CI iPhone"
 whim_watch_name="Whim CI Watch"
@@ -34,10 +36,16 @@ whim_iphone_udid="$(whim_existing_device "$whim_iphone_name" "$whim_ios_runtime"
 whim_watch_udid="$(whim_existing_device "$whim_watch_name" "$whim_watch_runtime")"
 
 if [[ -z "$whim_iphone_udid" ]]; then
-  whim_iphone_udid="$(xcrun simctl create "$whim_iphone_name" "$whim_iphone_type" "$whim_ios_runtime")"
+  whim_iphone_udid="$(xcrun simctl create "$whim_iphone_name" "$whim_iphone_type" "$whim_ios_runtime")" || {
+    echo "Failed to create iPhone simulator: $whim_iphone_type on $whim_ios_runtime." >&2
+    exit 1
+  }
 fi
 if [[ -z "$whim_watch_udid" ]]; then
-  whim_watch_udid="$(xcrun simctl create "$whim_watch_name" "$whim_watch_type" "$whim_watch_runtime")"
+  whim_watch_udid="$(xcrun simctl create "$whim_watch_name" "$whim_watch_type" "$whim_watch_runtime")" || {
+    echo "Failed to create Watch simulator: $whim_watch_type on $whim_watch_runtime." >&2
+    exit 1
+  }
 fi
 
 if ! xcrun simctl list pairs --json | WHIM_IPHONE="$whim_iphone_udid" WHIM_WATCH="$whim_watch_udid" node -e '

@@ -44,7 +44,9 @@ export function selectCompatibleRuntimes(runtimes) {
 export function selectCompatibleDeviceType(types, family, runtime) {
   const [major, minor = 0, patch = 0] = runtime.version.split('.').map(Number);
   const version = major * 65536 + minor * 256 + patch;
+  const supported = runtime.supportedDeviceTypes?.map(type => type.identifier);
   const match = types.find(type => type.productFamily === family
+    && (supported === undefined || supported.includes(type.identifier))
     && Number.isFinite(type.minRuntimeVersion) && Number.isFinite(type.maxRuntimeVersion)
     && type.minRuntimeVersion <= version && version <= type.maxRuntimeVersion);
   if (!match) throw new Error(`No compatible ${family} simulator device type for runtime ${runtime.version}.`);

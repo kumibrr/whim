@@ -103,10 +103,10 @@ test('paired simulator bootstrap passes compatible device types to simctl and ex
   await executable(join(root, 'Xcode/usr/bin/xcodebuild'), 'exit 0\n');
   await executable(join(root, 'bin/uname'), 'echo Darwin\n');
   const types = ['iPhone', 'Apple Watch'].flatMap((family, i) => [
-    { identifier: `new-${i}`, productFamily: family, minRuntimeVersion: 27 * 65536, maxRuntimeVersion: 0xFFFFFFFF },
+    { identifier: `new-${i}`, productFamily: family, minRuntimeVersion: (i ? 11 : 18) * 65536, maxRuntimeVersion: 0xFFFFFFFF },
     { identifier: `supported-${i}`, productFamily: family, minRuntimeVersion: (i ? 11 : 18) * 65536, maxRuntimeVersion: 26 * 65536 },
   ]);
-  await writeFile(join(root, 'runtimes.json'), JSON.stringify({ runtimes: [runtime('iOS', '18.6'), runtime('watchOS', '11.6')] }));
+  await writeFile(join(root, 'runtimes.json'), JSON.stringify({ runtimes: [runtime('iOS', '18.6'), runtime('watchOS', '11.6')].map((value, i) => ({ ...value, supportedDeviceTypes: [{ identifier: `supported-${i}` }] })) }));
   await writeFile(join(root, 'types.json'), JSON.stringify({ devicetypes: types }));
   await executable(join(root, 'bin/xcrun'), `
 echo "$*" >> "$WHIM_SIMULATOR_FIXTURE/commands"
@@ -129,4 +129,15 @@ esac
   assert.match(result.stdout, /WHIM_IPHONE_SIMULATOR_UDID='iphone-udid'/);
   assert.match(result.stdout, /WHIM_WATCH_SIMULATOR_UDID='watch-udid'/);
   assert.match(await readFile(join(root, 'commands'), 'utf8'), /simctl pair watch-udid iphone-udid/);
+});
+
+test('runtime supported-device catalogue overrides a model with matching nominal version bounds', async () => {
+  const { selectCompatibleDeviceType } = await import('./select-apple-runtimes.mjs');
+  const types = [
+    { identifier: 'excluded-model', productFamily: 'iPhone', minRuntimeVersion: 18 * 65536, maxRuntimeVersion: 0xFFFFFFFF },
+    { identifier: 'supported-model', productFamily: 'iPhone', minRuntimeVersion: 18 * 65536, maxRuntimeVersion: 0xFFFFFFFF },
+  ];
+  const selected = { ...runtime('iOS', '27.0'), supportedDeviceTypes: [{ identifier: 'supported-model', productFamily: 'iPhone' }] };
+  assert.equal(selectCompatibleDeviceType(types, 'iPhone', selected).identifier, 'supported-model');
+  assert.throws(() => selectCompatibleDeviceType(types, 'iPhone', { ...selected, supportedDeviceTypes: [] }), /No compatible/);
 });
