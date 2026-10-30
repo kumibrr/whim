@@ -3,6 +3,25 @@ import XCTest
 @testable import WhimCore
 
 final class AVAudioRecorderAdapterTests: XCTestCase {
+    // Break: start checks newly created hardware instead of the adapter's active recorder.
+    func testSecondStartRejectsWithoutReplacingTheActiveHardware() async throws {
+        let active = AudioRecorderHardwareFake(elapsed: 1, peakPowerDBFS: -12)
+        let replacement = AudioRecorderHardwareFake(elapsed: 0, peakPowerDBFS: -160)
+        let factory = AudioRecorderHardwareFactoryFake([active, replacement])
+        let adapter = AVAudioRecorderAdapter(makeHardware: { _ in factory.make() })
+        try await adapter.start(at: URL(fileURLWithPath: "/tmp/active.m4a"))
+        defer { active.stop() }
+
+        do {
+            try await adapter.start(at: URL(fileURLWithPath: "/tmp/replacement.m4a"))
+            XCTFail("An active recorder must reject a second start")
+        } catch AVAudioRecorderAdapterError.couldNotStart { }
+
+        XCTAssertTrue(active.isRecording)
+        XCTAssertFalse(replacement.isRecording)
+        await adapter.discard()
+    }
+
     // Break: Stop cancels metering before sampling sound captured after the last timer tick.
     func testStopSamplesFinalPeakBeforeClosingEncoder() async throws {
         let hardware = AudioRecorderHardwareFake(elapsed: 0.05, peakPowerDBFS: -12)
