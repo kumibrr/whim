@@ -51,3 +51,9 @@ A pre-build failure blocks the native archive/distribution. Suite output is in t
 - [Apple: dependencies in Cloud](https://developer.apple.com/documentation/Xcode/Making-Dependencies-Available-to-Xcode-Cloud)
 - [GitHub: release, push and dispatch events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)
 - [GitHub: recursive workflow suppression](https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-when-your-workflow-runs/triggering-a-workflow)
+
+## Applied settings and validation (2026-10-30)
+
+The existing Release workflow's tag trigger was removed and its branch prefix is now `release-build/`. Its Whim archive, App Store Connect distribution preparation and Internal TestFlight post-action were retained. The existing Default workflow now starts on PR changes targeting main as well as main pushes; its single iOS Whim build runs the complete suite and embeds Watch products, avoiding duplicate full-suite runs on separate action machines. Repository Actions PR creation is enabled; default token permissions remain read, with write access scoped by the preparation workflow. Main currently has no protection/rulesets. Automatic deletion of merged PR branches is disabled: keep it disabled for preparation branches, which retain provenance required by retries and Cloud verification. If one is deleted, restore `release-preparation/<tag>` at the original preparation PR head commit and dispatch the tag again; do not regenerate version files or move tags.
+
+Tooling regressions use real local bare Git remotes, actual Changesets/npm and mocked GitHub/Apple boundaries. They do not prove live Cloud webhook delivery, Git authentication, available simulator runtimes or Maestro execution on Apple's machines. A representative Cloud PR build is the cutover acceptance check. The migration does not create a real release/tag to exercise that path.

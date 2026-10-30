@@ -173,3 +173,17 @@ test('cloud checkout gate requires the immutable prepared branch and matching cu
   command(f.root, 'git', ['push', 'origin', 'HEAD:main']);
   await assert.rejects(verifyCloudRelease(f.root, 'release-build/1.0.1', f.options), /main|checkout/i);
 });
+
+test('a concurrently created differing cloud branch cannot be fast-forward overwritten by the atomic handoff', async t => {
+  const f = await fixture(t);
+  let appeared = false;
+  await assert.rejects(prepare(f, { run: async (exe, args, opts) => {
+    if (!appeared && exe === 'git' && args.includes('--atomic')) {
+      appeared = true;
+      command(f.root, 'git', ['push', 'origin', `${f.initial}:refs/heads/release-build/${f.tag}`]);
+    }
+    return f.options.run(exe, args, opts);
+  } }), /Existing release-build branch differs/);
+  assert.equal(remote(f, 'rev-parse', 'main'), f.initial);
+  assert.equal(remote(f, 'rev-parse', `release-build/${f.tag}`), f.initial);
+});

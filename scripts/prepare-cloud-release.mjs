@@ -67,7 +67,7 @@ async function handoff(c, tag, current, { allowMainPush }) {
   if (allowMainPush && current.main === current.source) {
     try {
       // Both refs become visible together. A protected/rejected main leaves neither changed.
-      await c.git('push', '--atomic', 'origin', `${current.preparation}:refs/heads/main`, `${current.preparation}:refs/heads/release-build/${tag}`);
+      await c.git('push', '--atomic', `--force-with-lease=refs/heads/release-build/${tag}:`, 'origin', `${current.preparation}:refs/heads/main`, `${current.preparation}:refs/heads/release-build/${tag}`);
       return { state: 'ready', commit: current.preparation };
     } catch (error) {
       const after = await c.state(tag);
