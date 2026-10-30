@@ -93,7 +93,7 @@ public final class AVAudioRecorderAdapter: NSObject, AudioRecorder, @unchecked S
             #endif
 
             do {
-                guard lock.withLock({ hardware == nil }) else {
+                guard lock.withLock({ self.hardware == nil }) else {
                     throw AVAudioRecorderAdapterError.couldNotStart
                 }
                 let hardware = try makeHardware(url)

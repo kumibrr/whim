@@ -50,6 +50,18 @@ Start capture and verify Lock Screen elapsed time and expanded Dynamic Island St
 
 Expected: Stop, Discard, interruption, and maximum duration end the activity and preserve/discard audio according to the v1 recording rules. Reopening removes orphan activities and exposes recoverable audio through normal recovery. The first-launch permissions/authentication required immediately after reboot are recorded separately from ordinary locked operation.
 
+## DI-1 — Voice waveform in every Dynamic Island presentation
+
+On a Dynamic Island iPhone, start a Recording Session and return to the Home Screen. Alternate silence, soft speech, loud speech, and different vowel sounds. Inspect compact presentation, then touch and hold to expand. Start another app's Live Activity to expose Whim's minimal circle.
+
+Expected: compact presentation has advancing red elapsed duration on the left and the voice waveform on the right. Expanded presentation shows the larger semibold red elapsed duration inset from the upper-left corner beside the camera cutout, and the app's rounded red square Stop control within a translucent 80-point circular surround centered over the full-width waveform using the same voice contour as Whim. The minimal circle shows the small waveform. Silence flattens the trace; voice changes its amplitude and contour. The original elapsed timer continues across presentations. ActivityKit controls refresh timing; record actual responsiveness on the device rather than claiming app-frame-rate animation from simulator tests.
+
+On separate Recording Sessions, tap the elapsed duration, centered Stop square, left, right, and padded edges of the expanded waveform. Each tap stops microphone capture, saves exactly one playable Note, and dismisses the activity without opening Whim. The system-owned camera/cutout is outside the content hit region. Compact/minimal taps keep the normal iOS app-opening interaction.
+
+Repeat with VoiceOver and Reduce Motion. The expanded waveform is one action named **Stop Whim Recording**, with a hint that it saves the Note. The compact duration remains legible through the five-minute limit. Verify that Lock Screen and paired Watch Stop still work.
+
+Evidence: external video of speech/silence, all three presentations, and each tap position followed by the resulting playable Note. Mark this case pending until checked on hardware; automated content, rendering, and Stop-intent tests do not establish system refresh timing or physical hit coverage.
+
 ## WS-1 — Watch Smart Stack and complication
 
 During an iPhone recording, inspect the paired Watch Smart Stack and invoke Stop there where supported. Independently inspect idle, recording, and failed-Note states of the Watch complication, then tap it while the Watch app is idle and while already recording.

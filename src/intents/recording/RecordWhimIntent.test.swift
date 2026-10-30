@@ -85,5 +85,6 @@ import XCTest
 
 private struct UnavailableActivity: RecordingActivityManaging {
     func start(_ recording: RecordingSnapshot) async throws { throw CocoaError(.featureUnsupported) }
+    func update(sessionID: RecordingSessionID, signal: RecordingSignal) async {}
     func end(sessionID: RecordingSessionID) async {}
 }

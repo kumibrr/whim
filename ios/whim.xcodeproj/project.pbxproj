@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        A20261027000000000000001 /* WhimLiveActivity.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20261027000000000000002 /* WhimLiveActivity.test.swift */; };
 		5E1A0C2B7D3F4A6B8C9D0E12 /* WidgetAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5E1A0C2B7D3F4A6B8C9D0E11 /* WidgetAssets.xcassets */; };
 		5E1A0C2B7D3F4A6B8C9D0E13 /* WidgetAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5E1A0C2B7D3F4A6B8C9D0E11 /* WidgetAssets.xcassets */; };
 		5E1A0C2B7D3F4A6B8C9D0E14 /* WidgetAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5E1A0C2B7D3F4A6B8C9D0E11 /* WidgetAssets.xcassets */; };
@@ -164,6 +165,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+        A20261027000000000000002 /* WhimLiveActivity.test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WhimLiveActivity.test.swift; path = "../src/widgets/recording-activity/WhimLiveActivity.test.swift"; sourceTree = "<group>"; };
 		5E1A0C2B7D3F4A6B8C9D0E11 /* WidgetAssets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = WidgetAssets.xcassets; path = "../src/widgets/app-composition/WidgetAssets.xcassets"; sourceTree = "<group>"; };
 		0268557010B2F2F63F56A531 /* RecordWhimControl.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RecordWhimControl.test.swift; path = "../src/widgets/recording-control/RecordWhimControl.test.swift"; sourceTree = "<group>"; };
 		0CA472B526C542ABA4BE87A0 /* RecordWhimControl.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RecordWhimControl.swift; path = "../src/widgets/recording-control/RecordWhimControl.swift"; sourceTree = "<group>"; };
@@ -330,6 +332,7 @@
 				0CA472B526C542ABA4BE87A0 /* RecordWhimControl.swift */,
 				0268557010B2F2F63F56A531 /* RecordWhimControl.test.swift */,
 				30353EC5DC957D43BDAC7F96 /* WhimLiveActivity.swift */,
+				A20261027000000000000002 /* WhimLiveActivity.test.swift */,
 				88480C7287291FB16A7CD0BF /* IPhoneModel.test-support.swift */,
 			);
 			name = WhimSystemSurfaceTests;
@@ -750,6 +753,7 @@
 				C0618CF5CDFFAFF05A861BA7 /* RecordWhimControl.swift in Sources */,
 				159147AC02C2EAC4144D932E /* RecordWhimControl.test.swift in Sources */,
 				1C3404E2749FFA8050286E1C /* WhimLiveActivity.swift in Sources */,
+				A20261027000000000000001 /* WhimLiveActivity.test.swift in Sources */,
 				9E8FAB20EDF6301F36162394 /* IPhoneModel.test-support.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -21,31 +21,19 @@ public struct LiveWaveformView: View {
         self.identifier = accessibilityIdentifier
     }
     public var body: some View {
-        GeometryReader { geometry in
-            let amplitude = WaveformLayout.amplitude(in: geometry.size)
-            let thickness = WaveformLayout.strokeWidth(amplitude: amplitude)
-            ZStack {
-                WaveformTrace(level: shownLevel, tone: shownTone, rest: rest, amplitude: amplitude)
-                    .stroke(.white, style: StrokeStyle(
-                        lineWidth: thickness, lineCap: .round, lineJoin: .round))
-                AccentDot(rest: rest, amplitude: amplitude, radius: thickness * 0.48)
-                    .fill(.white)
+        WaveformDrawing(level: shownLevel, tone: shownTone, rest: rest)
+            .onAppear {
+                rest = isResting ? 1 : 0
+                shownLevel = level
+                shownTone = tone
             }
-            // One layer: where the dot meets the line they must read as one stroke.
-            .compositingGroup().opacity(0.9)
-        }
-        .onAppear {
-            rest = isResting ? 1 : 0
-            shownLevel = level
-            shownTone = tone
-        }
-        .onChange(of: isResting) { _, resting in travel(toRest: resting) }
-        .onChange(of: level) { _, measured in meter(.init(level: measured, tone: tone)) }
-        .onChange(of: tone) { _, measured in meter(.init(level: level, tone: measured)) }
-        .accessibilityElement()
-        .accessibilityLabel(isResting ? "Whim" : "Microphone level")
-        .accessibilityValue(isResting ? "" : "\(Int(level * 100)) percent")
-        .accessibilityIdentifier(identifier)
+            .onChange(of: isResting) { _, resting in travel(toRest: resting) }
+            .onChange(of: level) { _, measured in meter(.init(level: measured, tone: tone)) }
+            .onChange(of: tone) { _, measured in meter(.init(level: level, tone: measured)) }
+            .accessibilityElement()
+            .accessibilityLabel(isResting ? "Whim" : "Microphone level")
+            .accessibilityValue(isResting ? "" : "\(Int(level * 100)) percent")
+            .accessibilityIdentifier(identifier)
     }
 
     /// The journey owns the waveform while it runs, so a measurement arriving
@@ -76,6 +64,44 @@ public struct LiveWaveformView: View {
         withAnimation(.easeOut(duration: 0.12)) {
             shownLevel = measurement.level
             shownTone = measurement.tone
+        }
+    }
+}
+
+/// A Live Activity is rendered as a snapshot, without the app view's lifecycle or
+/// local animation state. Draw the same geometry directly from published measurements.
+public struct LiveWaveformSnapshotView: View {
+    private let power: Double
+    private let tone: Double
+    public init(power: Double, tone: Double) {
+        self.power = power
+        self.tone = tone
+    }
+    public var body: some View {
+        WaveformDrawing(level: LiveWaveform.level(power: power), tone: tone, rest: 0)
+            .accessibilityElement()
+            .accessibilityLabel("Microphone level")
+            .accessibilityValue("\(Int(LiveWaveform.level(power: power) * 100)) percent")
+    }
+}
+
+private struct WaveformDrawing: View {
+    let level: Double
+    let tone: Double
+    let rest: Double
+    var body: some View {
+        GeometryReader { geometry in
+            let amplitude = WaveformLayout.amplitude(in: geometry.size)
+            let thickness = WaveformLayout.strokeWidth(amplitude: amplitude)
+            ZStack {
+                WaveformTrace(level: level, tone: tone, rest: rest, amplitude: amplitude)
+                    .stroke(.white, style: StrokeStyle(
+                        lineWidth: thickness, lineCap: .round, lineJoin: .round))
+                AccentDot(rest: rest, amplitude: amplitude, radius: thickness * 0.48)
+                    .fill(.white)
+            }
+            // One layer: where the dot meets the line they must read as one stroke.
+            .compositingGroup().opacity(0.9)
         }
     }
 }

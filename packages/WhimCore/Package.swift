@@ -83,6 +83,7 @@ let unitTestSources = [
     "Recording/CaptureLatencyProbe.test.swift",
     "Recording/ComplicationSnapshot.test.swift",
     "Recording/LiveActivityAdapter.test.swift",
+    "Recording/RecordingActivityAttributes.test.swift",
     "AppComposition/ActionableFailure.test.swift",
     "Recording/RecordingSignal.test.swift",
     "Recording/LiveWaveform.test.swift",

@@ -34,6 +34,7 @@ public enum RecordingServiceError: Error, Sendable, Equatable {
 /// Implementations must make ending an absent or already-ended session harmless.
 public protocol RecordingActivityManaging: Sendable {
     func start(_ recording: RecordingSnapshot) async throws
+    func update(sessionID: RecordingSessionID, signal: RecordingSignal) async
     func end(sessionID: RecordingSessionID) async
 }
 
@@ -53,6 +54,9 @@ public actor RecordingService {
     private var activating: RecordingSnapshot?
     private var startTask: Task<RecordingSnapshot, Error>?
     private var recorderEventTask: Task<Void, Never>?
+    private let activityMeasurements: AsyncStream<(RecordingSessionID, RecordingSignal)>
+    private let activityMeasurementContinuation: AsyncStream<(RecordingSessionID, RecordingSignal)>.Continuation
+    private var activityUpdateTask: Task<Void, Never>?
     private var finalizationTask: Task<Note?, Error>?
     private var discardTask: Task<Void, Error>?
     private var encoderCompletion: EncoderMetrics?
@@ -82,6 +86,15 @@ public actor RecordingService {
         let pair = AsyncStream.makeStream(of: RecordingServiceEvent.self)
         serviceEvents = pair.stream
         serviceEventContinuation = pair.continuation
+        let measurements = AsyncStream.makeStream(of: (RecordingSessionID, RecordingSignal).self,
+            bufferingPolicy: .bufferingNewest(1))
+        activityMeasurements = measurements.stream
+        activityMeasurementContinuation = measurements.continuation
+    }
+
+    deinit {
+        activityUpdateTask?.cancel()
+        activityMeasurementContinuation.finish()
     }
 
     public func events() -> AsyncStream<RecordingServiceEvent> { serviceEvents }
@@ -212,6 +225,17 @@ public actor RecordingService {
 
     private func beginConsumingRecorderEvents() {
         guard recorderEventTask == nil else { return }
+        // ActivityKit publication must never hold up microphone progress, encoder
+        // completion, or interruption handling. Keep only the newest waiting sample.
+        if let activity {
+            let measurements = activityMeasurements
+            activityUpdateTask = Task {
+                for await (sessionID, signal) in measurements {
+                    guard !Task.isCancelled else { break }
+                    await activity.update(sessionID: sessionID, signal: signal)
+                }
+            }
+        }
         let recorder = recorder
         recorderEventTask = Task { [weak self] in
             let events = await recorder.events()
@@ -238,9 +262,16 @@ public actor RecordingService {
             }
         case .signal(let signal):
             guard captureExists else { return }
+            if let session = active ?? activating {
+                activityMeasurementContinuation.yield((session.sessionID, signal))
+            }
             serviceEventContinuation.yield(.signal(signal))
         case .peakPower(let power):
             guard captureExists else { return }
+            if let session = active ?? activating {
+                activityMeasurementContinuation.yield((session.sessionID,
+                    RecordingSignal(peakPowerDBFS: power, tone: 0)))
+            }
             serviceEventContinuation.yield(.peakPower(power))
         case .routeChanged:
             guard captureExists else { return }

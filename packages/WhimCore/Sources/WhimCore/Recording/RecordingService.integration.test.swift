@@ -43,6 +43,71 @@ final class RecordingServiceIntegrationTests: XCTestCase {
         XCTAssertEqual(saved?.captureOutcome, .completed)
     }
 
+    // Break: the Island remains static because microphone measurements never reach its activity.
+    func testMicrophoneSignalReachesTheActiveLiveActivity() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = try SQLiteWhimStore.open(at: root.appendingPathComponent("whim.sqlite"))
+        let files = try AudioFileStore(root: root.appendingPathComponent("Audio"), closeWriter: { _ in })
+        let recorder = FixtureAudioRecorder()
+        let system = SignalActivitySystem()
+        let service = RecordingService(recorder: recorder, store: store, files: files,
+            activity: LiveActivityAdapter(system: system))
+        let events = await service.events()
+        let session = try await service.start(source: .iphone)
+        let signal = RecordingSignal(peakPowerDBFS: -12, tone: 0.75)
+        await recorder.emit(.signal(signal))
+        await recorder.emit(.routeChanged)
+        var iterator = events.makeAsyncIterator()
+        _ = await iterator.next()
+        _ = await iterator.next()
+        await system.waitForMeasurement()
+        let measurements = await system.measurements
+        let sessions = await system.updatedSessions
+        XCTAssertEqual(measurements, [signal])
+        XCTAssertEqual(sessions, [session.sessionID])
+        _ = try await service.stop()
+    }
+
+    // Break: a slow ActivityKit update holds encoder completion and interruptions behind it.
+    func testStopAndInterruptionFinalizeWhileActivityPublicationIsSuspended() async throws {
+        for interrupted in [false, true] {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: root) }
+            let store = try SQLiteWhimStore.open(at: root.appendingPathComponent("whim.sqlite"))
+            let files = try AudioFileStore(root: root.appendingPathComponent("Audio"), closeWriter: { _ in })
+            let recorder = FixtureAudioRecorder()
+            let system = SignalActivitySystem(suspend: true)
+            let service = RecordingService(recorder: recorder, store: store, files: files,
+                activity: LiveActivityAdapter(system: system))
+            let session = try await service.start(source: .iphone)
+            let events = await service.events()
+            await recorder.emit(.signal(RecordingSignal(peakPowerDBFS: -12, tone: 0.75)))
+            await system.waitForMeasurement()
+            let finalized = expectation(description: "finalization is independent of activity publication")
+            let completion = Task {
+                for await event in events {
+                    if case .finalized(let note) = event {
+                        XCTAssertEqual(note?.id, session.noteID)
+                        XCTAssertEqual(note?.captureOutcome, interrupted ? .interrupted : .completed)
+                        finalized.fulfill()
+                        break
+                    }
+                }
+            }
+            let stopping = Task { if !interrupted { _ = try await service.stop() } }
+            if interrupted { await recorder.emit(.interruption) }
+            await fulfillment(of: [finalized], timeout: 1)
+            await system.resumeUpdates()
+            _ = try await stopping.value
+            await completion.value
+            let active = await service.snapshot()
+            XCTAssertNil(active)
+        }
+    }
+
     func testRecordingOwnsOneActivityUntilStop() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -162,6 +227,7 @@ private actor FixtureAudioRecorder: AudioRecorder {
         continuation.yield(.encoderCompleted(duration: duration, peakPowerDBFS: peakPower))
     }
     func discard() async {}
+    func emit(_ event: RecordingEvent) { continuation.yield(event) }
     func setPeakPower(_ value: Float) { peakPower = value }
     func setReportedDuration(_ duration: TimeInterval) { self.duration = duration }
 }
@@ -175,5 +241,35 @@ private actor FixtureRecordingActivity: RecordingActivityManaging {
         started.append(recording)
         if fails { throw RecordingServiceError.encoderFailed }
     }
+    func update(sessionID: RecordingSessionID, signal: RecordingSignal) {}
     func end(sessionID: RecordingSessionID) async { ended.append(sessionID) }
+}
+
+private actor SignalActivitySystem: RecordingActivitySystem {
+    var active: [RecordingSessionID] = []
+    var measurements: [RecordingSignal] = []
+    var updatedSessions: [RecordingSessionID] = []
+    private var suspended: Bool
+    private var updateWaiter: CheckedContinuation<Void, Never>?
+    private var measurementWaiter: CheckedContinuation<Void, Never>?
+    init(suspend: Bool = false) { suspended = suspend }
+    func waitForMeasurement() async {
+        guard measurements.isEmpty else { return }
+        await withCheckedContinuation { measurementWaiter = $0 }
+    }
+    func resumeUpdates() {
+        suspended = false
+        updateWaiter?.resume()
+        updateWaiter = nil
+    }
+    func sessions() -> [RecordingSessionID] { active }
+    func request(_ recording: RecordingSnapshot) { active.append(recording.sessionID) }
+    func update(sessionID: RecordingSessionID, signal: RecordingSignal) async {
+        measurements.append(signal)
+        updatedSessions.append(sessionID)
+        measurementWaiter?.resume()
+        measurementWaiter = nil
+        if suspended { await withCheckedContinuation { updateWaiter = $0 } }
+    }
+    func end(_ sessionID: RecordingSessionID) { active.removeAll { $0 == sessionID } }
 }
