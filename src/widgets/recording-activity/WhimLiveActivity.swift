@@ -6,7 +6,7 @@ import WhimCore
 struct WhimLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: RecordingActivityAttributes.self) { context in
-            RecordingActivityView(startedAt: context.state.startedAt)
+            RecordingActivityView(state: context.state)
                 .activityBackgroundTint(.black)
                 .activitySystemActionForegroundColor(.white)
                 .widgetURL(URL(string: "whim://recording"))
@@ -48,20 +48,7 @@ struct RecordingIslandExpandedView: View {
 
     var body: some View {
         Button(intent: stopIntent) {
-            waveform(state)
-                .frame(maxWidth: .infinity)
-                .frame(height: 80)
-                .padding(.vertical, 12)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(.red)
-                        .frame(width: 24, height: 24)
-                        .frame(width: 80, height: 80)
-                        .background(.white.opacity(0.12), in: Circle())
-                        .overlay(Circle().stroke(.white.opacity(0.25), lineWidth: 0.5))
-                }
-                .contentShape(Rectangle())
-                .accessibilityHidden(true)
+            RecordingWaveformControls(state: state)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Stop Whim Recording")
@@ -69,28 +56,59 @@ struct RecordingIslandExpandedView: View {
     }
 }
 
+/// Fits below the timer and camera within the expanded Island's height budget.
+/// Shared with the Lock Screen so both presentations render the published voice.
+private struct RecordingWaveformControls: View {
+    let state: RecordingActivityContent
+
+    var body: some View {
+        waveform(state)
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 8)
+            .overlay {
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(.red)
+                    .frame(width: 24, height: 24)
+                    .frame(width: 56, height: 56)
+                    .background(.white.opacity(0.12), in: Circle())
+                    .overlay(Circle().stroke(.white.opacity(0.25), lineWidth: 0.5))
+            }
+            .contentShape(Rectangle())
+            .accessibilityHidden(true)
+    }
+}
+
 @MainActor private func waveform(_ state: RecordingActivityContent) -> some View {
     LiveWaveformSnapshotView(power: Double(state.power), tone: Double(state.tone))
 }
 
-private struct RecordingActivityView: View {
-    let startedAt: Date
+struct RecordingActivityView: View {
+    let state: RecordingActivityContent
+    var stopIntent = StopWhimRecordingIntent()
     @Environment(\.activityFamily) private var family
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack { Label("Whim", systemImage: "waveform"); Spacer(); timer(startedAt) }
-            stopButton
+        Button(intent: stopIntent) {
+            VStack(alignment: .leading, spacing: 4) {
+                timer(state.startedAt)
+                    .font(family == .small ? .headline.monospacedDigit() : .title2.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(.leading)
+                RecordingWaveformControls(state: state)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
         }
-        .font(family == .small ? .caption : .body)
-        .padding()
+        .buttonStyle(.plain)
         .foregroundStyle(.white)
+        .accessibilityLabel("Stop Whim Recording")
+        .accessibilityValue(Text(timerInterval: state.startedAt...state.startedAt.addingTimeInterval(300), countsDown: false))
+        .accessibilityHint("Stops recording and saves the Note")
     }
 }
 private func timer(_ startedAt: Date) -> some View {
     Text(timerInterval: startedAt...startedAt.addingTimeInterval(300), countsDown: false)
         .monospacedDigit().accessibilityLabel("Recording elapsed time")
-}
-private var stopButton: some View {
-    Button(intent: StopWhimRecordingIntent()) { Label("Stop", systemImage: "stop.fill") }
-        .buttonStyle(.borderedProminent).tint(.red).accessibilityLabel("Stop Whim Recording")
 }
