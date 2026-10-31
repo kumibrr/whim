@@ -78,7 +78,7 @@ public struct LiveWaveformSnapshotView: View {
         self.tone = tone
     }
     public var body: some View {
-        WaveformDrawing(level: LiveWaveform.level(power: power), tone: tone, rest: 0)
+        WaveformDrawing(level: LiveWaveform.level(power: power), tone: tone, rest: 0, lineWidth: 2)
             .accessibilityElement()
             .accessibilityLabel("Microphone level")
             .accessibilityValue("\(Int(LiveWaveform.level(power: power) * 100)) percent")
@@ -89,10 +89,11 @@ private struct WaveformDrawing: View {
     let level: Double
     let tone: Double
     let rest: Double
+    var lineWidth: Double? = nil
     var body: some View {
         GeometryReader { geometry in
             let amplitude = WaveformLayout.amplitude(in: geometry.size)
-            let thickness = WaveformLayout.strokeWidth(amplitude: amplitude)
+            let thickness = lineWidth ?? WaveformLayout.strokeWidth(amplitude: amplitude)
             ZStack {
                 WaveformTrace(level: level, tone: tone, rest: rest, amplitude: amplitude)
                     .stroke(.white, style: StrokeStyle(
