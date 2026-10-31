@@ -41,15 +41,28 @@ struct NoteDetailView: View {
                 } else if note.requiresReview {
                     Text("Review this recovered Note, then choose Send or Delete. It will not send automatically.")
                     if note.hasLocalAudio { Button("Send Note") { Task { await model.sendRecovered(); await root.refresh() } } }
-                } else if [.failed, .queued, .setupRequired].contains(note.status) {
-                    Button("Retry") { Task { await model.retry(); await root.refresh() } }
+                } else {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 12) {
+                            Text(TimelineFormat.status(note.status)).font(.subheadline.weight(.medium))
+                            Spacer(minLength: 12)
+                            deliveryAction(note)
+                        }
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(TimelineFormat.status(note.status)).font(.subheadline.weight(.medium))
+                            deliveryAction(note)
+                        }
+                    }
+                    .accessibilityIdentifier("note-delivery-status")
                 }
-                Text("Delivery details").whimHeading()
-                if note.attempts.isEmpty && (note.audioSynchronizationRetries ?? []).isEmpty {
-                    Text("No Attempts yet.").foregroundStyle(.secondary)
+                if !(note.audioSynchronizationRetries ?? []).isEmpty {
+                    Text("Audio synchronization").whimHeading()
                 }
                 ForEach(Array((note.audioSynchronizationRetries ?? []).enumerated()), id: \.element.id) { index, retry in
                     synchronizationRetryRow(retry, number: index + 1)
+                }
+                if !note.attempts.isEmpty {
+                    Text("Delivery attempts").whimHeading()
                 }
                 ForEach(note.attempts, id: \.id) { attempt in
                     VStack(alignment: .leading, spacing: 6) {
@@ -105,6 +118,20 @@ struct NoteDetailView: View {
                 }
             }
             .onDisappear { Task { await model.stopPlayback() } }
+    }
+    @ViewBuilder private func deliveryAction(_ note: NoteDetailProjection) -> some View {
+        if note.status == .setupRequired, let settings = root.settings {
+            NavigationLink {
+                SettingsSectionView(model: root, settings: settings, section: .webhook)
+            } label: {
+                Text("Configure webhook")
+            }
+            .whimGlassButton()
+            .accessibilityIdentifier("note-configure-webhook")
+        } else if note.status == .failed {
+            Button("Retry") { Task { await model.retry(); await root.refresh() } }
+                .whimGlassButton()
+        }
     }
     private func delete() async {
         await model.delete()

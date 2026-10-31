@@ -600,6 +600,24 @@ final class WhimServiceIntegrationTests: XCTestCase {
         XCTAssertEqual(sent?.status, .sent)
     }
 
+    func testConfigurationFailureIsLoggedWithoutCreatingANoteAndSurvivesReopen() async throws {
+        let harness = try WhimFacadeHarness(responses: [HTTPResponse(statusCode: 401, body: Data("Token abc rejected".utf8))])
+        defer { harness.remove() }
+        try Data("fixture".utf8).write(to: harness.root.appendingPathComponent("test.m4a"))
+        _ = try await harness.configuration.save(.init(endpoint: "https://example.com/receive?token=abc"))
+        let client = harness.makeService()
+        let result = try await client.testWebhook()
+        XCTAssertFalse(result.passed)
+        let reopened = try SQLiteWhimStore.open(at: harness.databaseURL)
+        let errors = try await harness.makeService(store: reopened).webhookErrors()
+        XCTAssertEqual(errors.count, 1)
+        XCTAssertEqual(errors.first?.noteTitle, "Configuration test")
+        XCTAssertEqual(errors.first?.responseStatusCode, 401)
+        XCTAssertEqual(errors.first?.message, "Token <redacted> rejected")
+        let notes = try await client.listNotes(filter: .all)
+        XCTAssertTrue(notes.isEmpty)
+    }
+
     func testWebhookErrorsListReceivedFailureMessagesNewestFirst() async throws {
         let harness = try WhimFacadeHarness(responses: [
             HTTPResponse(statusCode: 400, body: Data("Missing field: event".utf8)),

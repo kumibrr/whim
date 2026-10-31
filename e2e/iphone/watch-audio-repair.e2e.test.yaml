@@ -62,7 +62,7 @@ appId: app.whim.ios
 - assertVisible:
     id: note-sync-retry-row-1
     below:
-      text: Delivery details
+      text: Audio synchronization
 - assertVisible:
     id: note-sync-retry-row-2
     below:

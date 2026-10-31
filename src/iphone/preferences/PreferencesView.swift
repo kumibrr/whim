@@ -37,7 +37,7 @@ struct PreferencesView: View {
     var body: some View {
         List {
             Section {
-                ForEach(SettingsSection.allCases, id: \.self) { section in
+                ForEach(SettingsSection.allCases.filter { $0 != .webhookErrors }, id: \.self) { section in
                     NavigationLink(value: IPhoneRoute.settingsSection(section)) {
                         WhimLabeledValue {
                             Label(section.title, systemImage: section.symbol)
@@ -56,6 +56,7 @@ struct PreferencesView: View {
             }
             Section {
                 Button("Reset Whim", systemImage: "arrow.counterclockwise", role: .destructive) { confirm = true }
+                    .buttonStyle(.automatic)
                     .foregroundStyle(.red)
             } footer: {
                 Text("Remove all local Notes and restore Whim’s settings.")
@@ -69,9 +70,13 @@ struct PreferencesView: View {
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)
         .toolbar(.visible, for: .navigationBar)
-        .sheet(isPresented: $confirm) {
-            ConfirmationView(title: "Reset Whim on this iPhone?", message: "This removes all local audio, Notes, history, webhook configuration and credentials. It cannot revoke delivery accepted by your server or erase a disconnected Watch immediately.", confirm: "Confirm reset", error: model.error?.message, onCancel: { confirm = false }, onConfirm: { await model.perform { try await model.client.reset() } })
-                .presentationDetents([.medium, .large]).interactiveDismissDisabled(model.isPending)
+        .alert("Reset Whim on this iPhone?", isPresented: $confirm) {
+            Button("Confirm reset", role: .destructive) {
+                Task { await model.perform { try await model.client.reset() } }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes all local audio, Notes, history, webhook configuration and credentials. It cannot revoke delivery accepted by your server or erase a disconnected Watch immediately.")
         }
     }
     private func summary(_ section: SettingsSection) -> String {
@@ -135,8 +140,7 @@ struct SettingsSectionView: View {
                 Text("No webhook errors.").foregroundStyle(.secondary)
             }
             ForEach(errorLog.entries) { entry in webhookError(entry) }
-            footnote("Messages your webhook returned for failed Attempts, with secrets redacted. Entries are removed with their Note.")
-            sectionShortcut(.webhook, label: "Webhook settings")
+            footnote("Failed deliveries and configuration tests, with secrets redacted. Delivery entries are removed with their Note; test entries are cleared by Reset Whim.")
         case .audio:
             WhimLabeledValue {
                 Text("Keep audio after delivery")
@@ -191,10 +195,16 @@ struct SettingsSectionView: View {
             Text(entry.message).font(.callout.monospaced()).textSelection(.enabled)
                 .accessibilityIdentifier("webhook-error-message")
             Text(destinationLabel(entry.destination)).font(.footnote).foregroundStyle(.secondary)
+            if entry.noteID == nil { Text(entry.noteTitle).font(.footnote) }
             if let noteID = entry.noteID {
                 NavigationLink(value: IPhoneRoute.note(noteID)) {
                     Label(entry.noteTitle, systemImage: "waveform").font(.footnote).lineLimit(1)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .whimGlass(in: Capsule())
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Open Note \(entry.noteTitle)")
             }
         }

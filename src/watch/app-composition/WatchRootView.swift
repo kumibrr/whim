@@ -43,6 +43,7 @@ struct WatchRootView: View {
                 for: .navigationBar)
         }
         .tint(.white)
+        .buttonStyle(WatchGlassButtonStyle())
         .preferredColorScheme(.dark)
         .task {
             #if DEBUG

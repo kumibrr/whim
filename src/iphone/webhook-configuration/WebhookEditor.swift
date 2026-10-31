@@ -14,6 +14,7 @@ import WhimCore
     public private(set) var error: IPhoneError?
     public private(set) var message: String?
     public private(set) var offersRetry = false
+    public private(set) var isTesting = false
     public private(set) var isPending = false
     private let client: any WhimClient
     private var draftBase: [HeaderPatch] = []
@@ -38,6 +39,13 @@ import WhimCore
         guard values.indices.contains(index) else { return }
         values.remove(at: index); headers = values
     }
+    /// Empty submission explicitly clears a saved token; an untouched empty draft preserves it.
+    public func submitBearerToken() async {
+        guard !isPending else { return }
+        if bearer.value?.isEmpty != false { bearer = .init(action: .clear) }
+        await save()
+    }
+
     public func save() async {
         if let pendingSave { await pendingSave.value; return }
         guard !isPending else { return }
@@ -61,6 +69,9 @@ import WhimCore
         if pendingSave != nil || isDirty { await save() }
     }
     public func test(saveChanges: Bool = false) async {
+        guard !isTesting else { return }
+        isTesting = true
+        defer { isTesting = false }
         if saveChanges && (isDirty || pendingSave != nil) {
             await saveIfNeeded()
             guard error == nil else { return }
@@ -71,7 +82,7 @@ import WhimCore
             offersRetry = result.passed
             message = result.passed
                 ? (result.idempotencyConfirmed ? "Test passed. Idempotency confirmed." : "Test passed, but server-side idempotency could not be confirmed. Configure your server to deduplicate Note IDs.")
-                : "Test failed\(result.statusCode.map { " · HTTP \($0)" } ?? ""). Check your configuration."
+                : "Test failed\(result.statusCode.map { " · HTTP \($0)" } ?? ""). \(result.failureMessage ?? "Check your configuration.") View webhook errors for details."
         }
     }
     public func retryUnsent() async {

@@ -75,6 +75,9 @@ enum WhimDatabaseMigrator {
                 table.add(column: "audio_synchronization_retries", .blob)
             }
         }
+        migrator.registerMigration("v7-configuration-test-errors") { db in
+            try db.execute(sql: "CREATE TABLE configuration_test_errors (id TEXT PRIMARY KEY NOT NULL, metadata BLOB NOT NULL)")
+        }
         try migrator.migrate(queue)
     }
 }

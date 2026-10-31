@@ -241,7 +241,7 @@ private struct OnboardingPrimaryButtonStyle: ButtonStyle {
         configuration.label.labelStyle(.titleOnly).font(.body.weight(.semibold)).multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, minHeight: 56).padding(.horizontal, WhimSpacing.page).padding(.vertical, 4)
-            .foregroundStyle(.black).background(.white, in: Capsule())
+            .foregroundStyle(.white).whimGlass(in: Capsule())
             .opacity(!isEnabled ? 0.45 : configuration.isPressed ? 0.75 : 1)
     }
 }
@@ -250,7 +250,7 @@ private struct OnboardingSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+            .frame(maxWidth: .infinity, minHeight: 44).whimGlass(in: Capsule())
             .opacity(configuration.isPressed ? 0.65 : 1)
     }
 }

@@ -224,9 +224,24 @@ public actor SQLiteWhimStore: WhimStore {
         }
     }
 
+    public func saveConfigurationTestError(_ error: WebhookErrorProjection) async throws {
+        let data = try JSONEncoder().encode(error)
+        try await database.write { db in
+            try db.execute(sql: "INSERT INTO configuration_test_errors (id, metadata) VALUES (?, ?)", arguments: [error.attemptID, data])
+        }
+    }
+
+    public func configurationTestErrors() async throws -> [WebhookErrorProjection] {
+        try await database.read { db in
+            try Data.fetchAll(db, sql: "SELECT metadata FROM configuration_test_errors").map {
+                try JSONDecoder().decode(WebhookErrorProjection.self, from: $0)
+            }
+        }
+    }
+
     public func reset() async throws {
         try await database.write { db in
-            for table in ["tombstone_acknowledgements", "tombstones", "leases", "workflow_steps",
+            for table in ["configuration_test_errors", "tombstone_acknowledgements", "tombstones", "leases", "workflow_steps",
                           "receipts", "attempts", "deliveries", "notes", "recording_sessions",
                           "configuration_revisions"] {
                 try db.execute(sql: "DELETE FROM \(table)")

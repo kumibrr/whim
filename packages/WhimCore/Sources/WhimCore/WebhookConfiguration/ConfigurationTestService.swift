@@ -1,18 +1,21 @@
 import Foundation
 
 public struct ConfigurationTestResult: Codable, Equatable, Sendable {
+    public let failureMessage: String?
     public let passed: Bool
     public let statusCode: Int?
     public let idempotencyConfirmed: Bool
 
-    public init(passed: Bool, statusCode: Int?, idempotencyConfirmed: Bool) {
+    public init(passed: Bool, statusCode: Int?, idempotencyConfirmed: Bool, failureMessage: String? = nil) {
+        self.failureMessage = failureMessage
         self.passed = passed
         self.statusCode = statusCode
         self.idempotencyConfirmed = idempotencyConfirmed
     }
-    private enum CodingKeys: String, CodingKey { case passed, statusCode, idempotencyConfirmed }
+    private enum CodingKeys: String, CodingKey { case passed, statusCode, idempotencyConfirmed, failureMessage }
     public func encode(to encoder: Encoder) throws {
         var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encodeIfPresent(failureMessage, forKey: .failureMessage)
         try values.encode(passed, forKey: .passed); try values.encode(statusCode, forKey: .statusCode)
         try values.encode(idempotencyConfirmed, forKey: .idempotencyConfirmed)
     }
@@ -68,9 +71,25 @@ public struct ConfigurationTestService: Sendable {
             timestamp: Int64(clock.now.timeIntervalSince1970), event: "configuration.test",
             appVersion: appVersion, appBuild: appBuild)
         defer { request.removeBodyFile() }
-        let response = try await transport.send(request)
+        let response: HTTPResponse
+        do { response = try await transport.send(request) }
+        catch is CancellationError { throw CancellationError() }
+        catch {
+            let message = (error as? HTTPTransportError)?.description
+                ?? HTTPTransportError.url((error as NSError).code).description
+            return .init(passed: false, statusCode: nil, idempotencyConfirmed: false, failureMessage: message)
+        }
         let passed = (200...299).contains(response.statusCode)
-        guard passed else { return .init(passed: false, statusCode: response.statusCode, idempotencyConfirmed: false) }
+        guard passed else {
+            var message = String(decoding: response.body, as: UTF8.self)
+            var secrets = [credentials.bearerToken, credentials.hmacSecret].compactMap { $0 }
+            secrets += credentials.customHeaders.map(\.value)
+            secrets += URLComponents(url: credentials.endpoint, resolvingAgainstBaseURL: false)?.queryItems?.compactMap(\.value) ?? []
+            for secret in secrets where !secret.isEmpty { message = message.replacingOccurrences(of: secret, with: "<redacted>") }
+            if message.isEmpty { message = "The webhook returned HTTP \(response.statusCode). Check the URL, credentials, and server logs." }
+            return .init(passed: false, statusCode: response.statusCode, idempotencyConfirmed: false,
+                failureMessage: String(decoding: Data(message.utf8.prefix(DeliveryTimeouts.maximumErrorExcerptBytes)), as: UTF8.self))
+        }
         let expected = noteID.rawValue.uuidString.lowercased()
         let headerConfirmed = response.header("X-Whim-Note-ID")?.lowercased() == expected
         let jsonConfirmed: Bool

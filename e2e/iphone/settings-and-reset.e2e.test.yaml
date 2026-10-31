@@ -4,6 +4,8 @@ appId: app.whim.ios
 - tapOn: Settings
 - assertVisible:
     id: preferences
+- assertNotVisible:
+    id: settings-webhook-errors
 - tapOn:
     id: settings-webhook
 - tapOn:
@@ -13,10 +15,40 @@ appId: app.whim.ios
 - extendedWaitUntil:
     visible: Webhook saved. Test it to check delivery.
     timeout: 10000
-- tapOn: Test webhook
+- evalScript: '${http.post(WHIM_WEBHOOK_RESPONSE_URL, {headers: {"Content-Type": "application/json"}, body: JSON.stringify({status: 200, delay_ms: 10000})})}'
+- tapOn:
+    id: webhook-test
+    waitToSettleTimeoutMs: 100
+- assertVisible:
+    id: webhook-test
+    text: Testing webhook
+    enabled: false
 - extendedWaitUntil:
     visible: Test passed. Idempotency confirmed.
-    timeout: 15000
+    timeout: 20000
+- assertNotVisible:
+    text: Testing webhook
+- evalScript: '${http.post(WHIM_WEBHOOK_RESPONSE_URL, {headers: {"Content-Type": "application/json"}, body: JSON.stringify({status: 200})})}'
+# Empty blur preserves a saved bearer token; empty Return explicitly removes it.
+- tapOn:
+    id: webhook-bearer-token
+- inputText: temporary-test-token
+- tapOn:
+    id: webhook-keyboard-done
+- tapOn: Save settings
+- assertVisible: 'Bearer token · Saved .*'
+- assertNotVisible: Clear bearer token
+- tapOn:
+    id: webhook-bearer-token
+- tapOn:
+    id: webhook-keyboard-done
+- assertVisible: 'Bearer token · Saved .*'
+- tapOn:
+    id: webhook-bearer-token
+- pressKey: Enter
+- extendedWaitUntil:
+    notVisible: 'Bearer token · Saved .*'
+    timeout: 10000
 - scrollUntilVisible:
     element:
       id: shortcut-webhook-errors
@@ -24,6 +56,9 @@ appId: app.whim.ios
 - tapOn:
     id: shortcut-webhook-errors
 - assertVisible: No webhook errors.
+- assertNotVisible: Webhook settings
+- assertNotVisible:
+    id: shortcut-webhook
 - tapOn:
     id: BackButton
 - tapOn:
@@ -60,7 +95,11 @@ appId: app.whim.ios
     direction: DOWN
     centerElement: true
 - tapOn: Reset Whim
+- assertVisible: Reset Whim on this iPhone?
+- assertNotVisible: Sheet Grabber
 - tapOn: Cancel
+- assertVisible:
+    id: preferences
 - tapOn: Reset Whim
 - tapOn: Confirm reset
 - assertVisible: Get started
