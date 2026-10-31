@@ -171,7 +171,7 @@ private struct WatchGlass<S: Shape>: ViewModifier {
     }
 }
 
-private extension View {
+extension View {
     func watchGlass<S: Shape>(in shape: S) -> some View { modifier(WatchGlass(shape: shape)) }
 }
 
@@ -258,5 +258,16 @@ struct WatchStartupShell: View {
                 if failure == nil { ProgressView("Preparing…") }
             }.padding(8)
         }.accessibilityElement(children: .contain).accessibilityIdentifier("watch-capture")
+    }
+}
+
+
+struct WatchGlassButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .frame(minHeight: 44)
+            .watchGlass(in: Capsule())
+            .opacity(configuration.isPressed ? 0.65 : 1)
     }
 }

@@ -60,7 +60,11 @@ appId: app.whim.ios
     direction: DOWN
     centerElement: true
 - tapOn: Reset Whim
+- assertVisible: Reset Whim on this iPhone?
+- assertNotVisible: Sheet Grabber
 - tapOn: Cancel
+- assertVisible:
+    id: preferences
 - tapOn: Reset Whim
 - tapOn: Confirm reset
 - assertVisible: Get started

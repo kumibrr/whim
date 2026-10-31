@@ -67,13 +67,12 @@ struct TimelineView: View {
             Button {
                 filter = value
             } label: {
-                Text(value).font(.system(.caption, weight: .medium)).padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .foregroundStyle(filter == value ? .black : .white.opacity(0.65))
-                    .background(
-                        filter == value ? Color.white : Color.white.opacity(0.06), in: Capsule()
-                    )
-                    .frame(minHeight: 48)
+                Text(value).font(.system(.caption, weight: .semibold))
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .foregroundStyle(.white)
+                    .whimGlass(in: Capsule())
+                    .overlay(Capsule().stroke(.white.opacity(filter == value ? 0.8 : 0), lineWidth: 1.5))
+                    .frame(minHeight: 44).contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityLabel("\(value) filter").accessibilityAddTraits(
                 filter == value ? .isSelected : [])
         }

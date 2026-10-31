@@ -56,6 +56,7 @@ struct PreferencesView: View {
             }
             Section {
                 Button("Reset Whim", systemImage: "arrow.counterclockwise", role: .destructive) { confirm = true }
+                    .buttonStyle(.automatic)
                     .foregroundStyle(.red)
             } footer: {
                 Text("Remove all local Notes and restore Whim’s settings.")
@@ -69,9 +70,13 @@ struct PreferencesView: View {
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)
         .toolbar(.visible, for: .navigationBar)
-        .sheet(isPresented: $confirm) {
-            ConfirmationView(title: "Reset Whim on this iPhone?", message: "This removes all local audio, Notes, history, webhook configuration and credentials. It cannot revoke delivery accepted by your server or erase a disconnected Watch immediately.", confirm: "Confirm reset", error: model.error?.message, onCancel: { confirm = false }, onConfirm: { await model.perform { try await model.client.reset() } })
-                .presentationDetents([.medium, .large]).interactiveDismissDisabled(model.isPending)
+        .alert("Reset Whim on this iPhone?", isPresented: $confirm) {
+            Button("Confirm reset", role: .destructive) {
+                Task { await model.perform { try await model.client.reset() } }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes all local audio, Notes, history, webhook configuration and credentials. It cannot revoke delivery accepted by your server or erase a disconnected Watch immediately.")
         }
     }
     private func summary(_ section: SettingsSection) -> String {

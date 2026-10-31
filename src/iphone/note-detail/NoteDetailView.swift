@@ -43,6 +43,7 @@ struct NoteDetailView: View {
                     if note.hasLocalAudio { Button("Send Note") { Task { await model.sendRecovered(); await root.refresh() } } }
                 } else if [.failed, .queued, .setupRequired].contains(note.status) {
                     Button("Retry") { Task { await model.retry(); await root.refresh() } }
+                        .whimGlassButton()
                 }
                 Text("Delivery details").whimHeading()
                 if note.attempts.isEmpty && (note.audioSynchronizationRetries ?? []).isEmpty {

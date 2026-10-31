@@ -4,7 +4,7 @@ extension Color { static let whimAccent = Color.white }
 struct WhimButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.font(.body).padding(.vertical, 14).padding(.horizontal, 16).frame(minHeight: 48)
-            .background(Color(uiColor: .secondarySystemBackground)).clipShape(RoundedRectangle(cornerRadius: 14)).opacity(configuration.isPressed ? 0.65 : 1)
+            .whimGlass(in: Capsule()).opacity(configuration.isPressed ? 0.65 : 1)
     }
 }
 enum WhimSpacing {
