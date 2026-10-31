@@ -1,4 +1,5 @@
 import XCTest
+import Observation
 import AVFoundation
 import GRDB
 import WhimCore
@@ -237,6 +238,7 @@ final class WatchModelIntegrationTests: XCTestCase {
         }
     }
 
+    // Break: event-refresh assertions race delivery completion on slower runners.
     func testEventRefreshFailureIsVisibleAndLaterEventClearsIt() async throws {
         let fixture = try WatchFixture(connected: true)
         defer { fixture.remove() }
@@ -251,21 +253,29 @@ final class WatchModelIntegrationTests: XCTestCase {
         // Fixture-only schema fault breaks the timeline query while Note-by-ID delivery
         // writes still succeed, so the real delivery event exercises the failing refresh.
         try await database.write { try $0.execute(sql: "ALTER TABLE notes RENAME COLUMN created_at TO unavailable_created_at") }
+        // A response beyond the old polling window must still exercise both states.
+        await fixture.transport.delayNextResponse(by: .milliseconds(1500))
         await fixture.transport.resume()
-        for _ in 0..<100 {
-            if model.error != nil { break }
-            try await Task.sleep(for: .milliseconds(10))
+        await waitForModel("The delivery event exposes the refresh error") {
+            model.error != nil
         }
         XCTAssertEqual(model.error, "Recent Notes could not be refreshed. Try again.")
         try await database.write { try $0.execute(sql: "ALTER TABLE notes RENAME COLUMN unavailable_created_at TO created_at") }
         _ = try await fixture.client.startRecording(source: .appleWatch)
         _ = try await fixture.client.stopRecording()
-        for _ in 0..<100 {
-            if model.notes.count == 2, model.error == nil { break }
-            try await Task.sleep(for: .milliseconds(10))
+        await waitForModel("The later event restores both Notes and clears the error") {
+            model.notes.count == 2 && model.error == nil
         }
         XCTAssertNil(model.error)
         XCTAssertEqual(model.notes.count, 2)
+    }
+
+    private func waitForModel(_ description: String, condition: @escaping @MainActor () -> Bool) async {
+        let changed = expectation(description: description)
+        let observation = WatchModelCondition(condition: condition, expectation: changed)
+        observation.observe()
+        await fulfillment(of: [changed], timeout: 5)
+        withExtendedLifetime(observation) {}
     }
 
     private func failedNote(_ client: WhimService) async throws -> NoteProjection {
@@ -284,6 +294,31 @@ final class WatchModelIntegrationTests: XCTestCase {
         XCTFail("Finalization did not produce a Note")
     }
 
+}
+
+@MainActor private final class WatchModelCondition {
+    private let condition: @MainActor () -> Bool
+    private let expectation: XCTestExpectation
+    private var fulfilled = false
+
+    init(condition: @escaping @MainActor () -> Bool, expectation: XCTestExpectation) {
+        self.condition = condition
+        self.expectation = expectation
+    }
+
+    func observe() {
+        guard !fulfilled else { return }
+        let matched = withObservationTracking {
+            condition()
+        } onChange: { [weak self] in
+            // Observation reports willSet; inspect again on the actor after mutation.
+            Task { @MainActor in self?.observe() }
+        }
+        if matched {
+            fulfilled = true
+            expectation.fulfill()
+        }
+    }
 }
 
 private final class WatchFixture {
@@ -346,12 +381,18 @@ private actor WatchTransport: HTTPTransport {
     private var responses: [Int] = []
     private var suspended = false
     private var requests = 0
+    private var responseDelay: Duration?
     func send(_ request: WebhookRequest) async throws -> HTTPResponse {
         requests += 1
         while suspended { try await Task.sleep(for: .milliseconds(5)) }
+        if let delay = responseDelay {
+            responseDelay = nil
+            try await Task.sleep(for: delay)
+        }
         return .init(statusCode: responses.isEmpty ? 204 : responses.removeFirst())
     }
     func setResponses(_ responses: [Int]) { self.responses = responses }
+    func delayNextResponse(by delay: Duration) { responseDelay = delay }
     func suspend() { suspended = true }
     func resume() { suspended = false }
     func waitForRequests(_ count: Int) async throws {
