@@ -7,7 +7,8 @@ cd "$whim_root"
 if [[ "$(uname -s)" == "Darwin" && (
   -z "${WHIM_IPHONE_SIMULATOR_UDID:-}" || -z "${WHIM_WATCH_SIMULATOR_UDID:-}"
 ) ]]; then
-  eval "$(./scripts/boot-apple-simulators.sh)"
+  whim_simulator_environment="$(./scripts/boot-apple-simulators.sh)"
+  eval "$whim_simulator_environment"
 fi
 
 node scripts/check-test-colocation.mjs

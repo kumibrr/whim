@@ -49,34 +49,5 @@ export async function releaseFixture(t) {
   command(root, 'git', ['push', 'origin', 'main']);
   command(root, 'git', ['switch', '-c', 'release-fixture']);
   const initial = command(root, 'git', ['rev-parse', 'HEAD']).trim();
-  const publications = [];
-  const validations = [];
-  const messages = [];
-  async function run(executable, args, options) {
-    if (executable === 'bash') return '/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild\n';
-    if (executable === 'gh') {
-      if (args[0] === 'auth') return '';
-      if (args[0] === 'repo') return 'fixture/whim\n';
-      if (args[0] === 'release' && args[1] === 'create') {
-        assertArgument(args, '--verify-tag');
-        const notes = await readFile(args[args.indexOf('--notes-file') + 1], 'utf8');
-        publications.push({ tag: args[2], notes });
-        return 'https://github.com/fixture/whim/releases/tag/' + args[2] + '\n';
-      }
-      throw new Error(`Unexpected GitHub command: ${args.join(' ')}`);
-    }
-    if (executable === 'git' && args.join(' ') === 'remote get-url origin') return 'git@github.com:fixture/whim.git\n';
-    if (executable === 'git' && args.join(' ') === 'remote get-url --push --all origin') return command(root, executable, args).split('\n').filter(Boolean).map(url => url === remote ? 'git@github.com:fixture/whim.git' : 'git@github.com:elsewhere/whim.git').join('\n') + '\n';
-    if (executable === 'npm' && ['test:all', 'verify:release'].includes(args[1])) {
-      validations.push(args[1]);
-      return '';
-    }
-    if (executable === 'git' && args[0] === 'push' && args[2] === 'git@github.com:fixture/whim.git') args = [...args.slice(0, 2), remote, ...args.slice(3)];
-    return command(root, executable, args, options);
-  }
-  return { root, remote, initial, publications, validations, messages, run, options: { run, platform: 'darwin', log: message => messages.push(message) } };
-}
-
-function assertArgument(args, argument) {
-  if (!args.includes(argument)) throw new Error(`Expected ${argument} at the GitHub boundary.`);
+  return { root, remote, initial };
 }

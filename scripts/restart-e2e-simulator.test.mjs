@@ -17,7 +17,7 @@ set -eu
 case "$2" in
   shutdown) [ "$(cat "$WHIM_TEST_STATE")" = stale ]; printf shutdown > "$WHIM_TEST_STATE" ;;
   boot) [ "$(cat "$WHIM_TEST_STATE")" = shutdown ]; printf booting > "$WHIM_TEST_STATE" ;;
-  bootstatus) [ "$4" = -b ]; [ "$(cat "$WHIM_TEST_STATE")" = booting ]; printf ready > "$WHIM_TEST_STATE" ;;
+  bootstatus) [ "$4" = -b ]; [ "$(cat "$WHIM_TEST_STATE")" = booting ]; printf ready > "$WHIM_TEST_STATE"; echo Finished ;;
   *) exit 9 ;;
 esac
 `);
@@ -27,3 +27,19 @@ esac
   });
   assert.equal(await readFile(state, 'utf8'), 'ready');
 });
+
+for (const output of ['Status=3, isTerminal=YES\nData Migration Failed', 'Status=4, isTerminal=NO']) {
+  test(`E2E startup rejects an unhealthy boot even when simctl exits zero: ${output}`, async t => {
+    const { spawnSync } = await import('node:child_process');
+    const root = await mkdtemp(join(tmpdir(), 'whim-unhealthy-simulator-'));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const xcrun = join(root, 'xcrun');
+    await writeFile(xcrun, '#!/bin/sh\nif [ "$2" = bootstatus ]; then printf "%s\\n" "$WHIM_TEST_BOOT_OUTPUT"; fi\nexit 0\n');
+    await chmod(xcrun, 0o755);
+    const result = spawnSync(process.execPath, [new URL('./restart-e2e-simulator.mjs', import.meta.url).pathname, 'fixture-iphone'], {
+      encoding: 'utf8', env: { ...process.env, PATH: `${root}:${process.env.PATH}`, WHIM_TEST_BOOT_OUTPUT: output },
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /boot.*failed|healthy boot/i);
+  });
+}

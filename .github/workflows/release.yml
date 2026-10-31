@@ -1,0 +1,50 @@
+name: Prepare Cloud release
+
+on:
+  release:
+    types: [published]
+  push:
+    tags: ['[0-9]*.[0-9]*.[0-9]*', 'v[0-9]*.[0-9]*.[0-9]*']
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing immutable release tag (X.Y.Z or vX.Y.Z); blank resumes main'
+        type: string
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Serialize different tags as well as duplicate published/tag events.
+# GitHub retains only one pending run; workflow_dispatch recovers any superseded event.
+concurrency:
+  group: whim-release-preparation
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      # Always run trusted preparation tooling from main, never scripts from a tag.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Prepare or resume the main-gated release branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
+        shell: bash
+        run: |
+          if [[ -n "$RELEASE_TAG" ]]; then
+            node scripts/prepare-cloud-release.mjs "$RELEASE_TAG"
+          else
+            node scripts/prepare-cloud-release.mjs --resume
+          fi

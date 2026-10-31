@@ -88,35 +88,11 @@ When native view files change, run `ruby scripts/configure-xcode-project.rb` and
 
 [Changesets](https://github.com/changesets/changesets) owns the App Store marketing version in `ios/package.json`, under `@whim/app`. Record user-visible changes with `npm run changeset` and commit the Changeset with the change. Never edit `MARKETING_VERSION` by hand. Version 1.0.0 is the initial release and has no changelog. Xcode's distribution flow manages build numbers.
 
-To release, use a Mac with Xcode, the simulator runtimes and Maestro required by `test:all`, installed dependencies (`npm ci`), and authenticated Git and GitHub CLI access to push main/tags and create releases. Start from a clean branch whose current commit matches the freshly fetched `origin/main`, with at least one pending app Changeset, then run:
+Publish a GitHub Release with a new stable `X.Y.Z` (or `vX.Y.Z`) tag at current main, matching the next pending app Changesets version. GitHub Actions prepares the changelog, lockfile, app manifest and Xcode metadata. The generated update must land on **both main and `release-build/<tag>` before Xcode Cloud builds**. If main requires a preparation PR, merge it first. Original tags stay unchanged; source advancement blocks stale handoffs.
 
-```sh
-npm run release
-```
+The [Xcode Cloud Release workflow](https://appstoreconnect.apple.com/teams/3a7fa4a7-7fbd-40c9-b79c-659659e627f6/xcode-cloud/products/b675c35b-56c1-482b-b43d-ac966e431519/workflows/62dc6f87-fa57-4e9e-810a-43aa1dd13728) starts from prepared `release-build/` branches. Cloud owns all tests, builds, archive validation and existing Internal TestFlight distribution. Cloud PR CI runs the full suite as well. GitHub Actions runs release preparation only. `npm run release` explains this flow without running local CI, committing, tagging or publishing. `npm run release:version` remains a standalone development tool; do not run it manually as part of published-release preparation.
 
-This command consumes Changesets, updates `ios/CHANGELOG.md`, the app manifest, every Xcode target's marketing version, and the npm lockfile. It runs `test:all` and `verify:release`, commits the version changes, and atomically pushes the commit to main together with an annotated `vX.Y.Z` tag. It then creates a GitHub Release using that version's changelog notes. It refuses dirty or detached checkouts, an out-of-date main, reused tags, unexpected edits, failed checks, and separate or multiple push destinations. It prepares an isolated Git index, verifies the commit against the validated tree and original parent, and pushes pinned commit/tag objects to the checked destination. It never force-pushes or discards work. Other local checkouts are left alone; update their main branch normally afterward.
-
-The existing [Xcode Cloud Release workflow](https://appstoreconnect.apple.com/teams/3a7fa4a7-7fbd-40c9-b79c-659659e627f6/xcode-cloud/products/b675c35b-56c1-482b-b43d-ac966e431519/workflows/62dc6f87-fa57-4e9e-810a-43aa1dd13728) starts when the version tag is pushed. It archives the `Whim` scheme with its embedded Watch app and extensions for App Store Connect, manages distribution signing/build numbers, and uploads to the existing Internal TestFlight group. Wait for its build and App Store Connect processing to succeed before choosing the build for submission. App Store submission and physical acceptance remain manual. GitHub Actions is currently disabled for this repository.
-
-For version preparation alone, `npm run release:version` updates the manifests, changelog, Xcode versions, and lockfile without committing, tagging, or publishing. Do not run it before `npm run release`; the full command performs that step itself. `npm run release -- --help` displays usage without making changes.
-
-If a release fails, inspect its error and `git diff` first. Generated files, local commits, and tags are preserved. If version preparation completed but tests or archiving failed, fix the cause and rerun both checks, then finish the reviewed release manually. Use the release-notes path printed by the command:
-
-```sh
-npm run test:all
-npm run verify:release
-whim_release_version="$(node -p "require('./ios/package.json').version")"
-whim_release_notes='/path/printed/by/the/command/notes.md'
-git diff
-git add -- ios/package.json ios/CHANGELOG.md package-lock.json ios/whim.xcodeproj/project.pbxproj .changeset
-git commit -m "chore(ios): release $whim_release_version"
-git tag -a "v$whim_release_version" -m "whim $whim_release_version"
-git push --atomic origin HEAD:refs/heads/main "refs/tags/v$whim_release_version"
-gh release create "v$whim_release_version" --repo kumibrr/whim --verify-tag \
-  --title "whim $whim_release_version" --notes-file "$whim_release_notes"
-```
-
-Fetch and compare `origin/main` before finishing; if it advanced, reconcile and validate against the updated main first. If preparation itself only partially completed, repair the version/changelog consistency before finishing. If a commit or tag already exists, use the failed command's recovery instructions instead of recreating it. If commit verification failed, do not publish that commit: inspect and repair it, preserve concurrent edits, and validate again. If tagging failed after a verified commit, fix the tagging problem and use the printed command to create the tag at the recorded commit only after confirming that the tag is absent locally and remotely. Never move an existing release tag. After a push error, inspect remote refs before retrying because a lost response can hide a successful push. If only GitHub Release creation failed, the tag already triggered Xcode Cloud: check `gh release view`, then use the printed publication-only recovery command. Do not run versioning again for the same release.
+See [CI and release setup](docs/xcode-cloud.md) for cloud workflow configuration, version/tag requirements, branch protection, concurrency and retry recovery. Do not move an existing release tag.
 
 </details>
 
@@ -125,13 +101,13 @@ Fetch and compare `origin/main` before finishing; if it advanced, reconcile and 
 
 The [webhook contract](docs/webhook-contract-v1.md) documents signing and persistent Note-ID deduplication. The [privacy policy](docs/privacy.md) describes local processing, paired-device transfer, and user-selected endpoints. The [paired-device matrix](e2e/physical/paired-device.e2e.test.md) records the physical checks still required before release; its [test guide](e2e/physical/paired-device-test-guide.md) explains how to run and report every case.
 
-Run `npm run verify:release` on macOS to create a clean unsigned Release device archive. The command validates all four embedded executables, privacy manifests, and submission metadata. It checks the shared marketing version and build number, lowercase `whim` display names, and the export-compliance key. The release command runs this after `test:all`. The archive defaults to `ios/build/Whim.xcarchive`. Override it with `WHIM_ARCHIVE_PATH`. Distribution signing and physical acceptance remain separate release requirements.
+Run `npm run verify:release` on macOS to create a clean unsigned Release device archive. The command validates all four embedded executables, privacy manifests, and submission metadata. It checks the shared marketing version and build number, lowercase `whim` display names, and the export-compliance key. Cloud PR CI runs this after `test:all`; Cloud release CI validates its native archive instead. The archive defaults to `ios/build/Whim.xcarchive`. Override it with `WHIM_ARCHIVE_PATH`. Distribution signing and physical acceptance remain separate release requirements.
 
 The iPhone E2E runner restarts its selected simulator immediately before Maestro, so it starts with a fresh automation session after native XCTest. It waits for the simulator to finish booting before starting the journeys.
 
 Run `./scripts/check-release-privacy.sh` to check SDK references and source manifest reasons. Pass a built `whim.app` path to also inspect every embedded target's manifest. After building or archiving Release, run `./scripts/check-release-fixtures.sh /absolute/path/to/whim.app` to inspect all four executables for debug injection code. That check also requires the product-owner-approved, non-sensitive recording at `src/iphone/webhook-configuration/configuration-test.m4a`, matching the runtime configuration-test asset. The development fixture is not release approval.
 
-If GitHub Actions is re-enabled, require both `tooling` and `apple` CI jobs in repository branch protection. The [approved configuration-test recording](docs/configuration-test-asset.md) is included. Physical sign-off, signing/provisioning, and App Store disclosure review remain prerequisites for publishing.
+Require the successful Xcode Cloud PR CI status in branch protection after its first validated run; retire the old GitHub `tooling` and `apple` requirements during that cutover. The [approved configuration-test recording](docs/configuration-test-asset.md) is included. Physical sign-off, signing/provisioning, and App Store disclosure review remain prerequisites for publishing.
 
 Publish the privacy policy at a public URL and link to it from App Store Connect and an accessible place inside the app, as required by [App Review guideline 5.1.1](https://developer.apple.com/app-store/review/guidelines/#data-collection-and-storage). Review [App Privacy answers](https://developer.apple.com/app-store/app-privacy-details/) against the actual release and endpoint arrangement. The manifest declares no tracking or app-operator collection; that declaration does not establish a user-selected webhook's collection practices. The release privacy gate checks required-reason API declarations and their presence in embedded targets.
 

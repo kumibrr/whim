@@ -145,7 +145,9 @@ final class DeliveryServiceTests: XCTestCase {
         clock.set(Date(timeIntervalSince1970: 1_060))
         await sleeper.resumeNext()
         await firstWake.waitForCount(1)
-        for _ in 0..<20 { await Task.yield() }
+        // The callback has scheduled the retry, but its task may not have
+        // reached the sleeper yet. Observe that boundary before asserting.
+        await sleeper.waitForCallCount(2)
 
         let intervals = await sleeper.requestedIntervals
         XCTAssertEqual(intervals, [60, 900])
