@@ -30,6 +30,7 @@ private let retentionChoices: [(RetentionPolicy, String)] = [(.immediately, "Imm
 
 /// Settings root: one row per section, each opening its own page.
 struct PreferencesView: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     var model: IPhoneModel
     let settings: SettingsProjection
     @State private var confirm = false
@@ -38,10 +39,13 @@ struct PreferencesView: View {
             Section {
                 ForEach(SettingsSection.allCases, id: \.self) { section in
                     NavigationLink(value: IPhoneRoute.settingsSection(section)) {
-                        HStack {
+                        WhimLabeledValue {
                             Label(section.title, systemImage: section.symbol)
-                            Spacer()
-                            Text(summary(section)).foregroundStyle(.secondary).lineLimit(1)
+                        } value: {
+                            if !summary(section).isEmpty {
+                                Text(summary(section)).foregroundStyle(.secondary)
+                                    .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                            }
                         }
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(section.title)
@@ -95,19 +99,15 @@ struct SettingsSectionView: View {
     }
     private var isEditable: Bool { [.webhook, .audio, .titles].contains(section) }
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                content
-                if let error = editor.preferencesError ?? errorLog.error ?? model.error { WhimErrorText(message: error.message) }
+        WhimContent(spacing: WhimSpacing.group) {
+            content
+            if let error = editor.preferencesError ?? errorLog.error ?? model.error {
+                WhimErrorText(message: error.message)
             }
-            .frame(maxWidth: 600, alignment: .leading)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 32)
         }
-        .scrollDismissesKeyboard(.interactively)
-        .background(Color.black)
         .disabled(model.isPending || editor.isPending)
         .accessibilityIdentifier("settings-section-\(section.rawValue)")
+        .onAppear { if section == .permissions { model.markPermissionsReviewed() } }
         .navigationTitle(section.title)
         .navigationBarTitleDisplayMode(.large)
         .toolbar(.visible, for: .navigationBar)
@@ -138,9 +138,9 @@ struct SettingsSectionView: View {
             footnote("Messages your webhook returned for failed Attempts, with secrets redacted. Entries are removed with their Note.")
             sectionShortcut(.webhook, label: "Webhook settings")
         case .audio:
-            HStack {
+            WhimLabeledValue {
                 Text("Keep audio after delivery")
-                Spacer()
+            } value: {
                 Picker("Keep audio", selection: $editor.retentionPolicy) {
                     ForEach(retentionChoices, id: \.0) { policy, label in Text(label).tag(policy) }
                 }
@@ -150,7 +150,7 @@ struct SettingsSectionView: View {
         case .titles:
             Toggle("Transcription", isOn: $editor.transcriptionEnabled).accessibilityLabel("Transcription enabled")
             footnote("Only on-device recognition is used. No full transcript is stored.")
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: WhimSpacing.field) {
                 Text("Transcription language").font(.subheadline).foregroundStyle(.secondary)
                 TextField(editor.deviceLanguage, text: $editor.language)
                     .textInputAutocapitalization(.never).autocorrectionDisabled().whimInput("Transcription language")
@@ -182,7 +182,7 @@ struct SettingsSectionView: View {
         .accessibilityIdentifier("shortcut-\(target.rawValue)")
     }
     private func webhookError(_ entry: WebhookErrorLog.Entry) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: WhimSpacing.field) {
             HStack {
                 Text("⚠ \(entry.status)").fontWeight(.semibold)
                 Spacer()
@@ -206,9 +206,9 @@ struct SettingsSectionView: View {
     }
     private func footnote(_ text: String) -> some View { Text(text).font(.footnote).foregroundStyle(.secondary) }
     private func permission(_ kind: PermissionKind, status: PermissionStatus, title: String) -> some View {
-        HStack {
+        WhimLabeledValue {
             Text(title)
-            Spacer()
+        } value: {
             if status == .notDetermined {
                 Button("Allow") { Task { await model.perform { _ = try await model.client.requestPermission(kind) } } }
                     .whimGlassButton().accessibilityLabel("Allow \(kind.rawValue)")

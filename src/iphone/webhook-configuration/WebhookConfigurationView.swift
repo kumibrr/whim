@@ -3,6 +3,7 @@ import WhimCore
 import WhimIPhone
 /// Onboarding saves on blur; Settings uses its header Save action.
 struct WebhookConfigurationView: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     var model: IPhoneModel
     @Bindable var editor: WebhookEditor
     let configuration: WebhookSettingsProjection?
@@ -11,7 +12,7 @@ struct WebhookConfigurationView: View {
     private enum Field: Hashable { case endpoint, bearer, hmac, headerName, headerValue }
     @FocusState private var focused: Field?
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: WhimSpacing.group) {
             if let configuration, editor.endpoint.isEmpty { Text("Current destination: \(destinationLabel(configuration.destination))").font(.footnote).foregroundStyle(.secondary) }
             field("Webhook URL") {
                 TextField(configuration == nil ? "https://your-workflow.example/whim" : "Leave blank to keep current URL", text: $editor.endpoint)
@@ -25,7 +26,7 @@ struct WebhookConfigurationView: View {
             } else {
                 advancedFields
             }
-            HStack(spacing: 12) {
+            actionLayout {
                 if !compact { addHeaderButton }
                 Button("Test webhook", systemImage: "paperplane") {
                     focused = nil
@@ -55,8 +56,13 @@ struct WebhookConfigurationView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("webhook-configuration")
     }
+    private var actionLayout: AnyLayout {
+        typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 12))
+    }
     private var advancedFields: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: WhimSpacing.group) {
             secret("Bearer token", value: $editor.bearer, exists: configuration?.hasBearerToken == true, id: "webhook-bearer-token", focus: .bearer)
             secret("HMAC secret", value: $editor.hmac, exists: configuration?.hasHMACSecret == true, id: "webhook-hmac-secret", focus: .hmac)
             Text("Custom headers").font(.headline).accessibilityAddTraits(.isHeader).padding(.top, 8)
@@ -93,7 +99,7 @@ struct WebhookConfigurationView: View {
             .whimGlassButton()
     }
     private func field<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: WhimSpacing.field) {
             Text(label).font(.subheadline).foregroundStyle(.secondary)
             content()
         }

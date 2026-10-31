@@ -1,0 +1,45 @@
+appId: app.whim.ios
+---
+- runFlow: flows/clean-launch.yaml
+- assertVisible:
+    id: review-permissions
+- assertVisible: "Your voice notes won't have transcriptions and webhook fails will not be notified until you accept the permissions."
+- assertNotVisible: Enable on-device titles
+- assertNotVisible: Enable delivery alerts
+- tapOn:
+    id: review-permissions
+- assertVisible:
+    id: settings-section-permissions
+- assertVisible: Microphone
+- tapOn:
+    id: BackButton
+- tapOn:
+    id: BackButton
+- assertVisible:
+    id: whim-home
+- assertNotVisible:
+    id: review-permissions
+- launchApp:
+    clearState: false
+    arguments:
+      -WhimFixtureAudio: ${WHIM_FIXTURE_AUDIO}
+      -WhimFixtureWebhookURL: ${WHIM_WEBHOOK_TEST_URL}
+- assertVisible:
+    id: whim-home
+- assertNotVisible:
+    id: review-permissions
+# Visiting Permissions from Settings must also dismiss the entry point.
+- runFlow: flows/clean-launch.yaml
+- assertVisible:
+    id: review-permissions
+- tapOn: Settings
+- tapOn:
+    id: settings-permissions
+- assertVisible:
+    id: settings-section-permissions
+- tapOn:
+    id: BackButton
+- tapOn:
+    id: BackButton
+- assertNotVisible:
+    id: review-permissions

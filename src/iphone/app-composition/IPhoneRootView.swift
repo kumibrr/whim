@@ -13,7 +13,7 @@ struct IPhoneRootView: View {
     var body: some View {
         NavigationStack(path: $path) {
             Group {
-                if model.onboardingCompleted { home(model.settings) }
+                if model.onboardingCompleted { home }
                 else { OnboardingView(model: model, settings: model.settings) }
             }
             // The stack's root does not inherit insets applied outside NavigationStack.
@@ -69,7 +69,7 @@ struct IPhoneRootView: View {
                 else { path = [] }
             }
     }
-    private func home(_ settings: SettingsProjection?) -> some View {
+    private var home: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             // One waveform outlives both states, so the mark can travel to the
@@ -85,7 +85,9 @@ struct IPhoneRootView: View {
                     RecorderView(model: model, glassNamespace: captureGlassNamespace, failureNamespace: failureNamespace)
                         .transition(.identity)
                 } else {
-                    CaptureHomeView(model: model, glassNamespace: captureGlassNamespace, failureNamespace: failureNamespace) {
+                    CaptureHomeView(model: model, glassNamespace: captureGlassNamespace, failureNamespace: failureNamespace, reviewPermissions: {
+                        Task { if await model.prepareForNavigation() { path = [.settings, .settingsSection(.permissions)] } }
+                    }) {
                         Task { if await model.prepareForNavigation() { path.append(.settings) } }
                     }
                     .transition(.identity)
@@ -98,21 +100,6 @@ struct IPhoneRootView: View {
                     model.openHistory()
                 }
             })
-        .overlay(alignment: .top) {
-            VStack(spacing: 8) {
-                if model.recording == nil {
-                    if let settings, model.offersContextualPermissions && (settings.permissions.speech == .notDetermined || settings.permissions.notifications == .notDetermined) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Your Note is saved. Optional permissions help with titles and delivery alerts.").font(.footnote)
-                            if settings.permissions.speech == .notDetermined { Button("Enable on-device titles") { permission(.speech) } }
-                            if settings.permissions.notifications == .notDetermined { Button("Enable delivery alerts") { permission(.notifications) } }
-                            Button("Later") { model.dismissContextualPermissions() }
-                        }.padding(16).background(.black, in: RoundedRectangle(cornerRadius: 20))
-                    }
-
-                }
-            }.padding(.horizontal, 24).padding(.top, 80)
-        }
     }
     private func openWebhookSettings() {
         Task {
@@ -120,7 +107,6 @@ struct IPhoneRootView: View {
             if await model.prepareForNavigation() { path = [.settings, .settingsSection(.webhook)] }
         }
     }
-    private func permission(_ kind: PermissionKind) { Task { await model.perform { _ = try await model.client.requestPermission(kind) } } }
 }
 
 /// The error card belongs to the capture home; Settings and history report failures inline.
@@ -143,7 +129,7 @@ struct IPhoneFailurePresentation: ViewModifier {
                         withAnimation(.failureNotificationsMorph(reduceMotion: reduceMotion)) { model.collapseFailures() }
                     } : nil)
                     .failureNotificationsMorph(in: morphNamespace)
-                    .padding(.horizontal, 20).padding(.top, 8)
+                    .padding(.horizontal, WhimSpacing.page).padding(.top, 8)
             }
         }
         .alert("Free up storage", isPresented: $showsStorageInstructions) {

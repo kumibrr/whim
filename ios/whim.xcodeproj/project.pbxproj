@@ -80,6 +80,7 @@
 		FB441EFCAA789DF2C09691F6 /* NoteRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 937FF0FBB2E36229CE84E33C /* NoteRowView.swift */; };
 		FC52C8ACD718595E4728E3CC /* RecordWhimIntent.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69BBF5923F869E7D35DD19DE /* RecordWhimIntent.test.swift */; };
 		FD9CB3518EB97FFF3449648B /* WatchRecentNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD2493D9C58BA3F4C76E95EA /* WatchRecentNotesView.swift */; };
+		E62EECE2D989C69ECFAEA70E /* IPhoneTheme.integration.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23EF097CE0133C19A384FF00 /* IPhoneTheme.integration.test.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -221,6 +222,7 @@
 		DFE2FD013BB48CCD72E0893F /* WhimShortcutsProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WhimShortcutsProvider.swift; path = ../src/intents/recording/WhimShortcutsProvider.swift; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		EEC421C66148951ED2AA1210 /* WebhookStatusView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WebhookStatusView.swift; path = "../src/watch/webhook-status/WebhookStatusView.swift"; sourceTree = "<group>"; };
+		23EF097CE0133C19A384FF00 /* IPhoneTheme.integration.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = IPhoneTheme.integration.test.swift; path = ../src/iphone/appearance/IPhoneTheme.integration.test.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -331,6 +333,7 @@
 				0268557010B2F2F63F56A531 /* RecordWhimControl.test.swift */,
 				30353EC5DC957D43BDAC7F96 /* WhimLiveActivity.swift */,
 				88480C7287291FB16A7CD0BF /* IPhoneModel.test-support.swift */,
+				23EF097CE0133C19A384FF00 /* IPhoneTheme.integration.test.swift */,
 			);
 			name = WhimSystemSurfaceTests;
 			sourceTree = "<group>";
@@ -751,6 +754,7 @@
 				159147AC02C2EAC4144D932E /* RecordWhimControl.test.swift in Sources */,
 				1C3404E2749FFA8050286E1C /* WhimLiveActivity.swift in Sources */,
 				9E8FAB20EDF6301F36162394 /* IPhoneModel.test-support.swift in Sources */,
+				E62EECE2D989C69ECFAEA70E /* IPhoneTheme.integration.test.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

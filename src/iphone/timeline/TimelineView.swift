@@ -31,7 +31,7 @@ struct TimelineView: View {
                     Text("No Notes here yet. Capture a thought.").foregroundStyle(.secondary)
                 }
             }
-            LazyVStack(spacing: 14) {
+            LazyVStack(spacing: WhimSpacing.group) {
                 ForEach(visible, id: \.id) { note in
                     NoteRowView(
                         note: note, waveform: model.waveforms[note.id], playback: model.playback,

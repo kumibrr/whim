@@ -97,8 +97,14 @@ actor FacadePlayback: PlaybackAdapter {
 actor FacadeRecorder: AudioRecorder {
     let pair = AsyncStream.makeStream(of: RecordingEvent.self)
     private(set) var startCount = 0
+    private var preparedAudio: URL?
+    func usePreparedAudio(at url: URL) { preparedAudio = url }
     func events() -> AsyncStream<RecordingEvent> { pair.stream }
-    func start(at url: URL) throws { startCount += 1; try writeAudioFixture(to: url) }
+    func start(at url: URL) throws {
+        startCount += 1
+        if let preparedAudio { try FileManager.default.copyItem(at: preparedAudio, to: url) }
+        else { try writeAudioFixture(to: url) }
+    }
     func stop() { pair.continuation.yield(.encoderCompleted(duration: 1, peakPowerDBFS: -10)) }
     func discard() {}
     func emit(_ event: RecordingEvent) { pair.continuation.yield(event) }

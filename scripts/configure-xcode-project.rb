@@ -223,6 +223,7 @@ configure_target(surface_tests, 'app.whim.ios.systemsurfacetests', '18.0')
 surface_group = virtual_group(project, 'WhimSystemSurfaceTests')
 surface_paths = Dir.glob(File.join(repository_root, 'src/intents/**/*.swift')) + Dir.glob(File.join(repository_root, 'src/widgets/{recording-control,recording-activity}/**/*.swift'))
 surface_paths << File.join(repository_root, 'src/iphone/app-composition/IPhoneModel.test-support.swift')
+surface_paths += Dir.glob(File.join(repository_root, 'src/iphone/appearance/*.integration.test.swift'))
 surface_refs = surface_paths.map { |path| file_reference(surface_group, '../' + path.delete_prefix(repository_root + '/')) }
 surface_tests.source_build_phase.files.each { |entry| entry.remove_from_project unless surface_refs.include?(entry.file_ref) }
 surface_refs.each { |ref| surface_tests.add_file_references([ref]) unless surface_tests.source_build_phase.files_references.include?(ref) }

@@ -83,7 +83,7 @@ struct NoteRowView: View {
                 Button("Retry", action: retry).accessibilityLabel("Retry \(note.title)")
                     .font(.footnote).frame(minHeight: 48)
             }
-        }.padding(18).whimGlass(in: RoundedRectangle(cornerRadius: 24))
+        }.padding(WhimSpacing.group).whimGlass(in: RoundedRectangle(cornerRadius: 24))
             .accessibilityElement(children: .contain)
     }
     @ViewBuilder private var metadata: some View {
@@ -97,7 +97,7 @@ struct NoteRowView: View {
         }
     }
     private var metadataContent: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: WhimSpacing.field) {
             Text(note.title).font(.system(.subheadline, weight: .semibold)).lineLimit(typeSize.isAccessibilitySize ? nil : 1)
             Text(note.createdAt.formatted(date: .abbreviated, time: .shortened))
                 .font(.caption2).foregroundStyle(.secondary).lineLimit(typeSize.isAccessibilitySize ? nil : 2)

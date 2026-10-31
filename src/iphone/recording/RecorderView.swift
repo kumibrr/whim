@@ -6,49 +6,73 @@ struct CaptureHomeView: View {
     var model: IPhoneModel
     var glassNamespace: Namespace.ID
     var failureNamespace: Namespace.ID
+    var reviewPermissions: () -> Void
     var settings: () -> Void
     var body: some View {
-        VStack {
-            HStack {
-                if model.areFailuresCollapsed {
-                    ErrorNotificationsButton(model: model, namespace: failureNamespace)
+        GeometryReader { geometry in
+            VStack {
+                HStack {
+                    if model.areFailuresCollapsed {
+                        ErrorNotificationsButton(model: model, namespace: failureNamespace)
+                    }
+                    Spacer()
+                    Button(action: settings) {
+                        Image(systemName: "gearshape").font(.system(size: 20, weight: .regular))
+                            .frame(width: 48, height: 48).whimGlass(in: Circle())
+                    }.buttonStyle(.plain).accessibilityLabel("Settings")
+                        .accessibilityIdentifier("settings-button")
+                }.padding(.horizontal, WhimSpacing.page).padding(.top, 12)
+                if model.offersPermissionReview {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: WhimSpacing.group) {
+                            Text("Your voice notes won't have transcriptions and webhook fails will not be notified until you accept the permissions.")
+                                .font(.footnote)
+                                .foregroundStyle(.primary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("permission-review-explanation")
+                            Button("Review permissions", action: reviewPermissions)
+                                .font(.subheadline)
+                                .whimGlassButton()
+                                .accessibilityIdentifier("review-permissions")
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, WhimSpacing.page)
+                        .padding(.vertical, WhimSpacing.field)
+                    }
+                    .frame(maxHeight: max(100, geometry.size.height * 0.45 - 160))
+                    .compositingGroup()
+                    .clipped()
                 }
                 Spacer()
-                Button(action: settings) {
-                    Image(systemName: "gearshape").font(.system(size: 20, weight: .regular))
-                        .frame(width: 48, height: 48).whimGlass(in: Circle())
-                }.buttonStyle(.plain).accessibilityLabel("Settings")
-                    .accessibilityIdentifier("settings-button")
-            }.padding(.horizontal, 24).padding(.top, 12)
-            Spacer()
-            if !model.feedback.isEmpty {
-                Text(model.feedback).font(.footnote).foregroundStyle(.secondary).padding(
-                    .bottom, 20)
-            }
-            Button {
-                Task { await model.startRecording() }
-            } label: {
-                Circle().fill(.white).frame(width: 26, height: 26)
-                    .frame(width: 80, height: 80).whimGlass(in: Circle())
-                    .captureGlassIdentity("capture", in: glassNamespace)
-            }.buttonStyle(.plain).accessibilityLabel("Record a Whim")
-                .accessibilityIdentifier("record-button")
-                .disabled(model.isRecordingPending || !model.captureReady)
-            if !model.captureReady { ProgressView("Preparing recording…") }
-            Button {
-                model.openHistory()
-            } label: {
-                VStack(spacing: 10) {
-                    Text("scroll to see previous notes.").font(.system(size: 12))
-                    Image(systemName: "chevron.up").font(
-                        .system(size: 9, weight: .semibold))
-                }.foregroundStyle(.white.opacity(0.5)).padding(.top, 22).padding(
-                    .bottom, 12
-                )
-                .frame(minHeight: 48)
-            }.buttonStyle(.plain).accessibilityLabel("Show previous Notes")
-                .accessibilityIdentifier("history-hint")
-        }.accessibilityElement(children: .contain).accessibilityIdentifier("whim-home")
+                if !model.feedback.isEmpty {
+                    Text(model.feedback).font(.footnote).foregroundStyle(.secondary).padding(
+                        .bottom, 20)
+                }
+                Button {
+                    Task { await model.startRecording() }
+                } label: {
+                    Circle().fill(.white).frame(width: 26, height: 26)
+                        .frame(width: 80, height: 80).whimGlass(in: Circle())
+                        .captureGlassIdentity("capture", in: glassNamespace)
+                }.buttonStyle(.plain).accessibilityLabel("Record a Whim")
+                    .accessibilityIdentifier("record-button")
+                    .disabled(model.isRecordingPending || !model.captureReady)
+                if !model.captureReady { ProgressView("Preparing recording…") }
+                Button {
+                    model.openHistory()
+                } label: {
+                    VStack(spacing: 10) {
+                        Text("scroll to see previous notes.").font(.system(size: 12))
+                        Image(systemName: "chevron.up").font(
+                            .system(size: 9, weight: .semibold))
+                    }.foregroundStyle(.white.opacity(0.5)).padding(.top, 22).padding(
+                        .bottom, 12
+                    )
+                    .frame(minHeight: 48)
+                }.buttonStyle(.plain).accessibilityLabel("Show previous Notes")
+                    .accessibilityIdentifier("history-hint")
+            }.accessibilityElement(children: .contain).accessibilityIdentifier("whim-home")
+        }
     }
 }
 
@@ -80,7 +104,7 @@ struct RecorderView: View {
                 Spacer()
                 Text("Stop saves your Note and starts delivery.").font(.caption)
                     .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center).padding(.horizontal, 24).padding(
+                    .multilineTextAlignment(.center).padding(.horizontal, WhimSpacing.page).padding(
                         .bottom, 8)
                 Button {
                     Task { await model.stopRecording() }
@@ -96,10 +120,10 @@ struct RecorderView: View {
                     Task { await model.discardRecording() }
                 } label: {
                     if #available(iOS 26, *) {
-                        discardLabel.whimGlass(in: Capsule())
+                        DiscardRecordingLabel().whimGlass(in: Capsule())
                             .captureGlassIdentity("discard", in: glassNamespace)
                     } else {
-                        discardLabel
+                        DiscardRecordingLabel()
                     }
                 }.buttonStyle(.plain).accessibilityLabel("Discard recording")
                     .accessibilityIdentifier("discard-recording")
@@ -112,10 +136,15 @@ struct RecorderView: View {
                 .accessibilityIdentifier("recorder-panel")
         }
     }
-    private var discardLabel: some View {
+}
+
+struct DiscardRecordingLabel: View {
+    var body: some View {
         Text("Discard")
             .font(.body.weight(.semibold))
             .foregroundStyle(.red)
+            .padding(.horizontal, WhimSpacing.group)
+            .padding(.vertical, 12)
             .frame(minWidth: 120, minHeight: 56)
             .contentShape(Rectangle())
     }
