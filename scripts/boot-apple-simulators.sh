@@ -12,11 +12,12 @@ xcrun simctl list devicetypes --json > "$whim_simulator_data/device-types.json"
 xcrun simctl list devices --json > "$whim_simulator_data/devices.json"
 
 whim_existing_device() {
-  WHIM_DEVICE_NAME="$1" WHIM_RUNTIME_ID="$2" node - "$whim_simulator_data/devices.json" <<'NODE'
+  WHIM_DEVICE_NAME="$1" WHIM_RUNTIME_ID="$2" WHIM_DEVICE_TYPE="$3" node - "$whim_simulator_data/devices.json" <<'NODE'
 const fs = require('node:fs');
 const devices = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')).devices;
 const match = (devices[process.env.WHIM_RUNTIME_ID] ?? []).find(
-  (device) => device.isAvailable && device.name === process.env.WHIM_DEVICE_NAME,
+  (device) => device.isAvailable && device.name === process.env.WHIM_DEVICE_NAME
+    && device.deviceTypeIdentifier === process.env.WHIM_DEVICE_TYPE,
 );
 if (match) process.stdout.write(match.udid);
 NODE
@@ -32,8 +33,8 @@ echo "Selected Watch simulator: $whim_watch_type on $whim_watch_runtime" >&2
 
 whim_iphone_name="Whim CI iPhone"
 whim_watch_name="Whim CI Watch"
-whim_iphone_udid="$(whim_existing_device "$whim_iphone_name" "$whim_ios_runtime")"
-whim_watch_udid="$(whim_existing_device "$whim_watch_name" "$whim_watch_runtime")"
+whim_iphone_udid="$(whim_existing_device "$whim_iphone_name" "$whim_ios_runtime" "$whim_iphone_type")"
+whim_watch_udid="$(whim_existing_device "$whim_watch_name" "$whim_watch_runtime" "$whim_watch_type")"
 
 if [[ -z "$whim_iphone_udid" ]]; then
   whim_iphone_udid="$(xcrun simctl create "$whim_iphone_name" "$whim_iphone_type" "$whim_ios_runtime")" || {

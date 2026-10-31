@@ -108,12 +108,16 @@ test('paired simulator bootstrap passes compatible device types to simctl and ex
   ]);
   await writeFile(join(root, 'runtimes.json'), JSON.stringify({ runtimes: [runtime('iOS', '18.6'), runtime('watchOS', '11.6')].map((value, i) => ({ ...value, supportedDeviceTypes: [{ identifier: `supported-${i}` }] })) }));
   await writeFile(join(root, 'types.json'), JSON.stringify({ devicetypes: types }));
+  await writeFile(join(root, 'devices.json'), JSON.stringify({ devices: {
+    [runtime('iOS', '18.6').identifier]: [{ name: 'Whim CI iPhone', isAvailable: true,
+      udid: 'wrong-model-iphone', deviceTypeIdentifier: 'new-0' }],
+  } }));
   await executable(join(root, 'bin/xcrun'), `
 echo "$*" >> "$WHIM_SIMULATOR_FIXTURE/commands"
 case "$*" in
   'simctl list runtimes --json') cat "$WHIM_SIMULATOR_FIXTURE/runtimes.json";;
   'simctl list devicetypes --json') cat "$WHIM_SIMULATOR_FIXTURE/types.json";;
-  'simctl list devices --json') echo '{"devices":{}}';;
+  'simctl list devices --json') cat "$WHIM_SIMULATOR_FIXTURE/devices.json";;
   'simctl list pairs --json') echo '{"pairs":{}}';;
   'simctl create Whim CI iPhone supported-0 com.apple.CoreSimulator.SimRuntime.iOS-18-6') echo iphone-udid;;
   'simctl create Whim CI Watch supported-1 com.apple.CoreSimulator.SimRuntime.watchOS-11-6') echo watch-udid;;
@@ -124,6 +128,7 @@ esac
 `);
   const result = spawnSync('bash', [new URL('./boot-apple-simulators.sh', import.meta.url).pathname], { encoding: 'utf8', env: {
     ...process.env, PATH: `${root}/bin:${process.env.PATH}`, DEVELOPER_DIR: join(root, 'Xcode'), WHIM_SIMULATOR_FIXTURE: root,
+    WHIM_CI_IPHONE_DEVICE_TYPE: 'supported-0', WHIM_CI_WATCH_DEVICE_TYPE: 'supported-1',
   } });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /WHIM_IPHONE_SIMULATOR_UDID='iphone-udid'/);
@@ -140,4 +145,21 @@ test('runtime supported-device catalogue overrides a model with matching nominal
   const selected = { ...runtime('iOS', '27.0'), supportedDeviceTypes: [{ identifier: 'supported-model', productFamily: 'iPhone' }] };
   assert.equal(selectCompatibleDeviceType(types, 'iPhone', selected).identifier, 'supported-model');
   assert.throws(() => selectCompatibleDeviceType(types, 'iPhone', { ...selected, supportedDeviceTypes: [] }), /No compatible/);
+});
+
+test('the primary CI matrix keeps the configured phone and Watch instead of drifting to a new form factor', async () => {
+  const { selectCompatibleSimulators } = await import('./select-apple-runtimes.mjs');
+  const iphone = { identifier: 'com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro', productFamily: 'iPhone', minRuntimeVersion: 18 * 65536, maxRuntimeVersion: 0xFFFFFFFF };
+  const watch = { identifier: 'com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-10-46mm', productFamily: 'Apple Watch', minRuntimeVersion: 11 * 65536, maxRuntimeVersion: 0xFFFFFFFF };
+  const duo = { ...iphone, identifier: 'duo', minRuntimeVersion: 27 * 65536 };
+  const runtimes = [
+    { ...runtime('iOS', '27.1'), supportedDeviceTypes: [duo] },
+    { ...runtime('iOS', '27.0'), supportedDeviceTypes: [iphone] },
+    { ...runtime('watchOS', '27.0'), supportedDeviceTypes: [watch] },
+  ];
+  const selected = selectCompatibleSimulators(runtimes, [duo, iphone, watch]);
+  assert.equal(selected.ios.version, '27.0');
+  assert.equal(selected.iphone.identifier, iphone.identifier);
+  assert.equal(selected.watchDevice.identifier, watch.identifier);
+  assert.throws(() => selectCompatibleSimulators(runtimes, [duo, watch]), /configured iPhone/);
 });

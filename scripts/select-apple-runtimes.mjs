@@ -53,14 +53,46 @@ export function selectCompatibleDeviceType(types, family, runtime) {
   return match;
 }
 
+// Keep the primary portrait-phone CI matrix stable as Xcode adds new form factors.
+export function selectCompatibleSimulators(runtimes, types, {
+  iphoneType = 'com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro',
+  watchType = 'com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-10-46mm',
+} = {}) {
+  const iphone = types.find(type => type.identifier === iphoneType && type.productFamily === 'iPhone');
+  const watchDevice = types.find(type => type.identifier === watchType && type.productFamily === 'Apple Watch');
+  if (!iphone) throw new Error(`The configured iPhone CI device type is not installed: ${iphoneType}`);
+  if (!watchDevice) throw new Error(`The configured Watch CI device type is not installed: ${watchType}`);
+  const eligible = runtimes.filter(runtime => {
+    const type = runtime.identifier.includes('.iOS-') ? iphone
+      : runtime.identifier.includes('.watchOS-') ? watchDevice : null;
+    if (!type) return false;
+    try { selectCompatibleDeviceType([type], type.productFamily, runtime); return true; }
+    catch { return false; }
+  });
+  let selection;
+  try { selection = selectCompatibleRuntimes(eligible); }
+  catch (error) {
+    const available = runtimes.filter(runtime => runtime.isAvailable).map(runtime => runtime.identifier).join(', ');
+    throw new Error(`${error.message} Configured CI devices: ${iphoneType}, ${watchType}. Available runtimes: ${available}`, { cause: error });
+  }
+  return { ...selection, iphone, watchDevice };
+}
+
 async function main() {
   const runtimeList = JSON.parse(await readFile(process.argv[2], 'utf8'));
-  const selection = selectCompatibleRuntimes(runtimeList.runtimes ?? []);
-  const identifiers = [selection.ios.identifier, selection.watch.identifier];
+  let selection;
+  const identifiers = [];
   if (process.argv[3]) {
     const { devicetypes } = JSON.parse(await readFile(process.argv[3], 'utf8'));
-    identifiers.push(selectCompatibleDeviceType(devicetypes, 'iPhone', selection.ios).identifier,
-      selectCompatibleDeviceType(devicetypes, 'Apple Watch', selection.watch).identifier);
+    selection = selectCompatibleSimulators(runtimeList.runtimes ?? [], devicetypes, {
+      iphoneType: process.env.WHIM_CI_IPHONE_DEVICE_TYPE,
+      watchType: process.env.WHIM_CI_WATCH_DEVICE_TYPE,
+    });
+    identifiers.push(selection.ios.identifier, selection.watch.identifier,
+      selection.iphone.identifier, selection.watchDevice.identifier);
+  } else {
+    selection = selectCompatibleRuntimes(runtimeList.runtimes ?? []);
+    identifiers.push(selection.ios.identifier, selection.watch.identifier);
   }
   process.stdout.write(identifiers.join('|'));
 }
