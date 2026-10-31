@@ -201,7 +201,17 @@ import WhimCore
     public private(set) var peakPowerDBFS = -160.0
     public private(set) var recordingTone = 0.0
     public private(set) var feedback = ""
-    public private(set) var offersContextualPermissions = false
+    @ObservationIgnored private let permissionReviewDefaults: UserDefaults
+    private static let permissionReviewKey = "permissions.pageVisited.v1"
+    public private(set) var hasReviewedPermissions: Bool
+    public var offersPermissionReview: Bool {
+        guard !hasReviewedPermissions, recording == nil, let permissions = settings?.permissions else { return false }
+        return [permissions.microphone, permissions.speech, permissions.notifications].contains { $0 != .granted }
+    }
+    public func markPermissionsReviewed() {
+        hasReviewedPermissions = true
+        permissionReviewDefaults.set(true, forKey: Self.permissionReviewKey)
+    }
     public private(set) var revision = 0
     @ObservationIgnored private var observation: Task<Void, Never>?
     @ObservationIgnored private var lastSequence: UInt64 = 0
@@ -211,8 +221,10 @@ import WhimCore
     @ObservationIgnored private var refreshRequested = false
     @ObservationIgnored private var completionGeneration = 0
 
-    public init(client: any WhimClient, onboardingCompletedHint: Bool = false) {
+    public init(client: any WhimClient, onboardingCompletedHint: Bool = false, permissionReviewDefaults: UserDefaults = .standard) {
         self.client = client; self.onboardingHint = onboardingCompletedHint
+        self.permissionReviewDefaults = permissionReviewDefaults
+        self.hasReviewedPermissions = permissionReviewDefaults.bool(forKey: Self.permissionReviewKey)
     }
     deinit { observation?.cancel(); inlineTask?.cancel() }
     public func start() async {
@@ -369,11 +381,10 @@ import WhimCore
             let note = try await client.stopRecording()
             if let note {
                 notes.removeAll { $0.id == note.id }; notes.append(note); sortNotes()
-                offersContextualPermissions = true; feedback = "Note saved"
+                feedback = "Note saved"
             } else { feedback = "Short recording discarded" }
         }
     }
-    public func dismissContextualPermissions() { offersContextualPermissions = false }
     public func discardRecording() async {
         lastCaptureCommand = .discard
         await capture { try await client.discardRecording(); feedback = "Recording discarded" }
@@ -396,7 +407,7 @@ import WhimCore
         fold(event)
         switch event.type {
         case .recordingStarted:
-            completionGeneration += 1; offersContextualPermissions = false
+            completionGeneration += 1
             if previousSessionID != event.recording?.sessionID {
                 elapsedSeconds = 0; peakPowerDBFS = -160; recordingTone = 0
             }
@@ -409,11 +420,11 @@ import WhimCore
                 Task { [weak self, client] in
                     let saved = try? await client.note(id: NoteID(rawValue: uuid))
                     guard let self, generation == self.completionGeneration, saved != nil else { return }
-                    self.feedback = "Note saved"; self.offersContextualPermissions = true
+                    self.feedback = "Note saved"
                 }
             }
         case .recordingDiscarded, .notesReset:
-            completionGeneration += 1; offersContextualPermissions = false
+            completionGeneration += 1
             feedback = event.type == .notesReset ? "" : "Recording discarded"
         default: break
         }
@@ -433,6 +444,8 @@ import WhimCore
         case .notesReset:
             maintenanceTask?.cancel(); maintenanceTask = nil; maintenanceError = nil
             resetRevision += 1
+            hasReviewedPermissions = false
+            permissionReviewDefaults.removeObject(forKey: Self.permissionReviewKey)
             notes = []; recording = nil; playback = nil; isHistoryPresented = false
             startupState = StartupProjection(onboardingCompleted: false,
                 microphone: startupState?.microphone ?? .notDetermined, recording: nil)

@@ -97,6 +97,7 @@ whim_flows=(
   "$whim_root/e2e/iphone/failed-and-retry.e2e.test.yaml"
   "$whim_root/e2e/iphone/recovered-review.e2e.test.yaml"
   "$whim_root/e2e/iphone/settings-and-reset.e2e.test.yaml"
+  "$whim_root/e2e/iphone/permission-review.e2e.test.yaml"
   "$whim_root/e2e/iphone/retention.e2e.test.yaml"
   "$whim_root/e2e/iphone/watch-synchronization.e2e.test.yaml"
   "$whim_root/e2e/iphone/interrupted-watch-transfer.e2e.test.yaml"

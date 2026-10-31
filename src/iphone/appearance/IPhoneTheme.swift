@@ -7,10 +7,45 @@ struct WhimButtonStyle: ButtonStyle {
             .background(Color(uiColor: .secondarySystemBackground)).clipShape(RoundedRectangle(cornerRadius: 14)).opacity(configuration.isPressed ? 0.65 : 1)
     }
 }
+enum WhimSpacing {
+    static let page: CGFloat = 20
+    static let section: CGFloat = 24
+    static let group: CGFloat = 16
+    static let field: CGFloat = 8
+}
+
+struct WhimLabeledValue<Label: View, Value: View>: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ViewBuilder var label: Label
+    @ViewBuilder var value: Value
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: WhimSpacing.field) {
+                label
+                value
+            }
+        } else {
+            HStack {
+                label
+                Spacer()
+                value
+            }
+        }
+    }
+}
+
 struct WhimContent<Content: View>: View {
+    var spacing: CGFloat = WhimSpacing.section
     @ViewBuilder var content: Content
     var body: some View {
-        ScrollView { VStack(alignment: .leading, spacing: 20) { content }.frame(maxWidth: .infinity, alignment: .leading).padding(24).padding(.bottom, 86) }
+        ScrollView {
+            VStack(alignment: .leading, spacing: spacing) { content }
+                .frame(maxWidth: 600, alignment: .leading)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, WhimSpacing.page)
+                .padding(.top, WhimSpacing.group)
+                .padding(.bottom, WhimSpacing.section)
+        }
             .scrollDismissesKeyboard(.interactively).background(Color(uiColor: .systemBackground))
     }
 }

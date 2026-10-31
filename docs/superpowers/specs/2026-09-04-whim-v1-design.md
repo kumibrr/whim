@@ -277,7 +277,7 @@ Onboarding:
 2. Offer webhook configuration and test, with Skip available.
 3. Request microphone permission.
 
-Speech and notification permissions are requested contextually after the first recording. Denied permissions are not repeatedly requested; Settings provides the relevant system-settings route.
+Speech and notification permissions are optional and managed from the Permissions page in Settings. When any permission is missing and the user has never visited that page, the idle iPhone capture screen shows one Liquid Glass “Review permissions” button below explanatory text beneath Settings, leaving the logo visible. The reminder area scrolls at large text sizes to keep the logo unobstructed. Opening the page through any route records the visit locally and removes the reminder across launches, even if no permission is granted. Resetting Whim clears that visit. Denied permissions are not repeatedly requested; Settings provides the relevant system-settings route.
 
 The iPhone uses a sober black appearance with white accents and native typography, native Liquid Glass where available, and a translucent material fallback on iOS 18. Watch appearance remains unchanged apart from sharing the iPhone's logo waveform on its capture screen. Every status includes text or symbols rather than relying on color. VoiceOver, Dynamic Type, sufficient contrast, haptic plus visible feedback, logical focus order, and Reduce Motion support are v1 requirements.
 

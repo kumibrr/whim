@@ -121,13 +121,13 @@ struct OnboardingFrame<Content: View, Actions: View>: View {
             GeometryReader { geometry in
                 ScrollView {
                     content.frame(maxWidth: 480, alignment: .leading)
-                        .padding(.horizontal, 28).padding(.vertical, 24)
+                        .padding(.horizontal, WhimSpacing.page).padding(.vertical, 24)
                         .frame(maxWidth: .infinity)
                         .frame(minHeight: geometry.size.height, alignment: step == 1 ? .top : .center)
                 }.scrollDismissesKeyboard(.interactively)
             }
             VStack(spacing: 12) { actions }
-                .frame(maxWidth: 480).padding(.horizontal, 28)
+                .frame(maxWidth: 480).padding(.horizontal, WhimSpacing.page)
                 .padding(.top, 20).padding(.bottom, 16)
                 .frame(maxWidth: .infinity).background(.black)
                 .fixedSize(horizontal: false, vertical: true)
@@ -158,7 +158,7 @@ struct OnboardingFrame<Content: View, Actions: View>: View {
                     Capsule().fill(.white.opacity(index <= step ? 0.85 : 0.15)).frame(height: 2)
                 }
             }.accessibilityHidden(true)
-        }.padding(.horizontal, 28).padding(.top, 12).padding(.bottom, 8)
+        }.padding(.horizontal, WhimSpacing.page).padding(.top, 12).padding(.bottom, 8)
             .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 }
@@ -240,7 +240,7 @@ private struct OnboardingPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.labelStyle(.titleOnly).font(.body.weight(.semibold)).multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, minHeight: 56).padding(.horizontal, 20).padding(.vertical, 4)
+            .frame(maxWidth: .infinity, minHeight: 56).padding(.horizontal, WhimSpacing.page).padding(.vertical, 4)
             .foregroundStyle(.black).background(.white, in: Capsule())
             .opacity(!isEnabled ? 0.45 : configuration.isPressed ? 0.75 : 1)
     }

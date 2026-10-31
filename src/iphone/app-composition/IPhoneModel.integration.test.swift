@@ -566,18 +566,41 @@ import WhimCore
         XCTAssertEqual(model.settings?.permissions.microphone, .granted)
         XCTAssertNil(model.error)
     }
-    func testOptionalPermissionPromptCanBeDeferred() async throws {
+    func testPermissionReviewIsOfferedOnlyUntilThePermissionsPageHasBeenVisited() async throws {
         let harness = try WhimFacadeHarness()
         defer { harness.remove() }
-        let model = IPhoneModel(client: harness.makeService(permissions: GrantedPermissions()))
+        let suite = "permission-review-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let client = harness.makeService(permissions: MutablePermissions())
+        let model = IPhoneModel(client: client, permissionReviewDefaults: defaults)
         await model.start()
         defer { model.stop() }
-        await model.startRecording()
-        await model.stopRecording()
-        for _ in 0..<100 where !model.offersContextualPermissions { try await Task.sleep(for: .milliseconds(5)) }
-        XCTAssertTrue(model.offersContextualPermissions)
-        model.dismissContextualPermissions()
-        XCTAssertFalse(model.offersContextualPermissions)
+        XCTAssertTrue(model.offersPermissionReview, "Missing permissions should offer a single review entry point")
+        model.markPermissionsReviewed()
+        XCTAssertFalse(model.offersPermissionReview, "Visiting the page is enough; granting permission is optional")
+        let relaunched = IPhoneModel(client: client, permissionReviewDefaults: defaults)
+        await relaunched.start()
+        defer { relaunched.stop() }
+        XCTAssertFalse(relaunched.offersPermissionReview, "The visit must survive app relaunch")
+        try await client.reset()
+        for _ in 0..<100 where !model.offersPermissionReview { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertTrue(model.offersPermissionReview, "Reset restores permission-review guidance")
+    }
+    func testPermissionReviewIsHiddenWhenAllPermissionsAreGranted() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let suite = "permission-review-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let permissions = MutablePermissions()
+        let model = IPhoneModel(client: harness.makeService(permissions: permissions), permissionReviewDefaults: defaults)
+        await model.start()
+        defer { model.stop() }
+        XCTAssertTrue(model.offersPermissionReview)
+        await permissions.grant()
+        await model.refresh()
+        XCTAssertFalse(model.offersPermissionReview)
     }
     func testDeniedPermissionShowsSanitizedError() async throws {
         let harness = try WhimFacadeHarness()
