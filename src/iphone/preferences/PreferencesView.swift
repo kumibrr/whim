@@ -37,7 +37,7 @@ struct PreferencesView: View {
     var body: some View {
         List {
             Section {
-                ForEach(SettingsSection.allCases, id: \.self) { section in
+                ForEach(SettingsSection.allCases.filter { $0 != .webhookErrors }, id: \.self) { section in
                     NavigationLink(value: IPhoneRoute.settingsSection(section)) {
                         WhimLabeledValue {
                             Label(section.title, systemImage: section.symbol)
@@ -140,8 +140,7 @@ struct SettingsSectionView: View {
                 Text("No webhook errors.").foregroundStyle(.secondary)
             }
             ForEach(errorLog.entries) { entry in webhookError(entry) }
-            footnote("Messages your webhook returned for failed Attempts, with secrets redacted. Entries are removed with their Note.")
-            sectionShortcut(.webhook, label: "Webhook settings")
+            footnote("Failed deliveries and configuration tests, with secrets redacted. Delivery entries are removed with their Note; test entries are cleared by Reset Whim.")
         case .audio:
             WhimLabeledValue {
                 Text("Keep audio after delivery")
@@ -196,10 +195,16 @@ struct SettingsSectionView: View {
             Text(entry.message).font(.callout.monospaced()).textSelection(.enabled)
                 .accessibilityIdentifier("webhook-error-message")
             Text(destinationLabel(entry.destination)).font(.footnote).foregroundStyle(.secondary)
+            if entry.noteID == nil { Text(entry.noteTitle).font(.footnote) }
             if let noteID = entry.noteID {
                 NavigationLink(value: IPhoneRoute.note(noteID)) {
                     Label(entry.noteTitle, systemImage: "waveform").font(.footnote).lineLimit(1)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .whimGlass(in: Capsule())
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Open Note \(entry.noteTitle)")
             }
         }

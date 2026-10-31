@@ -192,7 +192,7 @@ final class WebhookIntegrationTests: XCTestCase {
             _ = try await URLSessionHTTPTransport(requestTimeout: 1, resourceTimeout: 2).send(request)
             XCTFail("Expected normal TLS validation to reject the self-signed certificate")
         } catch let error as HTTPTransportError {
-            XCTAssertEqual(error, .network)
+            XCTAssertTrue(error.description.contains("TLS certificate validation failed"))
         }
     }
 

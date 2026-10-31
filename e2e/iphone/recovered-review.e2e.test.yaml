@@ -35,7 +35,7 @@ appId: app.whim.ios
 - assertVisible:
     id: note-detail
 - assertVisible: '⚠ Review required'
-- assertVisible: No Attempts yet.
+- assertNotVisible: No Attempts yet.
 - assertTrue:
     condition: ${json(http.get(WHIM_WEBHOOK_TEST_URL.replace('/receive', '/state')).body).received.length === 0}
     label: Recovery does not deliver the Note to the configured destination

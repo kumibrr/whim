@@ -3,6 +3,20 @@ import XCTest
 @testable import WhimCore
 
 final class ConfigurationTestServiceTests: XCTestCase {
+    func testDNSFailureReturnsActionableDetails() async throws {
+        let revision = ConfigurationRevisionID()
+        let credentials = ConfigurationCredentialFake(revision: revision,
+            credentials: .init(endpoint: URL(string: "https://example.invalid")!, bearerToken: nil, hmacSecret: nil, customHeaders: []))
+        let fixture = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try Data("audio".utf8).write(to: fixture)
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let service = ConfigurationTestService(credentials: credentials, transport: DNSFailureTransport(),
+            fixtureAudioURL: fixture, appVersion: "1", appBuild: "1")
+        let result = try await service.send(revisionID: revision)
+        XCTAssertFalse(result.passed)
+        XCTAssertTrue(result.failureMessage?.contains("DNS lookup failed") == true)
+    }
+
     func testMissingFixtureDoesNotFailConstruction() async throws {
         let revision = ConfigurationRevisionID()
         let credentials = ConfigurationCredentialFake(revision: revision,
@@ -78,3 +92,7 @@ private actor ConfigurationCredentialFake: CredentialStore {
 
 private enum FixtureFailure: Error { case missing }
 private func missingFixture() throws -> URL { throw FixtureFailure.missing }
+
+private struct DNSFailureTransport: HTTPTransport {
+    func send(_ request: WebhookRequest) async throws -> HTTPResponse { throw URLError(.cannotFindHost) }
+}

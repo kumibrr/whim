@@ -50,9 +50,19 @@ appId: app.whim.ios
     above:
       id: note-play-.*
 - assertVisible:
-    text: Delivery details
+    text: Configure webhook
     below:
       id: note-play-.*
+- assertNotVisible: Delivery details
+- assertNotVisible: No Attempts yet.
+- assertNotVisible: Retry
+- tapOn: Configure webhook
+- assertVisible:
+    id: settings-section-webhook
+- tapOn:
+    id: BackButton
+- assertVisible:
+    id: note-detail
 - tapOn:
     id: note-play-.*
 - assertVisible:

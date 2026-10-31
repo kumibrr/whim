@@ -12,6 +12,18 @@ appId: app.whim.ios
 - extendedWaitUntil:
     visible: Webhook saved. Test it to check delivery.
     timeout: 10000
+# Configuration-test failures are visible without creating a Note.
+- tapOn: Test webhook
+- extendedWaitUntil:
+    visible: 'Test failed.*HTTP 400.*View webhook errors.*'
+    timeout: 15000
+- tapOn: View webhook errors
+- assertVisible: Configuration test
+- assertVisible: '⚠ HTTP 400'
+- assertVisible:
+    id: webhook-error-message
+- tapOn:
+    id: BackButton
 - tapOn:
     id: BackButton
 - tapOn:
@@ -37,17 +49,15 @@ appId: app.whim.ios
 - tapOn: Close history
 - tapOn: Settings
 - tapOn:
-    id: settings-webhook-errors
+    id: settings-webhook
+- tapOn: View webhook errors
 - assertVisible: '⚠ HTTP 400'
 - assertVisible:
     id: webhook-error-message
     text: '.*note_id.*'
-- scrollUntilVisible:
-    element:
-      id: shortcut-webhook
-    direction: DOWN
+- assertNotVisible: Webhook settings
 - tapOn:
-    id: shortcut-webhook
+    id: BackButton
 - tapOn:
     id: webhook-url
 - inputText: https://whim-fixture.invalid/receive

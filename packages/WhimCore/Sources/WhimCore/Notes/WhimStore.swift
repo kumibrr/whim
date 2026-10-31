@@ -6,6 +6,8 @@ public enum LeaseKind: String, Codable, Sendable {
 }
 
 public protocol WhimStore: Sendable {
+    func saveConfigurationTestError(_ error: WebhookErrorProjection) async throws
+    func configurationTestErrors() async throws -> [WebhookErrorProjection]
     /// Persist intentional expiry before unlinking audio; never expires an unsent Note.
     func markAudioExpired(noteID: NoteID, at date: Date) async throws -> Bool
     func latestConfigurationRevision() async throws -> ConfigurationRevision?
@@ -45,6 +47,8 @@ public protocol WhimStore: Sendable {
 }
 
 public extension WhimStore {
+    func saveConfigurationTestError(_ error: WebhookErrorProjection) async throws { throw WhimStoreError.unsupportedOperation }
+    func configurationTestErrors() async throws -> [WebhookErrorProjection] { [] }
     func savePendingPeerNote(_ recording: FinalizedRecording) async throws -> Note { throw WhimStoreError.unsupportedOperation }
     func setAudioSynchronization(_ value: AudioSynchronization?, noteID: NoteID) async throws { throw WhimStoreError.unsupportedOperation }
     func replaceAudioSynchronization(_ expected: AudioSynchronization, with value: AudioSynchronization, noteID: NoteID) async throws -> Bool { throw WhimStoreError.unsupportedOperation }

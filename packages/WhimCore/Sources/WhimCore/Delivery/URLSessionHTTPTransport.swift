@@ -108,7 +108,7 @@ private final class BoundedUploadDelegate: NSObject, URLSessionDataDelegate, @un
             uploadTask = nil
             // Join URLSession completion before the caller can remove its upload file.
             if cancelled { return (continuation, .failure(CancellationError())) }
-            if error != nil { return (continuation, .failure(HTTPTransportError.network)) }
+            if let error { return (continuation, .failure(HTTPTransportError.url((error as NSError).code))) }
             guard let response else { return (continuation, .failure(HTTPTransportError.invalidResponse)) }
             let headers = response.allHeaderFields.reduce(into: [String: String]()) { result, entry in
                 if let key = entry.key as? String { result[key] = String(describing: entry.value) }

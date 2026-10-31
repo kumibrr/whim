@@ -3,6 +3,49 @@ import WhimCore
 @testable import WhimIPhone
 
 @MainActor final class WebhookEditorIntegrationTests: XCTestCase {
+    func testEmptyBearerBlurPreservesButSubmitClearsAndNonemptySubmitReplaces() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let client = harness.makeService()
+        _ = try await client.updateWebhook(.init(endpoint: "https://example.com/receive", bearerToken: "original", hmacSecret: "keep-hmac"))
+        let editor = WebhookEditor(client: client)
+        await editor.saveIfNeeded()
+        let afterBlur = try await client.settings()
+        XCTAssertEqual(afterBlur.webhook?.hasBearerToken, true)
+        await editor.submitBearerToken()
+        let afterEmptySubmit = try await client.settings()
+        XCTAssertEqual(afterEmptySubmit.webhook?.hasBearerToken, false)
+        XCTAssertEqual(afterEmptySubmit.webhook?.hasHMACSecret, true)
+        editor.bearer = .init(action: .replace, value: "replacement")
+        await editor.submitBearerToken()
+        let latest = try await harness.store.latestConfigurationRevision()
+        let revision = try XCTUnwrap(latest)
+        let stored = await harness.credentials.credentials(for: revision.id)
+        XCTAssertEqual(stored?.bearerToken, "replacement")
+        XCTAssertFalse(editor.isDirty)
+    }
+
+    func testTestingStateEndsAfterSuccessFailureAndCancellation() async throws {
+        for outcome in [200, 500, 0] {
+            let harness = try WhimFacadeHarness(responses: [HTTPResponse(statusCode: outcome)])
+            defer { harness.remove() }
+            try Data("fixture".utf8).write(to: harness.root.appendingPathComponent("test.m4a"))
+            let editor = WebhookEditor(client: harness.makeService())
+            editor.endpoint = "https://example.com/receive"
+            await editor.save()
+            XCTAssertFalse(editor.isTesting)
+            await harness.transport.suspendResponses()
+            let pending = Task { await editor.test() }
+            await harness.transport.waitForRequestCount(1)
+            XCTAssertTrue(editor.isTesting)
+            if outcome == 0 { pending.cancel() }
+            await harness.transport.resumeResponses()
+            await pending.value
+            XCTAssertFalse(editor.isTesting)
+            XCTAssertFalse(editor.isPending)
+        }
+    }
+
     func testSavingKeepsEndpointEditableWithoutPendingChanges() async throws {
         let harness = try WhimFacadeHarness()
         defer { harness.remove() }

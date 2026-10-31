@@ -28,11 +28,23 @@ struct WebhookConfigurationView: View {
             }
             actionLayout {
                 if !compact { addHeaderButton }
-                Button("Test webhook", systemImage: "paperplane") {
+                Button {
                     focused = nil
                     Task { await editor.test(saveChanges: compact); await model.refresh() }
+                } label: {
+                    Label {
+                        Text("Test webhook")
+                    } icon: {
+                        if editor.isTesting {
+                            ProgressView().controlSize(.small)
+                                .accessibilityLabel("Testing webhook")
+                                .accessibilityIdentifier("webhook-test-progress")
+                        } else {
+                            Image(systemName: "paperplane")
+                        }
+                    }
                 }
-                    .whimGlassButton().disabled(!compact && editor.isDirty)
+                    .whimGlassButton().disabled(editor.isTesting || (!compact && editor.isDirty))
             }
             if compact { Text("Changes save automatically when you leave a field.").font(.footnote).foregroundStyle(.secondary) }
             else if editor.isDirty { Text("Save changes before testing.").font(.footnote).foregroundStyle(.secondary) }
@@ -108,7 +120,15 @@ struct WebhookConfigurationView: View {
         field(label + (exists && value.wrappedValue.action == .preserve ? " · Saved ••••" : "")) {
             SecureField(exists ? "Leave blank to preserve" : "Optional", text: Binding(get: { value.wrappedValue.action == .replace ? value.wrappedValue.value ?? "" : "" }, set: { value.wrappedValue = .init(action: $0.isEmpty ? .preserve : .replace, value: $0.isEmpty ? nil : $0) }))
                 .textInputAutocapitalization(.never).autocorrectionDisabled().focused($focused, equals: focus).whimInput(label).accessibilityIdentifier(id)
-            if exists { Button("Clear \(label.lowercased())") { value.wrappedValue = .init(action: .clear); saveOnBlur() }.whimGlassButton() }
+                .onSubmit {
+                    guard focus == .bearer else { return }
+                    Task {
+                        await editor.submitBearerToken()
+                        focused = nil
+                        await model.refresh()
+                    }
+                }
+            if exists && focus != .bearer { Button("Clear \(label.lowercased())") { value.wrappedValue = .init(action: .clear); saveOnBlur() }.whimGlassButton() }
             if value.wrappedValue.action == .clear { Text("Will be removed when saved.").font(.footnote).foregroundStyle(.secondary) }
         }
     }

@@ -205,6 +205,14 @@ public struct WebhookErrorProjection: Codable, Equatable, Sendable {
     /// The sanitized, capped response excerpt; nil when no response body was received.
     public let message: String?
 
+    public init(testID: String, failedAt: Date, destination: SanitizedEndpoint,
+                statusCode: Int?, message: String) {
+        attemptID = testID; noteID = ""; noteTitle = "Configuration test"
+        device = .iphone; self.failedAt = failedAt; self.destination = .init(destination)
+        failureReason = statusCode == nil ? "network" : "http_status"
+        responseStatusCode = statusCode; self.message = message
+    }
+
     public init(note: Note, failure: AttemptFailure) {
         attemptID = failure.attempt.id.rawValue.uuidString.lowercased()
         noteID = note.id.rawValue.uuidString.lowercased(); noteTitle = note.title

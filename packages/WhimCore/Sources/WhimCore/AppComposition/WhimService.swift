@@ -362,7 +362,7 @@ public actor WhimService: WhimClient {
 
     public func webhookErrors() async throws -> [WebhookErrorProjection] {
         _ = try await prepareCapture()
-        var errors: [WebhookErrorProjection] = []
+        var errors = try await store.configurationTestErrors()
         for summary in try await store.listNotes(filter: .all) {
             guard let note = try await store.note(id: summary.id) else { continue }
             errors += note.delivery.failedAttempts.map { WebhookErrorProjection(note: note, failure: $0) }
@@ -477,7 +477,13 @@ public actor WhimService: WhimClient {
         guard let revision = try await store.latestConfigurationRevision() else {
             throw ConfigurationTestError.missingConfiguration
         }
-        return try await configurationTest.send(revisionID: revision.id)
+        let result = try await configurationTest.send(revisionID: revision.id)
+        if !result.passed {
+            try await store.saveConfigurationTestError(.init(testID: UUID().uuidString.lowercased(),
+                failedAt: clock.now, destination: revision.endpoint, statusCode: result.statusCode,
+                message: result.failureMessage ?? "Test failed. Check the webhook configuration."))
+        }
+        return result
     }
 
     public func updatePreferences(_ input: PreferenceInput) async throws {
