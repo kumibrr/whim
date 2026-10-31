@@ -37,14 +37,15 @@ struct WebhookConfigurationView: View {
                     } icon: {
                         if editor.isTesting {
                             ProgressView().controlSize(.small)
-                                .accessibilityLabel("Testing webhook")
-                                .accessibilityIdentifier("webhook-test-progress")
+                                .accessibilityHidden(true)
                         } else {
                             Image(systemName: "paperplane")
                         }
                     }
                 }
                     .whimGlassButton().disabled(editor.isTesting || (!compact && editor.isDirty))
+                    .accessibilityIdentifier("webhook-test")
+                    .accessibilityLabel(editor.isTesting ? "Testing webhook" : "Test webhook")
             }
             if compact { Text("Changes save automatically when you leave a field.").font(.footnote).foregroundStyle(.secondary) }
             else if editor.isDirty { Text("Save changes before testing.").font(.footnote).foregroundStyle(.secondary) }
