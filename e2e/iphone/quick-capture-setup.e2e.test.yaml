@@ -1,0 +1,55 @@
+appId: app.whim.ios
+---
+- runFlow: flows/clean-launch.yaml
+# Completing the setup once must not prompt again on a later launch.
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: whim-home
+    timeout: 60000
+- assertNotVisible:
+    id: onboarding
+- tapOn:
+    id: settings-button
+- scrollUntilVisible:
+    element: Set up action button
+    direction: DOWN
+- tapOn: Set up action button
+- assertNotVisible: My iPhone has an Action button
+- assertNotVisible: Start using Whim
+- assertNotVisible: Set up your Apple Watch
+- assertVisible:
+    id: setup-demo-video
+- assertVisible: A button for your thoughts
+- assertNotVisible: Pause setup demo
+- extendedWaitUntil:
+    visible: Play again
+    timeout: 15000
+- tapOn: Play again
+- assertNotVisible: Play again
+- extendedWaitUntil:
+    visible: Play again
+    timeout: 15000
+- assertVisible:
+    id: setup-demo-video
+- assertVisible: 1 of 2
+- tapOn: Show me how
+- assertVisible: Set up your Action button
+- assertVisible: 2 of 2
+- assertVisible:
+    id: setup-demo-video
+- assertVisible: 'Open Settings → Action Button → Controls → Choose a Control.*'
+- assertNotVisible: Next step
+- assertNotVisible: whim shortcuts
+- assertNotVisible: Previous
+- assertNotVisible: Read again
+- tapOn:
+    id: BackButton
+- tapOn: Apple Watch
+- assertVisible:
+    id: watch-capture-setup
+- assertVisible: A Note from your wrist
+- assertNotVisible:
+    id: quick-capture-setup

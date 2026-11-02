@@ -17,11 +17,15 @@ appId: app.whim.ios
     visible: Get started
     timeout: 60000
 - tapOn: Get started
+- assertNotVisible: Skip webhook setup
 - scrollUntilVisible:
-    element: Skip webhook setup
+    element: Continue to microphone
     direction: DOWN
     centerElement: false
-- tapOn: Skip webhook setup
+- tapOn: Continue to microphone
+- extendedWaitUntil:
+    visible: Always ready to record
+    timeout: 60000
 - runFlow:
     when:
       visible: Continue
@@ -37,12 +41,22 @@ appId: app.whim.ios
             visible: OK
           commands:
             - tapOn: OK
-# Granting permission also completes onboarding; pre-granted launches need this button.
+# Advance to optional quick capture setup after microphone permission.
 - runFlow:
     when:
-      visible: Start using Whim
+      visible: Continue to setup
     commands:
-      - tapOn: Start using Whim
+      - tapOn: Continue to setup
+- assertVisible:
+    id: quick-capture-setup
+- assertNotVisible: Start using Whim
+- tapOn: Show me how
+- assertVisible: Set up your Action button
+- assertNotVisible: Previous
+- assertNotVisible: Read again
+- assertNotVisible: Skip for now
+- tapOn: Continue
+- runFlow: skip-watch-setup.yaml
 - extendedWaitUntil:
     visible:
       id: whim-home

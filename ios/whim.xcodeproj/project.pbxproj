@@ -82,6 +82,8 @@
 		FC52C8ACD718595E4728E3CC /* RecordWhimIntent.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69BBF5923F869E7D35DD19DE /* RecordWhimIntent.test.swift */; };
 		FD9CB3518EB97FFF3449648B /* WatchRecentNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD2493D9C58BA3F4C76E95EA /* WatchRecentNotesView.swift */; };
 		E62EECE2D989C69ECFAEA70E /* IPhoneTheme.integration.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23EF097CE0133C19A384FF00 /* IPhoneTheme.integration.test.swift */; };
+		10943B85C7485DEEA992F9E0 /* action-button-setup.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 82548CB6C3A19D52242C1C32 /* action-button-setup.mp4 */; };
+		15D8C5F63070F0E1C93C9D4C /* action-button-preview.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 38A5E79713356B53419A876B /* action-button-preview.mp4 */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -225,6 +227,8 @@
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		EEC421C66148951ED2AA1210 /* WebhookStatusView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WebhookStatusView.swift; path = "../src/watch/webhook-status/WebhookStatusView.swift"; sourceTree = "<group>"; };
 		23EF097CE0133C19A384FF00 /* IPhoneTheme.integration.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = IPhoneTheme.integration.test.swift; path = ../src/iphone/appearance/IPhoneTheme.integration.test.swift; sourceTree = "<group>"; };
+		38A5E79713356B53419A876B /* action-button-preview.mp4 */ = {isa = PBXFileReference; includeInIndex = 1; name = "action-button-preview.mp4"; path = "../assets/onboarding/action-button-preview.mp4"; sourceTree = "<group>"; };
+		82548CB6C3A19D52242C1C32 /* action-button-setup.mp4 */ = {isa = PBXFileReference; includeInIndex = 1; name = "action-button-setup.mp4"; path = "../assets/onboarding/action-button-setup.mp4"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -296,6 +300,8 @@
 			isa = PBXGroup;
 			children = (
 				BB2F792B24A3F905000567C9 /* Supporting */,
+				38A5E79713356B53419A876B /* action-button-preview.mp4 */,
+				82548CB6C3A19D52242C1C32 /* action-button-setup.mp4 */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				585A2FAB306064BE009CB6FA /* Whim.icon */,
@@ -661,6 +667,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				5E1A0C2B7D3F4A6B8C9D0E15 /* WidgetAssets.xcassets in Resources */,
+				15D8C5F63070F0E1C93C9D4C /* action-button-preview.mp4 in Resources */,
+				10943B85C7485DEEA992F9E0 /* action-button-setup.mp4 in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				585A2FB0306065A9009CB6FA /* Whim.icon in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,

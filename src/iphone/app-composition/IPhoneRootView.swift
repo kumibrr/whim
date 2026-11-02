@@ -4,6 +4,7 @@ import WhimIPhone
 
 enum IPhoneRoute: Hashable { case settings, settingsSection(SettingsSection), note(NoteID) }
 struct IPhoneRootView: View {
+    @AppStorage("onboarding.quickCapture.v1.acknowledged", store: UserDefaults(suiteName: WhimProductionComposition.appGroupIdentifier)) private var setupAcknowledged = false
     @Bindable var model: IPhoneModel
     var pendingLink: PendingIPhoneLink?
     @Environment(\.scenePhase) private var phase
@@ -13,8 +14,10 @@ struct IPhoneRootView: View {
     var body: some View {
         NavigationStack(path: $path) {
             Group {
-                if model.onboardingCompleted { home }
-                else { OnboardingView(model: model, settings: model.settings) }
+                if QuickCaptureGuide.needsUpgradeGuide(onboardingCompleted: model.onboardingCompleted, acknowledged: setupAcknowledged), model.recording == nil {
+                    OnboardingView(model: model, settings: model.settings, setupOnly: true, setupAcknowledged: $setupAcknowledged)
+                } else if model.onboardingCompleted { home }
+                else { OnboardingView(model: model, settings: model.settings, setupAcknowledged: $setupAcknowledged) }
             }
             // The stack's root does not inherit insets applied outside NavigationStack.
             .modifier(IPhoneFailurePresentation(model: model,

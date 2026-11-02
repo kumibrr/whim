@@ -3,9 +3,10 @@ import WhimCore
 import WhimIPhone
 
 enum SettingsSection: String, CaseIterable, Hashable {
-    case webhook, webhookErrors = "webhook-errors", audio, titles, permissions, watch
+    case webhook, webhookErrors = "webhook-errors", audio, titles, permissions, watch, quickCapture = "quick-capture"
     var title: String {
         switch self {
+        case .quickCapture: "Set up action button"
         case .webhook: "Webhook"
         case .webhookErrors: "Webhook errors"
         case .audio: "Audio retention"
@@ -16,6 +17,7 @@ enum SettingsSection: String, CaseIterable, Hashable {
     }
     var symbol: String {
         switch self {
+        case .quickCapture: "button.vertical.left.press"
         case .webhook: "link"
         case .webhookErrors: "exclamationmark.triangle"
         case .audio: "waveform"
@@ -84,7 +86,7 @@ struct PreferencesView: View {
         case .webhook: settings.webhook.map { destinationLabel($0.destination) } ?? "Not configured"
         case .audio: retentionChoices.first { $0.0 == settings.preferences.retentionPolicy }?.1 ?? ""
         case .titles: settings.preferences.transcriptionEnabled ? "On" : "Off"
-        case .webhookErrors, .permissions: ""
+        case .webhookErrors, .permissions, .quickCapture: ""
         case .watch: settings.watch.availability.capitalized
         }
     }
@@ -132,6 +134,8 @@ struct SettingsSectionView: View {
     }
     @ViewBuilder private var content: some View {
         switch section {
+        case .quickCapture:
+            QuickCaptureSetupView()
         case .webhook:
             WebhookConfigurationView(model: model, editor: editor.webhook, configuration: settings.webhook)
             sectionShortcut(.webhookErrors, label: "View webhook errors")
@@ -167,6 +171,8 @@ struct SettingsSectionView: View {
             footnote("Choose whether notification previews show Note titles on the Lock Screen in system Settings → Notifications → Whim → Show Previews.")
             Button("Notification preview settings", systemImage: "bell.badge") { systemSettings() }.whimGlassButton()
         case .watch:
+            QuickCaptureSetupView(isWatch: true)
+            Divider()
             Text("Watch synchronization \(settings.watch.availability).")
             footnote("Last synchronized: \(settings.watch.lastSynchronizedAt.map(TimelineFormat.date) ?? "Not yet synchronized")")
             if settings.watch.resetState == "pending" {

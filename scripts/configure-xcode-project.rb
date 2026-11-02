@@ -253,6 +253,14 @@ project.targets.select { |target| %w[whim WhimWatch WhimLiveActivity WhimComplic
   end
 end
 
+# Bundle only the current Action Button walkthrough clips.
+%w[action-button-preview action-button-setup].each do |name|
+  reference = file_reference(app_group, "../assets/onboarding/#{name}.mp4")
+  unless app_target.resources_build_phase.files_references.include?(reference)
+    app_target.resources_build_phase.add_file_reference(reference)
+  end
+end
+
 # Onboarding and widget surfaces share the compact Whim artwork.
 widget_assets = file_reference(widget_group, '../src/widgets/app-composition/WidgetAssets.xcassets')
 project.targets.select { |target| %w[whim WhimLiveActivity WhimComplication WhimSystemSurfaceTests].include?(target.name) }.each do |target|
