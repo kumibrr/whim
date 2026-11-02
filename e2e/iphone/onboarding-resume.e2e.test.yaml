@@ -13,8 +13,8 @@ appId: app.whim.ios
     visible: Get started
     timeout: 60000
 - tapOn: Get started
-- tapOn: Skip webhook setup
-- assertVisible: Step 3 of [45]
+- tapOn: Continue to microphone
+- assertVisible: Step 3 of 4
 - tapOn: Open system settings
 # Permission changes can terminate Whim. Grant access and cold-launch without clearing data.
 - stopApp: app.whim.ios
@@ -24,10 +24,10 @@ appId: app.whim.ios
 - extendedWaitUntil:
     visible: Continue to setup
     timeout: 60000
-- assertVisible: Step 3 of [45]
+- assertVisible: Step 3 of 4
 - assertVisible: Always ready to record
 - tapOn: Continue to setup
-- assertVisible: Step 4 of [45]
+- assertVisible: Step 4 of 4
 - stopApp: app.whim.ios
 - launchApp
 - assertVisible:
@@ -46,4 +46,4 @@ appId: app.whim.ios
 - tapOn: Reset Whim
 - tapOn: Confirm reset
 - assertVisible: Get started
-- assertVisible: Step 1 of [45]
+- assertVisible: Step 1 of 4

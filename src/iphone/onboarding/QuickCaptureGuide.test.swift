@@ -18,8 +18,14 @@ final class QuickCaptureGuideTests: XCTestCase {
         XCTAssertFalse(QuickCaptureGuide.needsUpgradeGuide(onboardingCompleted: true, acknowledged: true))
     }
 
-    func testSkippingPhoneSetupAdvancesToWatchOnlyWhenPaired() {
-        XCTAssertEqual(QuickCaptureGuide.nextSetupStep(after: 3, hasPairedWatch: true), 4)
+    func testSavedWatchStepResumesAtPhoneSetupWhileWatchOnboardingIsHidden() {
+        XCTAssertEqual(QuickCaptureGuide.onboardingStep(saved: 4, setupOnly: false), 3)
+        XCTAssertEqual(QuickCaptureGuide.onboardingStep(saved: 4, setupOnly: true), 3)
+        XCTAssertEqual(QuickCaptureGuide.onboardingStep(saved: 1, setupOnly: false), 1)
+    }
+
+    func testPhoneSetupCompletesEvenWhenWatchIsPaired() {
+        XCTAssertNil(QuickCaptureGuide.nextSetupStep(after: 3, hasPairedWatch: true))
         XCTAssertNil(QuickCaptureGuide.nextSetupStep(after: 3, hasPairedWatch: false))
         XCTAssertNil(QuickCaptureGuide.nextSetupStep(after: 4, hasPairedWatch: true))
     }

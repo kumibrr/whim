@@ -13,9 +13,13 @@ public enum QuickCaptureGuide {
         onboardingCompleted && !acknowledged
     }
 
-    /// Nil means onboarding is complete; Watch setup is its own optional step.
+    public static func onboardingStep(saved: Int, setupOnly: Bool) -> Int {
+        setupOnly ? 3 : min(3, max(0, saved))
+    }
+
+    /// Watch onboarding is deferred until its demonstration video is ready.
     public static func nextSetupStep(after step: Int, hasPairedWatch: Bool) -> Int? {
-        step == 3 && hasPairedWatch ? 4 : nil
+        nil
     }
     public enum Route: String, Sendable { case actionButton, lockScreen }
     public static func route(for model: String) -> Route {

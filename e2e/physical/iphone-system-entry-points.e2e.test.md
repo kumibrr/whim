@@ -91,8 +91,8 @@ Expected: Smart Stack Stop addresses the iPhone Recording Session. The complicat
 
 Upgrade an installation whose original onboarding is complete, without deleting its data.
 Launch Whim: phone setup appears directly, without welcome, webhook, or microphone steps.
-Skip phone setup: a paired Apple Watch gets its own step; otherwise return to home.
-Close and reopen during Watch setup: resume that step. Skip it and relaunch: home appears
+Continue from phone setup: return to home even with a paired Apple Watch.
+Upgrade an installation saved on the old Watch step: resume phone setup. Finish and relaunch: home appears
 without repeating setup. Existing Notes and webhook configuration remain intact.
 Repeat with an active recording: recording remains accessible before setup is presented.
 

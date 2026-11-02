@@ -17,11 +17,12 @@ appId: app.whim.ios
     visible: Get started
     timeout: 60000
 - tapOn: Get started
+- assertNotVisible: Skip webhook setup
 - scrollUntilVisible:
-    element: Skip webhook setup
+    element: Continue to microphone
     direction: DOWN
     centerElement: false
-- tapOn: Skip webhook setup
+- tapOn: Continue to microphone
 - extendedWaitUntil:
     visible: Always ready to record
     timeout: 60000
@@ -49,7 +50,12 @@ appId: app.whim.ios
 - assertVisible:
     id: quick-capture-setup
 - assertNotVisible: Start using Whim
-- tapOn: Skip for now
+- tapOn: Show me how
+- assertVisible: Set up your Action button
+- assertNotVisible: Previous
+- assertNotVisible: Read again
+- assertNotVisible: Skip for now
+- tapOn: Continue
 - runFlow: skip-watch-setup.yaml
 - extendedWaitUntil:
     visible:

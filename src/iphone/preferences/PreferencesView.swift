@@ -3,10 +3,10 @@ import WhimCore
 import WhimIPhone
 
 enum SettingsSection: String, CaseIterable, Hashable {
-    case quickCapture = "quick-capture", webhook, webhookErrors = "webhook-errors", audio, titles, permissions, watch
+    case webhook, webhookErrors = "webhook-errors", audio, titles, permissions, watch, quickCapture = "quick-capture"
     var title: String {
         switch self {
-        case .quickCapture: "Record from anywhere"
+        case .quickCapture: "Set up action button"
         case .webhook: "Webhook"
         case .webhookErrors: "Webhook errors"
         case .audio: "Audio retention"
@@ -17,7 +17,7 @@ enum SettingsSection: String, CaseIterable, Hashable {
     }
     var symbol: String {
         switch self {
-        case .quickCapture: "hand.tap"
+        case .quickCapture: "button.vertical.left.press"
         case .webhook: "link"
         case .webhookErrors: "exclamationmark.triangle"
         case .audio: "waveform"

@@ -457,9 +457,11 @@ V1 is complete only when:
 - The product-owner-provided configuration-test audio asset is present and non-sensitive.
 
 Existing installations that completed original onboarding but have no quick-capture setup
-acknowledgement receive only the phone and optional paired-Watch setup steps. Skipping the
-last applicable step persists acknowledgement. Upgrade progress survives relaunch, and
+acknowledgement receive only phone setup. Continuing from its final page or skipping
+the preview persists acknowledgement. Saved Watch-step progress resumes at phone setup, and
 active recordings remain accessible before setup. New onboarding also writes this
 acknowledgement so setup does not repeat on the next launch.
 
 Action Button setup uses bundled silent video demos: the capture preview and one combined setup step covering Controls and Record a Whim. Videos play once while visible and active, with a Play again control visible only when stopped that restarts from the beginning; Reduce Motion disables autoplay. Watch and Lock Screen guides retain media placeholders until footage is available.
+
+Onboarding currently has four steps. Webhook setup has one Continue to microphone action. Action Button setup has no Previous or Read again controls; its final page uses Continue instead of Skip for now. Apple Watch onboarding is hidden pending video production; its guide remains in Settings.

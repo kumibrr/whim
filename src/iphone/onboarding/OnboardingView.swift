@@ -1,6 +1,5 @@
 import SwiftUI
 import AVFoundation
-import WatchConnectivity
 import WhimCore
 import WhimIPhone
 
@@ -11,7 +10,8 @@ struct OnboardingView: View {
     @Binding private var setupAcknowledged: Bool
     @AppStorage("onboarding.quickCapture.v1.step", store: UserDefaults(suiteName: WhimProductionComposition.appGroupIdentifier)) private var upgradeStep = 3
     let setupOnly: Bool
-    private var step: Int { setupOnly ? max(3, upgradeStep) : savedStep }
+    private var step: Int { QuickCaptureGuide.onboardingStep(saved: setupOnly ? upgradeStep : savedStep, setupOnly: setupOnly) }
+    @State private var setupPage = 0
     @State private var webhook: WebhookEditor
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var textSize
@@ -24,14 +24,13 @@ struct OnboardingView: View {
     }
 
     var body: some View {
-        OnboardingFrame(step: step, totalSteps: hasWatchStep ? 5 : 4, back: step == 0 || (setupOnly && step == 3) || (step == 2 && model.startupState?.microphone == .notDetermined) ? nil : { move(to: step - 1) }) {
+        OnboardingFrame(step: step, totalSteps: 4, back: step == 0 || (setupOnly && step == 3) || (step == 2 && model.startupState?.microphone == .notDetermined) ? nil : { move(to: step - 1) }) {
             Group {
                 switch step {
                 case 0: OnboardingWelcome()
                 case 1: workflow
                 case 2: microphone
-                case 3: QuickCaptureSetupView()
-                default: QuickCaptureSetupView(isWatch: true)
+                default: QuickCaptureSetupView(onPageChange: { setupPage = $0 })
                 }
             }.id(step).transition(.opacity)
         } actions: {
@@ -43,8 +42,6 @@ struct OnboardingView: View {
             case 1:
                 Button("Continue to microphone", systemImage: "arrow.right") { move(to: 2) }
                     .buttonStyle(OnboardingPrimaryButtonStyle())
-                Button("Skip webhook setup") { move(to: 2) }
-                    .buttonStyle(OnboardingSecondaryButtonStyle())
             case 2:
                 if model.startupState?.microphone == .notDetermined {
                     Button("Continue", systemImage: "arrow.right") { complete(request: true) }
@@ -64,8 +61,13 @@ struct OnboardingView: View {
                     }
                 }
             default:
-                Button("Skip for now") { skipSetup() }
-                    .buttonStyle(OnboardingSecondaryButtonStyle())
+                if QuickCaptureGuide.currentRoute == .actionButton && setupPage == 1 {
+                    Button("Continue") { finish() }
+                        .buttonStyle(OnboardingPrimaryButtonStyle())
+                } else {
+                    Button("Skip for now") { finish() }
+                        .buttonStyle(OnboardingSecondaryButtonStyle())
+                }
             }
         }
         .disabled(model.isPending || !model.captureReady || webhook.isPending)
@@ -121,16 +123,6 @@ struct OnboardingView: View {
                 if request { _ = try await model.client.requestPermission(.microphone) }
             }
             move(to: 3)
-        }
-    }
-    private var hasWatchStep: Bool {
-        step == 4 || (WCSession.isSupported() && WCSession.default.isPaired)
-    }
-    private func skipSetup() {
-        if let next = QuickCaptureGuide.nextSetupStep(after: step, hasPairedWatch: hasWatchStep) {
-            move(to: next)
-        } else {
-            finish()
         }
     }
     private func finish() {
@@ -295,6 +287,7 @@ private struct OnboardingSecondaryButtonStyle: ButtonStyle {
 struct QuickCaptureSetupView: View {
     @State private var page = 0
     var isWatch = false
+    var onPageChange: (Int) -> Void = { _ in }
     @State private var controlCenter = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let route = QuickCaptureGuide.currentRoute
@@ -348,13 +341,13 @@ struct QuickCaptureSetupView: View {
             }
             .accessibilityIdentifier("setup-instruction")
             HStack(spacing: 16) {
-                if page > 0 {
+                if page > 0 && !actionButton {
                     Button("Previous") { advance(-1) }.buttonStyle(OnboardingSecondaryButtonStyle())
                 }
                 if page < titles.count - 1 {
                     Button(page == 0 ? "Show me how" : "Next step", systemImage: "arrow.right") { advance(1) }
                         .buttonStyle(OnboardingPrimaryButtonStyle())
-                } else {
+                } else if !actionButton {
                     Button("Read again", systemImage: "arrow.counterclockwise") { page = 0 }
                         .buttonStyle(OnboardingSecondaryButtonStyle())
                 }
@@ -371,6 +364,8 @@ struct QuickCaptureSetupView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(isWatch ? "watch-capture-setup" : "quick-capture-setup")
+        .onAppear { onPageChange(page) }
+        .onChange(of: page) { _, value in onPageChange(value) }
     }
     private func advance(_ offset: Int) {
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { page += offset }

@@ -15,12 +15,12 @@ appId: app.whim.ios
     visible: Get started
     timeout: 60000
 - assertVisible: .*stores voice Notes locally.*
-- assertVisible: Step 1 of [45]
+- assertVisible: Step 1 of 4
 - assertVisible: .*Use complications, or add Whim to the Smart Stack.*
 - assertNotVisible:
     id: startup-error
 - tapOn: Get started
-- assertVisible: Step 2 of [45]
+- assertVisible: Step 2 of 4
 - assertVisible: (?s).*Your workflow,.*directly.*
 - tapOn:
     id: onboarding-back
@@ -42,11 +42,11 @@ appId: app.whim.ios
 - assertNotVisible:
     id: webhook-bearer-token
 - scrollUntilVisible:
-    element: Skip webhook setup
+    element: Continue to microphone
     direction: DOWN
     centerElement: false
-- tapOn: Skip webhook setup
-- assertVisible: Step 3 of [45]
+- tapOn: Continue to microphone
+- assertVisible: Step 3 of 4
 - assertVisible: Always ready to record
 # The explanation must lead to the system prompt, with no custom opt-out.
 - assertNotVisible: Allow microphone

@@ -14,8 +14,8 @@ appId: app.whim.ios
     visible: Get started
     timeout: 60000
 - tapOn: Get started
-- tapOn: Skip webhook setup
-- assertVisible: Step 3 of [45]
+- tapOn: Continue to microphone
+- assertVisible: Step 3 of 4
 - tapOn: Continue
 - assertVisible: Don.t Allow
 # iOS versions label the affirmative system action differently.

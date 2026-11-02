@@ -13,7 +13,10 @@ appId: app.whim.ios
     id: onboarding
 - tapOn:
     id: settings-button
-- tapOn: Record from anywhere
+- scrollUntilVisible:
+    element: Set up action button
+    direction: DOWN
+- tapOn: Set up action button
 - assertNotVisible: My iPhone has an Action button
 - assertNotVisible: Start using Whim
 - assertNotVisible: Set up your Apple Watch
@@ -40,9 +43,8 @@ appId: app.whim.ios
 - assertVisible: 'Open Settings → Action Button → Controls → Choose a Control.*'
 - assertNotVisible: Next step
 - assertNotVisible: whim shortcuts
-- tapOn: Previous
-- assertVisible: A button for your thoughts
-- assertVisible: 1 of 2
+- assertNotVisible: Previous
+- assertNotVisible: Read again
 - tapOn:
     id: BackButton
 - tapOn: Apple Watch
