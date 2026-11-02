@@ -86,6 +86,7 @@ xcrun simctl uninstall "$WHIM_IPHONE_SIMULATOR_UDID" "$whim_bundle_id" >/dev/nul
 xcrun simctl install "$WHIM_IPHONE_SIMULATOR_UDID" "$whim_app"
 node "$whim_root/scripts/restart-e2e-simulator.mjs" "$WHIM_IPHONE_SIMULATOR_UDID"
 whim_flows=(
+  "$whim_root/e2e/iphone/quick-capture-setup.e2e.test.yaml"
   "$whim_root/e2e/iphone/history-sheet.e2e.test.yaml"
   "$whim_root/e2e/iphone/playback-error.e2e.test.yaml"
   "$whim_root/e2e/iphone/onboarding.e2e.test.yaml"

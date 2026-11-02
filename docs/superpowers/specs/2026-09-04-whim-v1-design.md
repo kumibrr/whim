@@ -276,6 +276,7 @@ Onboarding:
 1. Explain local storage and direct webhook delivery.
 2. Offer webhook configuration and test, with Skip available.
 3. Request microphone permission.
+4. Offer optional “Record from anywhere” guidance: Action-button Control automatically selected for known Action-button iPhone hardware, Lock Screen and Control Center controls otherwise, and Watch complication instructions for paired Watches, with the Watch guide available separately in Settings → Apple Watch even when pairing is not yet detected. The iPhone setup screen has only Skip for now as its exit; this advances to a separate Watch setup step when paired, otherwise completes onboarding. Watch setup has its own Skip for now exit. Each instruction reserves a media placeholder for a photo or short video. Leaving the app retains the setup step. The same guide is available from Settings. System assignments are performed by the user and are not reported as automatically verified.
 
 Speech and notification permissions are optional and managed from the Permissions page in Settings. When any permission is missing and the user has never visited that page, the idle iPhone capture screen shows one Liquid Glass “Review permissions” button below explanatory text beneath Settings, leaving the logo visible. The reminder area scrolls at large text sizes to keep the logo unobstructed. Opening the page through any route records the visit locally and removes the reminder across launches, even if no permission is granted. Resetting Whim clears that visit. Denied permissions are not repeatedly requested; Settings provides the relevant system-settings route.
 
@@ -454,3 +455,11 @@ V1 is complete only when:
 - A reference webhook verifies signatures and deduplicates concurrent Attempts by Note ID.
 - App privacy disclosures match the implemented behavior: audio and titles go only to the configured user endpoint; Whim sends no diagnostics or telemetry elsewhere.
 - The product-owner-provided configuration-test audio asset is present and non-sensitive.
+
+Existing installations that completed original onboarding but have no quick-capture setup
+acknowledgement receive only the phone and optional paired-Watch setup steps. Skipping the
+last applicable step persists acknowledgement. Upgrade progress survives relaunch, and
+active recordings remain accessible before setup. New onboarding also writes this
+acknowledgement so setup does not repeat on the next launch.
+
+Action Button setup uses bundled silent video demos: the capture preview and one combined setup step covering Controls and Record a Whim. Videos play once while visible and active, with a Play again control visible only when stopped that restarts from the beginning; Reduce Motion disables autoplay. Watch and Lock Screen guides retain media placeholders until footage is available.

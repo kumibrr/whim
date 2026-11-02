@@ -77,3 +77,25 @@ Expected: Smart Stack Stop addresses the iPhone Recording Session. The complicat
 - `ComplicationLaunchUITests` supplies a DEBUG-only launch context to the installed Watch app and verifies capture and invalid-route behavior. watchOS 27 Simulator rejected both XCTest URL opening (no process ID) and `simctl openurl` (LSApplicationWorkspace error 115), even with the registered scheme. Warm URL reentry is covered through WatchModel; actual face taps require WS-1.
 - `shortcuts-and-live-activity.e2e.test.yaml` exercises installed Live Activity Stop where the simulator exposes the surface. `action-button-stop-and-send.e2e.test.yaml` invokes the production Record intent through a DEBUG fixture-only link and verifies capture, repeat-to-send, playback, and a fresh session. This link does not prove OS shortcut dispatch or locked execution. Lock Screen customization and a physical Action button remain cases LS-1/AB-1.
 - Activity lifecycle and reconciliation, permission/activity failure, attention projection, and DEBUG-only latency have deterministic companion tests. Hardware latency figures must be captured on the physical devices; fixture timings are not product performance claims.
+
+## Quick capture onboarding guidance
+
+1. Complete microphone onboarding and confirm step 4, “Record from anywhere”, appears. Background and relaunch Whim; the guide must remain available until Skip for now is selected.
+2. On an Action-button iPhone, confirm Action button is detected automatically and follow all three Control setup steps, selecting Settings → Action Button → Controls → Choose a Control → Record a Whim. Hold the button to start, then invoke it again to stop and save exactly one Note.
+3. On an iPhone without an Action button, confirm the Lock Screen guide is selected automatically. Follow each guide to add “Record a Whim” to the Lock Screen and Control Center. Verify both recording routes and repeat-to-stop behavior.
+4. With an Apple Watch, skip iPhone setup to reach the separate Watch step (or open Settings → Apple Watch), install Whim if needed, and follow the complication instructions using a supported face. Grant microphone access on Watch and confirm tapping the complication starts capture; stop from the Watch app.
+5. Skip setup, then reopen Settings → Record from anywhere. Verify instructions remain available with a disconnected Watch and with microphone access denied.
+6. Repeat with VoiceOver and accessibility text sizes; all instructions and completion buttons must remain reachable. Setup guidance must never claim the system assignment has been verified automatically.
+
+### Existing installation receives setup once
+
+Upgrade an installation whose original onboarding is complete, without deleting its data.
+Launch Whim: phone setup appears directly, without welcome, webhook, or microphone steps.
+Skip phone setup: a paired Apple Watch gets its own step; otherwise return to home.
+Close and reopen during Watch setup: resume that step. Skip it and relaunch: home appears
+without repeating setup. Existing Notes and webhook configuration remain intact.
+Repeat with an active recording: recording remains accessible before setup is presented.
+
+### Setup video playback
+
+Verify each Action Button page plays its matching silent clip, stops at the end without sound, and pauses when backgrounded or dismissed. Enable Reduce Motion: clips remain paused until Play again is tapped. Check replay starts from the beginning with VoiceOver and ensure no playback interrupts an active recording.

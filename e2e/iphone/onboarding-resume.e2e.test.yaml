@@ -14,7 +14,7 @@ appId: app.whim.ios
     timeout: 60000
 - tapOn: Get started
 - tapOn: Skip webhook setup
-- assertVisible: Step 3 of 3
+- assertVisible: Step 3 of [45]
 - tapOn: Open system settings
 # Permission changes can terminate Whim. Grant access and cold-launch without clearing data.
 - stopApp: app.whim.ios
@@ -22,11 +22,19 @@ appId: app.whim.ios
     permissions:
       all: allow
 - extendedWaitUntil:
-    visible: Start using Whim
+    visible: Continue to setup
     timeout: 60000
-- assertVisible: Step 3 of 3
+- assertVisible: Step 3 of [45]
 - assertVisible: Always ready to record
-- tapOn: Start using Whim
+- tapOn: Continue to setup
+- assertVisible: Step 4 of [45]
+- stopApp: app.whim.ios
+- launchApp
+- assertVisible:
+    id: quick-capture-setup
+- assertNotVisible: Start using Whim
+- tapOn: Skip for now
+- runFlow: flows/skip-watch-setup.yaml
 - assertVisible:
     id: whim-home
 - tapOn:
@@ -38,4 +46,4 @@ appId: app.whim.ios
 - tapOn: Reset Whim
 - tapOn: Confirm reset
 - assertVisible: Get started
-- assertVisible: Step 1 of 3
+- assertVisible: Step 1 of [45]

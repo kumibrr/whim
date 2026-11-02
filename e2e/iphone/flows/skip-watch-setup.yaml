@@ -1,0 +1,13 @@
+appId: app.whim.ios
+---
+- runFlow:
+    when:
+      visible:
+        id: watch-capture-setup
+    commands:
+      - assertVisible: Step 5 of 5
+      - assertNotVisible:
+          id: quick-capture-setup
+      - assertNotVisible: Start using Whim
+      - assertVisible: A Note from your wrist
+      - tapOn: Skip for now
