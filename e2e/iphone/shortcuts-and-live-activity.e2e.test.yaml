@@ -21,10 +21,15 @@ appId: app.whim.ios
       visible: Allow
     commands:
       - tapOn: Allow
+- runFlow:
+    when:
+      visible: Always Allow
+    commands:
+      - tapOn: Always Allow
 # iOS 27 reports widget-local accessibility bounds (16,44), not screen bounds.
 # The dedicated CI iPhone renders this button at the bottom of Notification Center.
 - tapOn:
-    point: 18%, 81%
+    point: 50%, 80%
 - extendedWaitUntil:
     notVisible: Stop Whim Recording
     timeout: 10000

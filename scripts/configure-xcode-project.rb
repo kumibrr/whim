@@ -168,6 +168,9 @@ app_target.build_configurations.each do |configuration|
   settings = configuration.build_settings
   %w[SWIFT_OBJC_BRIDGING_HEADER OTHER_LDFLAGS OTHER_CFLAGS OTHER_SWIFT_FLAGS HEADER_SEARCH_PATHS LIBRARY_SEARCH_PATHS FRAMEWORK_SEARCH_PATHS].each { |key| settings.delete(key) }
   settings['SWIFT_VERSION'] = '6.0'
+  # Xcode's Debug launcher can omit AppIntents during metadata extraction.
+  # Keep intents in the executable used by the extractor and installed E2E app.
+  settings['ENABLE_DEBUG_DYLIB'] = 'NO' if configuration.name == 'Debug'
   settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'Whim'
   settings['INFOPLIST_FILE'] = 'whim/Info.plist'
   settings['GENERATE_INFOPLIST_FILE'] = 'NO'

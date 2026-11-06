@@ -55,7 +55,8 @@ for bundle in [iphone, watch]:
         extension = json.loads((iphone / 'PlugIns/WhimLiveActivity.appex/Metadata.appintents/extract.actionsdata').read_text())['actions']
         for metadata_actions in [actions, extension]:
             # Controls run intents in the widget extension unless LiveActivityIntent routes them to the app process.
-            assert 'com.apple.link.systemProtocol.SessionStarting' in metadata_actions['RecordWhimIntent']['systemProtocols'], 'Record control must run in the app process'
+            for intent in ['RecordWhimIntent', 'StopWhimRecordingIntent']:
+                assert 'com.apple.link.systemProtocol.SessionStarting' in metadata_actions[intent]['systemProtocols'], f'{intent} must run in the app process'
             # IntentModes.background (1) + foreground(.dynamic) (8): prefer
             # background capture while retaining permission recovery in Whim.
             assert metadata_actions['RecordWhimIntent']['supportedModes'] == 9, 'Record must prefer background execution in both bundles'
