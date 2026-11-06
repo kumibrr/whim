@@ -13,15 +13,25 @@ final class QuickCaptureGuideTests: XCTestCase {
 
 
     func testUpgradeGuideOnlyAppearsForCompletedOnboardingWithoutAcknowledgement() {
-        XCTAssertTrue(QuickCaptureGuide.needsUpgradeGuide(onboardingCompleted: true, acknowledged: false))
-        XCTAssertFalse(QuickCaptureGuide.needsUpgradeGuide(onboardingCompleted: false, acknowledged: false))
-        XCTAssertFalse(QuickCaptureGuide.needsUpgradeGuide(onboardingCompleted: true, acknowledged: true))
+        XCTAssertTrue(QuickCaptureGuide.needsUpgradeGuide(onboardingCompleted: true, acknowledged: false, route: .actionButton))
+        XCTAssertFalse(QuickCaptureGuide.needsUpgradeGuide(onboardingCompleted: false, acknowledged: false, route: .actionButton))
+        XCTAssertFalse(QuickCaptureGuide.needsUpgradeGuide(onboardingCompleted: true, acknowledged: true, route: .actionButton))
+    }
+
+    func testHiddenPhoneGuidesDoNotInterruptExistingInstallations() {
+        XCTAssertFalse(QuickCaptureGuide.needsUpgradeGuide(onboardingCompleted: true, acknowledged: false, route: nil))
     }
 
     func testSavedWatchStepResumesAtPhoneSetupWhileWatchOnboardingIsHidden() {
-        XCTAssertEqual(QuickCaptureGuide.onboardingStep(saved: 4, setupOnly: false), 3)
-        XCTAssertEqual(QuickCaptureGuide.onboardingStep(saved: 4, setupOnly: true), 3)
-        XCTAssertEqual(QuickCaptureGuide.onboardingStep(saved: 1, setupOnly: false), 1)
+        XCTAssertEqual(QuickCaptureGuide.onboardingStep(saved: 4, setupOnly: false, route: .actionButton), 3)
+        XCTAssertEqual(QuickCaptureGuide.onboardingStep(saved: 4, setupOnly: true, route: .actionButton), 3)
+        XCTAssertEqual(QuickCaptureGuide.onboardingStep(saved: 1, setupOnly: false, route: .actionButton), 1)
+    }
+
+    func testHiddenPhoneGuideProgressResumesAtTheLastVisibleStep() {
+        XCTAssertEqual(QuickCaptureGuide.onboardingStep(saved: 3, setupOnly: false, route: nil), 2)
+        XCTAssertEqual(QuickCaptureGuide.onboardingStep(saved: 4, setupOnly: false, route: nil), 2)
+        XCTAssertEqual(QuickCaptureGuide.onboardingStep(saved: 1, setupOnly: false, route: nil), 1)
     }
 
     func testPhoneSetupCompletesEvenWhenWatchIsPaired() {
@@ -35,9 +45,9 @@ final class QuickCaptureGuideTests: XCTestCase {
             XCTAssertEqual(QuickCaptureGuide.route(for: model), .actionButton, model)
         }
     }
-    func testOlderAndUnknownHardwareUseUniversallyAvailableControls() {
+    func testOlderAndUnknownHardwareSkipPhoneSetupWhileControlGuidesAreHidden() {
         for model in ["iPhone15,4", "iPhone15,5", "iPhone14,6", "iPad16,1", "unknown", "iPhone99,1"] {
-            XCTAssertEqual(QuickCaptureGuide.route(for: model), .lockScreen, model)
+            XCTAssertNil(QuickCaptureGuide.route(for: model), model)
         }
     }
 }

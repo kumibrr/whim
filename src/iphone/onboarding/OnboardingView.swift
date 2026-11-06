@@ -24,7 +24,7 @@ struct OnboardingView: View {
     }
 
     var body: some View {
-        OnboardingFrame(step: step, totalSteps: 4, back: step == 0 || (setupOnly && step == 3) || (step == 2 && model.startupState?.microphone == .notDetermined) ? nil : { move(to: step - 1) }) {
+        OnboardingFrame(step: step, back: step == 0 || (setupOnly && step == 3) || (step == 2 && model.startupState?.microphone == .notDetermined) ? nil : { move(to: step - 1) }) {
             Group {
                 switch step {
                 case 0: OnboardingWelcome()
@@ -53,7 +53,7 @@ struct OnboardingView: View {
                         }.buttonStyle(OnboardingPrimaryButtonStyle())
                     }
                     if model.startupState?.microphone == .granted {
-                        Button("Continue to setup") { complete(request: false) }
+                        Button(QuickCaptureGuide.currentRoute == nil ? "Continue" : "Continue to setup") { complete(request: false) }
                             .buttonStyle(OnboardingPrimaryButtonStyle())
                     } else {
                         Button("Continue") { complete(request: false) }
@@ -122,7 +122,8 @@ struct OnboardingView: View {
             await model.perform {
                 if request { _ = try await model.client.requestPermission(.microphone) }
             }
-            move(to: 3)
+            if QuickCaptureGuide.currentRoute == nil { finish() }
+            else { move(to: 3) }
         }
     }
     private func finish() {
@@ -137,7 +138,7 @@ struct OnboardingView: View {
 /// Startup and the interactive welcome share their first frame.
 struct OnboardingFrame<Content: View, Actions: View>: View {
     let step: Int
-    var totalSteps: Int = 4
+    var totalSteps: Int = QuickCaptureGuide.currentRoute == nil ? 3 : 4
     var back: (() -> Void)? = nil
     @ViewBuilder var content: Content
     @ViewBuilder var actions: Actions
@@ -200,7 +201,7 @@ struct OnboardingWelcome: View {
                 OnboardingBenefit(symbol: "lock", title: "Keep it yours",
                     detail: "Local storage. Your destination. You’re in control.")
                 OnboardingBenefit(symbol: "hand.tap", title: "Convenient",
-                    detail: "Assign the Action Button to Whim, or use its control in Control Center or on the Lock Screen.")
+                    detail: "Record in Whim, or assign it to your iPhone’s Action button when supported.")
                 OnboardingBenefit(symbol: "applewatch", title: "Apple Watch",
                     detail: "Use complications, or add Whim to the Smart Stack for hands-free operation.")
             }
@@ -321,6 +322,9 @@ struct QuickCaptureSetupView: View {
         ]
     }
     var body: some View {
+        if isWatch || route != nil { guide }
+    }
+    private var guide: some View {
         VStack(alignment: .leading, spacing: 24) {
             HStack {
                 Text(isWatch ? "Apple Watch" : actionButton ? "Action button" : controlCenter ? "Control Center" : "Lock Screen")

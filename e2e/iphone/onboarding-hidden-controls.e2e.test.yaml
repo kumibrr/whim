@@ -1,0 +1,49 @@
+appId: app.whim.ios
+---
+# Model the hardware boundary on the shared CI simulator.
+- launchApp:
+    clearState: true
+    arguments:
+      -WhimFixtureDeviceModel: iPhone15,4
+    permissions:
+      all: allow
+- runFlow:
+    when:
+      visible: Open
+    commands:
+      - tapOn: Cancel
+- extendedWaitUntil:
+    visible: Get started
+    timeout: 60000
+- assertVisible: Step 1 of 3
+- tapOn: Get started
+- tapOn: Continue to microphone
+- assertVisible: Step 3 of 3
+- tapOn: Continue
+- extendedWaitUntil:
+    visible:
+      id: whim-home
+    timeout: 10000
+- assertNotVisible:
+    id: quick-capture-setup
+- stopApp
+- launchApp:
+    arguments:
+      -WhimFixtureDeviceModel: iPhone15,4
+- extendedWaitUntil:
+    visible:
+      id: whim-home
+    timeout: 60000
+- assertNotVisible:
+    id: onboarding
+- tapOn:
+    id: settings-button
+- assertNotVisible: Set up action button
+- assertNotVisible: Configure action button
+- assertNotVisible: Configure control center and lockscreen
+- assertNotVisible: Configure Apple Watch complication
+- assertNotVisible: Shortcuts
+- tapOn: Apple Watch
+- assertVisible: Watch synchronization .*
+- assertNotVisible:
+    id: watch-capture-setup

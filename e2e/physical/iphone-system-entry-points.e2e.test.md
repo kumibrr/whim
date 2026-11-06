@@ -100,9 +100,9 @@ Expected: Smart Stack Stop addresses the iPhone Recording Session. The complicat
 
 1. Complete microphone onboarding and confirm step 4, “Record from anywhere”, appears. Background and relaunch Whim; the guide must remain available until Skip for now is selected.
 2. On an Action-button iPhone, confirm Action button is detected automatically and follow all three Control setup steps, selecting Settings → Action Button → Controls → Choose a Control → Record a Whim. Hold the button to start, then invoke it again to stop and save exactly one Note.
-3. On an iPhone without an Action button, confirm the Lock Screen guide is selected automatically. Follow each guide to add “Record a Whim” to the Lock Screen and Control Center. Verify both recording routes and repeat-to-stop behavior.
-4. With an Apple Watch, skip iPhone setup to reach the separate Watch step (or open Settings → Apple Watch), install Whim if needed, and follow the complication instructions using a supported face. Grant microphone access on Watch and confirm tapping the complication starts capture; stop from the Watch app.
-5. Skip setup, then reopen Settings → Record from anywhere. Verify instructions remain available with a disconnected Watch and with microphone access denied.
+3. On an iPhone without an Action button, confirm onboarding has three steps and finishes after microphone setup. Lock Screen and Control Center guides and the Settings setup row must remain hidden. Verify the recording controls separately using LS-1; hiding guidance does not disable them.
+4. Open Settings → Apple Watch and confirm synchronization status remains available without complication setup instructions. “Configure control center and lockscreen” and “Configure Apple Watch complication” remain hidden from Shortcuts for now.
+5. On an Action-button iPhone, skip setup, then reopen Settings → Shortcuts → Configure action button. Verify instructions remain available with a disconnected Watch and with microphone access denied. On other iPhones, confirm no Action button option or empty Shortcuts group appears.
 6. Repeat with VoiceOver and accessibility text sizes; all instructions and completion buttons must remain reachable. Setup guidance must never claim the system assignment has been verified automatically.
 
 ### Existing installation receives setup once

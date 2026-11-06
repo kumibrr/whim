@@ -6,7 +6,7 @@ enum SettingsSection: String, CaseIterable, Hashable {
     case webhook, webhookErrors = "webhook-errors", audio, titles, permissions, watch, quickCapture = "quick-capture"
     var title: String {
         switch self {
-        case .quickCapture: "Set up action button"
+        case .quickCapture: "Configure action button"
         case .webhook: "Webhook"
         case .webhookErrors: "Webhook errors"
         case .audio: "Audio retention"
@@ -39,21 +39,16 @@ struct PreferencesView: View {
     var body: some View {
         List {
             Section {
-                ForEach(SettingsSection.allCases.filter { $0 != .webhookErrors }, id: \.self) { section in
-                    NavigationLink(value: IPhoneRoute.settingsSection(section)) {
-                        WhimLabeledValue {
-                            Label(section.title, systemImage: section.symbol)
-                        } value: {
-                            if !summary(section).isEmpty {
-                                Text(summary(section)).foregroundStyle(.secondary)
-                                    .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
-                            }
-                        }
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(section.title)
-                        .accessibilityValue(summary(section))
-                    }
-                    .accessibilityIdentifier("settings-\(section.rawValue)")
+                ForEach(SettingsSection.allCases.filter {
+                    $0 != .webhookErrors && $0 != .quickCapture
+                }, id: \.self) { section in
+                    settingsLink(section)
+                }
+            }
+            // Control Center/Lock Screen and Watch complication setup are hidden for now.
+            if QuickCaptureGuide.currentRoute == .actionButton {
+                Section("Shortcuts") {
+                    settingsLink(.quickCapture)
                 }
             }
             Section {
@@ -80,6 +75,22 @@ struct PreferencesView: View {
         } message: {
             Text("This removes all local audio, Notes, history, webhook configuration and credentials. It cannot revoke delivery accepted by your server or erase a disconnected Watch immediately.")
         }
+    }
+    private func settingsLink(_ section: SettingsSection) -> some View {
+        NavigationLink(value: IPhoneRoute.settingsSection(section)) {
+            WhimLabeledValue {
+                Label(section.title, systemImage: section.symbol)
+            } value: {
+                if !summary(section).isEmpty {
+                    Text(summary(section)).foregroundStyle(.secondary)
+                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(section.title)
+            .accessibilityValue(summary(section))
+        }
+        .accessibilityIdentifier("settings-\(section.rawValue)")
     }
     private func summary(_ section: SettingsSection) -> String {
         switch section {
@@ -171,8 +182,6 @@ struct SettingsSectionView: View {
             footnote("Choose whether notification previews show Note titles on the Lock Screen in system Settings → Notifications → Whim → Show Previews.")
             Button("Notification preview settings", systemImage: "bell.badge") { systemSettings() }.whimGlassButton()
         case .watch:
-            QuickCaptureSetupView(isWatch: true)
-            Divider()
             Text("Watch synchronization \(settings.watch.availability).")
             footnote("Last synchronized: \(settings.watch.lastSynchronizedAt.map(TimelineFormat.date) ?? "Not yet synchronized")")
             if settings.watch.resetState == "pending" {

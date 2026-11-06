@@ -1,5 +1,6 @@
 import SwiftUI
 import WhimCore
+import WhimIPhone
 extension Color { static let whimAccent = Color.white }
 struct WhimButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -200,8 +201,8 @@ struct IPhoneStartupShell: View {
                     }.padding(.bottom, 96)
                 }
             } else {
-                OnboardingFrame(step: onboardingStep) {
-                    switch onboardingStep {
+                OnboardingFrame(step: QuickCaptureGuide.onboardingStep(saved: onboardingStep, setupOnly: false)) {
+                    switch QuickCaptureGuide.onboardingStep(saved: onboardingStep, setupOnly: false) {
                     case 0: OnboardingWelcome()
                     case 1: OnboardingWorkflowHeading()
                     default: OnboardingMicrophoneHeading()

@@ -14,9 +14,12 @@ appId: app.whim.ios
 - tapOn:
     id: settings-button
 - scrollUntilVisible:
-    element: Set up action button
+    element: Configure action button
     direction: DOWN
-- tapOn: Set up action button
+- assertVisible: Shortcuts
+- assertNotVisible: Configure control center and lockscreen
+- assertNotVisible: Configure Apple Watch complication
+- tapOn: Configure action button
 - assertNotVisible: My iPhone has an Action button
 - assertNotVisible: Start using Whim
 - assertNotVisible: Set up your Apple Watch
@@ -48,8 +51,9 @@ appId: app.whim.ios
 - tapOn:
     id: BackButton
 - tapOn: Apple Watch
-- assertVisible:
+- assertNotVisible:
     id: watch-capture-setup
-- assertVisible: A Note from your wrist
+- assertVisible: Watch synchronization .*
+- assertNotVisible: A Note from your wrist
 - assertNotVisible:
     id: quick-capture-setup
