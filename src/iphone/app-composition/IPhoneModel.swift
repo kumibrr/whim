@@ -5,6 +5,11 @@ import WhimCore
 @MainActor @Observable public final class IPhoneModel {
     public private(set) var isHistoryPresented = false
     public var canBrowse: Bool { recording == nil && !isRecordingPending }
+    public let appUpdate: AppUpdateModel
+    public var offersAppUpdate: Bool {
+        startupState != nil && onboardingCompleted && canBrowse && sceneIsActive
+            && !isHistoryPresented && appUpdate.pendingUpdate != nil
+    }
     public func openHistory() {
         guard canBrowse else { return }
         isHistoryPresented = true
@@ -24,7 +29,7 @@ import WhimCore
     public private(set) var waveforms: [NoteID: AudioWaveform] = [:]
     @ObservationIgnored private var waveformLoads: Set<NoteID> = []
     @ObservationIgnored private var inlineTask: Task<Void, Never>?
-    @ObservationIgnored private var sceneIsActive = true
+    private var sceneIsActive = true
     @ObservationIgnored private var navigationGeneration = 0
     @ObservationIgnored private var inlineGeneration = 0
     @ObservationIgnored private var inlineNoteID: NoteID?
@@ -224,8 +229,10 @@ import WhimCore
     @ObservationIgnored private var refreshRequested = false
     @ObservationIgnored private var completionGeneration = 0
 
-    public init(client: any WhimClient, onboardingCompletedHint: Bool = false, permissionReviewDefaults: UserDefaults = .standard) {
+    public init(client: any WhimClient, onboardingCompletedHint: Bool = false, permissionReviewDefaults: UserDefaults = .standard,
+                appUpdateDefaults: UserDefaults = UserDefaults(suiteName: WhimProductionComposition.appGroupIdentifier) ?? .standard) {
         self.client = client; self.onboardingHint = onboardingCompletedHint
+        self.appUpdate = AppUpdateModel(client: client, defaults: appUpdateDefaults)
         self.permissionReviewDefaults = permissionReviewDefaults
         self.hasReviewedPermissions = permissionReviewDefaults.bool(forKey: Self.permissionReviewKey)
     }
@@ -279,6 +286,7 @@ import WhimCore
             if revision == captureRevision { recording = value.recording }
             startupState = StartupProjection(onboardingCompleted: reset == resetRevision ? value.onboardingCompleted : onboardingCompleted,
                 microphone: value.microphone, recording: recording)
+            appUpdate.prepare(onboardingCompleted: onboardingCompleted)
             if let settings {
                 self.settings = SettingsProjection(preferences: settings.preferences, webhook: settings.webhook,
                     onboardingCompleted: onboardingCompleted, permissions: settings.permissions, watch: settings.watch)
@@ -518,6 +526,7 @@ import WhimCore
         case .noteDeleted: notes.removeAll { $0.id.rawValue.uuidString.lowercased() == event.noteID }
         case .notesReset:
             maintenanceTask?.cancel(); maintenanceTask = nil; maintenanceError = nil
+            appUpdate.prepare(onboardingCompleted: false)
             resetRevision += 1
             hasReviewedPermissions = false
             permissionReviewDefaults.removeObject(forKey: Self.permissionReviewKey)

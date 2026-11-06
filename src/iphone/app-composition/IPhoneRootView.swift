@@ -3,6 +3,7 @@ import WhimCore
 import WhimIPhone
 
 enum IPhoneRoute: Hashable { case settings, settingsSection(SettingsSection), note(NoteID) }
+private enum IPhoneSheet: String, Identifiable { case history, appUpdate; var id: String { rawValue } }
 struct IPhoneRootView: View {
     @AppStorage("onboarding.quickCapture.v1.acknowledged", store: UserDefaults(suiteName: WhimProductionComposition.appGroupIdentifier)) private var setupAcknowledged = false
     @Bindable var model: IPhoneModel
@@ -11,12 +12,11 @@ struct IPhoneRootView: View {
     @Namespace private var captureGlassNamespace
     @Namespace private var failureNamespace
     @State private var path: [IPhoneRoute] = []
+    @State private var handlingLink = false
     var body: some View {
         NavigationStack(path: $path) {
             Group {
-                if QuickCaptureGuide.needsUpgradeGuide(onboardingCompleted: model.onboardingCompleted, acknowledged: setupAcknowledged), model.recording == nil {
-                    OnboardingView(model: model, settings: model.settings, setupOnly: true, setupAcknowledged: $setupAcknowledged)
-                } else if model.onboardingCompleted { home }
+                if model.onboardingCompleted { home }
                 else { OnboardingView(model: model, settings: model.settings, setupAcknowledged: $setupAcknowledged) }
             }
             // The stack's root does not inherit insets applied outside NavigationStack.
@@ -33,12 +33,7 @@ struct IPhoneRootView: View {
                 }
             }.toolbar(.hidden, for: .navigationBar)
         }
-        .sheet(isPresented: Binding(
-            get: { model.isHistoryPresented },
-            set: { presented in if !presented { Task { await model.closeHistory() } } }
-        )) {
-            HistorySheet(model: model)
-        }
+        .sheet(item: sheetPresentation) { sheet in sheetContent(sheet) }
         .onChange(of: model.isHistoryPresented) { old, new in
             if !old && new { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
         }
@@ -55,6 +50,8 @@ struct IPhoneRootView: View {
             .task(id: pendingLink?.id) {
                 guard let url = pendingLink?.url else { return }
                 guard ["whim", "app.whim.ios"].contains(url.scheme ?? "") else { return }
+                handlingLink = true
+                defer { handlingLink = false }
                 await model.closeHistory()
                 #if DEBUG
                 // Installed journeys exercise the production shortcut with fixture audio.
@@ -71,6 +68,24 @@ struct IPhoneRootView: View {
                 else if parts.first == "note", let raw = parts.last, let id = UUID(uuidString: raw) { path = [.note(NoteID(rawValue: id))] }
                 else { path = [] }
             }
+    }
+    private var sheetPresentation: Binding<IPhoneSheet?> {
+        Binding(get: {
+            if model.isHistoryPresented { return .history }
+            if path.isEmpty, !handlingLink, phase == .active, model.offersAppUpdate { return .appUpdate }
+            return nil
+        }, set: { sheet in
+            if sheet == nil, model.isHistoryPresented { Task { await model.closeHistory() } }
+        })
+    }
+    @ViewBuilder private func sheetContent(_ sheet: IPhoneSheet) -> some View {
+        switch sheet {
+        case .history: HistorySheet(model: model)
+        case .appUpdate:
+            if let update = model.appUpdate.pendingUpdate {
+                AppUpdateView(model: model.appUpdate, update: update)
+            }
+        }
     }
     private var home: some View {
         ZStack {

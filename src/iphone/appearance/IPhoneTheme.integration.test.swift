@@ -6,6 +6,27 @@ import WhimIPhone
 @testable import whim
 
 @MainActor final class IPhoneSpacingTests: XCTestCase {
+    func testUpdateSectionsFitNarrowViewportsAtStandardAndAccessibilitySizes() async throws {
+        let fixture = try WhimFacadeHarness()
+        defer { fixture.remove() }
+        let suite = "update-render-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let update = AppUpdate(id: "render-update", title: "What’s new in Whim",
+            detail: "Review the changes and choose your preferences.",
+            sections: [.information(title: "Your Notes stay yours", detail: "Choose how Whim keeps and titles your Notes."),
+                       .onDeviceTitles, .audioRetention, .quickCaptureGuide])
+        let model = AppUpdateModel(client: fixture.makeService(), defaults: defaults, update: update)
+        model.prepare(onboardingCompleted: true)
+        await model.load()
+        for size in [DynamicTypeSize.large, .accessibility3] {
+            try await render("app-update-\(size.isAccessibilitySize ? "large-text" : "standard")",
+                             size: size, navigation: false) {
+                AppUpdateView(model: model, update: update)
+            }
+        }
+    }
+
     func testPermissionsPageRecordsTheVisitAndRemovesTheHomeReminder() async throws {
         let fixture = try WhimFacadeHarness()
         defer { fixture.remove() }
@@ -14,7 +35,8 @@ import WhimIPhone
         defer { defaults.removePersistentDomain(forName: suite) }
         let client = fixture.makeService(permissions: PermissionReviewFixture())
         try await client.completeOnboarding()
-        let model = IPhoneModel(client: client, permissionReviewDefaults: defaults)
+        let model = IPhoneModel(client: client, permissionReviewDefaults: defaults, appUpdateDefaults: defaults)
+        model.appUpdate.prepare(onboardingCompleted: false)
         await model.start()
         defer { model.stop() }
         XCTAssertTrue(model.offersPermissionReview)

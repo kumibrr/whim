@@ -157,17 +157,10 @@ struct SettingsSectionView: View {
             ForEach(errorLog.entries) { entry in webhookError(entry) }
             footnote("Failed deliveries and configuration tests, with secrets redacted. Delivery entries are removed with their Note; test entries are cleared by Reset Whim.")
         case .audio:
-            WhimLabeledValue {
-                Text("Keep audio after delivery")
-            } value: {
-                Picker("Keep audio", selection: $editor.retentionPolicy) {
-                    ForEach(retentionChoices, id: \.0) { policy, label in Text(label).tag(policy) }
-                }
-                .pickerStyle(.menu).labelsHidden().accessibilityIdentifier("retention-picker")
-            }
+            AudioRetentionControl(editor: editor)
             footnote("Unsent and recovered Notes are always kept until you delete them. Timeline metadata remains after audio expires.")
         case .titles:
-            Toggle("Transcription", isOn: $editor.transcriptionEnabled).accessibilityLabel("Transcription enabled")
+            OnDeviceTitlesControl(editor: editor)
             footnote("Only on-device recognition is used. No full transcript is stored.")
             VStack(alignment: .leading, spacing: WhimSpacing.field) {
                 Text("Transcription language").font(.subheadline).foregroundStyle(.secondary)
@@ -247,4 +240,27 @@ struct SettingsSectionView: View {
         .frame(minHeight: 44)
     }
     private func systemSettings() { Task { await model.perform { try await model.client.openSystemSettings() } } }
+}
+
+/// Shared by Settings and release announcements so both edit the same preference draft.
+struct AudioRetentionControl: View {
+    @Bindable var editor: SettingsEditor
+    var body: some View {
+        WhimLabeledValue {
+            Text("Keep audio after delivery")
+        } value: {
+            Picker("Keep audio", selection: $editor.retentionPolicy) {
+                ForEach(retentionChoices, id: \.0) { policy, label in Text(label).tag(policy) }
+            }
+            .pickerStyle(.menu).labelsHidden().accessibilityIdentifier("retention-picker")
+        }
+    }
+}
+
+struct OnDeviceTitlesControl: View {
+    @Bindable var editor: SettingsEditor
+    var body: some View {
+        Toggle("Transcription", isOn: $editor.transcriptionEnabled)
+            .accessibilityLabel("Transcription enabled")
+    }
 }

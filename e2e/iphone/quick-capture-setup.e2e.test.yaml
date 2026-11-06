@@ -11,6 +11,8 @@ appId: app.whim.ios
     timeout: 60000
 - assertNotVisible:
     id: onboarding
+- assertNotVisible:
+    id: app-update-sheet
 - tapOn:
     id: settings-button
 - scrollUntilVisible:

@@ -460,11 +460,14 @@ V1 is complete only when:
 - App privacy disclosures match the implemented behavior: audio and titles go only to the configured user endpoint; Whim sends no diagnostics or telemetry elsewhere.
 - The product-owner-provided configuration-test audio asset is present and non-sensitive.
 
-Existing installations that completed original onboarding but have no quick-capture setup
-acknowledgement receive only phone setup. Continuing from its final page or skipping
-the preview persists acknowledgement. Saved Watch-step progress resumes at phone setup, and
-active recordings remain accessible before setup. New onboarding also writes this
-acknowledgement so setup does not repeat on the next launch.
+Existing installations receive deliberate release announcements in a sheet using the
+onboarding layout, with release-specific acknowledgement independent of app versions.
+The initial announcement contains the phone quick-capture guide. Fresh installations
+mark their installed release's announcement as covered before onboarding can finish,
+so completing onboarding and relaunching never shows that announcement. Continue or
+Skip for now acknowledges an announcement; optional settings controls save drafts only
+on Continue, and failed saves remain visible. Recording, history, navigation and inactive
+scenes defer presentation. See the [update onboarding design](2026-11-06-update-onboarding-design.md).
 
 Action Button setup uses bundled silent video demos: the capture preview and one combined setup step covering Controls and Record a Whim. Videos play once while visible and active, with a Play again control visible only when stopped that restarts from the beginning; Reduce Motion disables autoplay. Watch and Lock Screen guides retain media placeholders until footage is available.
 

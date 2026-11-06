@@ -1,0 +1,70 @@
+appId: app.whim.ios
+---
+# Argument-domain defaults represent an older installation with completed onboarding.
+# No update-announcement marker exists in that release.
+- launchApp:
+    clearState: true
+    arguments:
+      -onboarding.v1.completed: YES
+      -onboarding.quickCapture.v1.acknowledged: YES
+      -WhimFixtureAudio: ${WHIM_FIXTURE_AUDIO}
+    permissions:
+      all: allow
+- extendedWaitUntil:
+    visible:
+      id: app-update-sheet
+    timeout: 60000
+- assertVisible: What.s new in Whim
+- assertVisible:
+    id: quick-capture-setup
+- assertNotVisible: Step 4 of 4
+- openLink: whim://settings
+- runFlow:
+    when:
+      visible: Open
+    commands:
+      - tapOn: Open
+- extendedWaitUntil:
+    visible:
+      id: preferences
+    timeout: 10000
+- assertNotVisible:
+    id: app-update-sheet
+- tapOn:
+    id: BackButton
+- extendedWaitUntil:
+    visible:
+      id: app-update-sheet
+    timeout: 10000
+# A Shortcut must expose Stop immediately, dismissing the announcement without covering it.
+- runFlow: flows/invoke-record-shortcut.yaml
+- extendedWaitUntil:
+    visible:
+      id: stop-recording
+    timeout: 10000
+- assertNotVisible:
+    id: app-update-sheet
+- tapOn: Discard recording
+- extendedWaitUntil:
+    visible:
+      id: app-update-sheet
+    timeout: 10000
+- tapOn:
+    id: app-update-continue
+- extendedWaitUntil:
+    visible:
+      id: whim-home
+    timeout: 10000
+- assertNotVisible:
+    id: app-update-sheet
+- stopApp
+- launchApp:
+    clearState: false
+    arguments:
+      -onboarding.v1.completed: YES
+- extendedWaitUntil:
+    visible:
+      id: whim-home
+    timeout: 60000
+- assertNotVisible:
+    id: app-update-sheet
