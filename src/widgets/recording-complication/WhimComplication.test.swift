@@ -27,8 +27,8 @@ import XCTest
         XCTAssertGreaterThan(redPixels.count, 100, "Recording must remain visible")
         let redRows = redPixels.map { ($0 / 4) / image.width }
         let bottomInset = image.height - 1 - (try XCTUnwrap(redRows.max()))
-        XCTAssertEqual(Double(bottomInset), 2, accuracy: 1,
-                       "Keep the glyph close to the bezel label with a small clear gap")
+        XCTAssertEqual(Double(bottomInset), 0, accuracy: 1,
+                       "Place the glyph at the bezel-facing edge without an extra inset")
         let whitePixels = stride(from: 0, to: pixels.count, by: 4).filter {
             pixels[$0] > 200 && pixels[$0 + 1] > 200 && pixels[$0 + 2] > 200
         }.count
@@ -44,8 +44,22 @@ import XCTest
         }
         XCTAssertGreaterThan(warningPixels.count, 60, "The warning must remain legible")
         let lastRow = try XCTUnwrap(warningPixels.map { ($0 / 4) / image.width }.max())
-        XCTAssertEqual(Double(image.height - 1 - lastRow), 2, accuracy: 1,
+        XCTAssertEqual(Double(image.height - 1 - lastRow), 0, accuracy: 1,
                        "Warning and Stop should sit equally close to their curved labels")
+    }
+
+    func testCornerLabelMovesOutwardToMeetTheGlyph() throws {
+        let entry = WhimComplicationEntry(date: Date(), snapshot: .idle)
+        let (image, pixels) = try render(WhimCornerComplicationLabel(entry: entry)
+            .font(.system(size: 14)).foregroundStyle(.white)
+            .frame(width: 120, height: 40, alignment: .bottom).background(.black))
+        let rows = (0..<image.height).filter { y in
+            (0..<image.width).contains { x in pixels[(y * image.width + x) * 4] > 200 }
+        }
+        let lastRow = try XCTUnwrap(rows.max())
+        let baselineClearance = image.height - 1 - lastRow
+        XCTAssertGreaterThanOrEqual(baselineClearance, 16, "Bring the curved label nearly flush with the glyph")
+        XCTAssertLessThanOrEqual(baselineClearance, 18, "Keep the label within its allotted space")
     }
 
     // Break: Corner uses a straight logo or merely rotates the entire straight mark.

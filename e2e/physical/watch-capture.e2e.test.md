@@ -51,7 +51,8 @@ Status: pending physical-device execution.
    dial, with a matching curved “Record” label and no circular background. Tap it with
    microphone access granted: expect immediate capture. Return to the face and
    verify the red recording glyph sits close to the curved elapsed-time label,
-   with a small clear gap and no overlap. The timer remains on the bezel.
+   with a tight clear gap and no overlap. The lifted label must stay fully
+   visible in every corner. The timer remains on the bezel.
    The logo's two ends must extend into tapered wedges following the same arc,
    with both tips fully visible.
    The Stop symbol must follow the same local angle as the text, rather than

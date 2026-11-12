@@ -112,7 +112,6 @@ struct WhimCornerComplicationContent: View {
     var body: some View {
         glyph
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .padding(.bottom, 2)
             .widgetAccentable()
             .widgetCurvesContent()
             .widgetLabel { WhimCornerComplicationLabel(entry: entry) }
@@ -147,7 +146,9 @@ struct WhimCornerComplicationContent: View {
 struct WhimCornerComplicationLabel: View {
     let entry: WhimComplicationEntry
 
-    @ViewBuilder var body: some View {
+    var body: some View { label.baselineOffset(14) }
+
+    @ViewBuilder private var label: some View {
         if let recording = entry.snapshot.activeRecording(at: entry.date) {
             let timer = Text(timerInterval: recording.createdAt...recording.createdAt.addingTimeInterval(recording.maximumDurationSeconds), countsDown: false)
             if entry.snapshot.hasFailedNotes {
