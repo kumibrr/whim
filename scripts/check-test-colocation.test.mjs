@@ -45,6 +45,21 @@ test('rejects tests without adjacent implementations', async (t) => {
   assert.ok(errors.some((error) => error.includes('Missing.test.ts')));
 });
 
+test('runs watch-only complication companion tests in the Watch test target', async (t) => {
+  const root = await fixture(t, {
+    'src/widgets/recording-complication/WhimComplication.swift': '',
+    'src/widgets/recording-complication/WhimComplication.test.swift': '',
+    'ios/whim.xcodeproj/project.pbxproj': `
+      FILE /* WhimComplication.test.swift */ = {isa = PBXFileReference; path = "../src/widgets/recording-complication/WhimComplication.test.swift"; };
+      BUILD /* test */ = {isa = PBXBuildFile; fileRef = FILE /* test */; };
+      SOURCES /* Sources */ = {isa = PBXSourcesBuildPhase; files = (BUILD /* test */,); };
+      TARGET /* WhimWatchTests */ = {isa = PBXNativeTarget; name = WhimWatchTests; buildPhases = (SOURCES /* Sources */,); };
+    `,
+  });
+
+  assert.deepEqual(await checkRepository(root), []);
+});
+
 test('rejects generic architecture folders', async (t) => {
   const root = await fixture(t, { 'src/iphone/components/Button.tsx': '' });
 

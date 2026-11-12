@@ -298,7 +298,7 @@ Automatic and manual completion produce one stop haptic per Recording Session. D
 
 Settings → Apple Watch on iPhone includes Auto-stop after silence, enabled by default, and a silence-duration slider from 2 to 10 seconds in one-second steps, defaulting to 3 seconds. The slider keeps its value when disabled. The existing Save action persists these preferences and synchronizes them independently of webhook configuration. The Watch retains the latest applied choice offline; pending/applied status is separate from webhook synchronization. Each Watch Recording Session snapshots its local choice at start. After meaningful audio, a continuous quiet interval triggers normal Stop, saving one completed Note and starting its existing Workflow. Initial silence alone does not arm this behavior, resumed audio resets the interval, and missing meter samples are never treated as silence. Manual Stop, immediate Discard, the two-second internal minimum, and the five-minute maximum remain safeguards. iPhone capture does not use this rule. Real microphone thresholds, quiet speech, ambient noise, and wrist-down execution require physical acceptance in `e2e/physical/watch-capture.e2e.test.md`.
 
-The WidgetKit complication shows the Whim mark while idle, elapsed recording time above the Watch app's Stop glyph while active (the circular family uses the compact mark), and an attention indicator when failed Notes exist. Tapping it launches directly into capture.
+The WidgetKit complication supports Circular, Corner, Rectangular, and Inline slots. Circular shows the compact Whim mark while idle, elapsed time above the Watch app's Stop glyph while active, and an attention indicator when failed Notes exist. Corner has a separate layout: one outer glyph with a system-curved label along the dial, without Circular's background or stacked timer. Idle shows the compact Whim mark with “Record”; recording shows the red Stop symbol with elapsed time on the bezel. Failed Notes show a warning glyph with “Check Notes” while idle, or a warning symbol beside the bezel timer while recording. Corner uses dedicated bowed logo artwork and opts into WidgetKit content curving: the logo follows the curve, and the Stop and warning symbols match the text's local angle. All three glyphs use images, which the system can curve and orient. WidgetKit controls curvature, orientation, and label sizing for each corner. Tapping any family launches directly into capture or focuses an existing Recording Session.
 
 ## App Intents, Lock Screen control, Action button, and Live Activity
 
@@ -366,6 +366,15 @@ Tests exercise these public seams:
 7. **Installed application:** complete journeys through compiled development builds.
 
 New test seams require an explicit design decision. Tests may use internal helpers for fixture setup, but assertions remain against these interfaces.
+
+**2026-11-12 complication registration decision:** Watch-hosted companion tests may
+check `WhimComplication.supportedFamilies`, the configuration value passed to
+WidgetKit, and render the complication view with an explicit widget family.
+WidgetKit exposes no public reader for a resolved widget's configuration. These
+tests therefore verify the owned registration boundary and rendered UI. Picker
+availability, layout, tinting, and tapping on a face remain physical acceptance
+cases in `e2e/physical/watch-capture.e2e.test.md`; installed-app tests cover the
+shared capture launch context.
 
 ### Unit suite
 
