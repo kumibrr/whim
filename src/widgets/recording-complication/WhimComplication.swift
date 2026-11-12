@@ -111,7 +111,8 @@ struct WhimCornerComplicationContent: View {
 
     var body: some View {
         glyph
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .padding(.bottom, 2)
             .widgetAccentable()
             .widgetCurvesContent()
             .widgetLabel { WhimCornerComplicationLabel(entry: entry) }
@@ -129,7 +130,7 @@ struct WhimCornerComplicationContent: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .resizable()
                 .scaledToFit()
-                .padding(2)
+                .frame(width: 18, height: 18, alignment: .bottom)
                 .foregroundStyle(.yellow)
                 .accessibilityLabel("Record a Whim. Failed Notes need attention")
         } else {

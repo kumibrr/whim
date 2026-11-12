@@ -50,8 +50,10 @@ Status: pending physical-device execution.
 2. While idle, verify the Corner shows the compact Whim mark curved along the
    dial, with a matching curved “Record” label and no circular background. Tap it with
    microphone access granted: expect immediate capture. Return to the face and
-   verify a single centered red recording glyph occupies the outer corner,
-   with elapsed time on the curved bezel label rather than above the glyph.
+   verify the red recording glyph sits close to the curved elapsed-time label,
+   with a small clear gap and no overlap. The timer remains on the bezel.
+   The logo's two ends must extend into tapered wedges following the same arc,
+   with both tips fully visible.
    The Stop symbol must follow the same local angle as the text, rather than
    remaining upright. Repeat in all four corners; orientation follows each slot.
 3. Tap the Corner during capture: expect the same Recording Session, not a
@@ -63,12 +65,13 @@ Status: pending physical-device execution.
    VoiceOver must announce the actual elapsed duration as well as the recording
    label, including when failed Notes exist; refocus after a few seconds and
    verify the announced duration advances.
-   Both the standalone warning glyph and the warning beside the timer must
-   align with the text's local angle in each corner.
+   The standalone warning should sit as close to its label as Stop does. Both
+   the standalone warning glyph and the warning beside the timer must align
+   with the text's local angle in each corner, without touching the label.
 
 Evidence: Watch model/watchOS version, build, screenshots of the picker and
 each Corner state, and the saved Note. Deterministic companion coverage checks
-the compiled widget's family registration, bowed logo artwork, and centered Corner recording glyph;
+the compiled widget's family registration, curved tapered logo artwork, and shared bezel gap for Stop and warning;
 installed-app complication launch
 coverage checks capture and saving. Face layout and system picker installation
 remain physical acceptance cases.
