@@ -24,6 +24,7 @@ case "${1:-}" in
         "${whim_xcode_build_locations[@]}" \
         -only-testing:WhimCoreIntegrationTests/AVAudioRecorderSessionIntegrationTests \
         -only-testing:WhimCoreIntegrationTests/PCMRecorderHardwareIntegrationTests \
+        -only-testing:WhimCoreIntegrationTests/WatchConnectivitySessionIntegrationTests \
         -destination "id=${WHIM_IPHONE_SIMULATOR_UDID}" \
         CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
     )

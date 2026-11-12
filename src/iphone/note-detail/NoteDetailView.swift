@@ -22,7 +22,9 @@ struct NoteDetailView: View {
                 if let error = note.localError { Text("Local audio error: \(error.rawValue)").foregroundStyle(.red) }
                 if note.workflowError != nil { Text("Delivery could not continue. Your Note is preserved.").foregroundStyle(.red) }
                 if note.audioSynchronization != nil {
-                    Text("The audio has not synchronized to this iPhone.").foregroundStyle(.secondary)
+                    let details = AudioSynchronizationDetails(note: note)
+                    if let cause = details.cause { Text(cause).font(.callout).accessibilityIdentifier("note-sync-cause") }
+                    if let recovery = details.recovery { Text(recovery).font(.callout).accessibilityIdentifier("note-sync-recovery") }
                     Button {
                         Task { await model.retry(); await root.refresh() }
                     } label: {
@@ -55,11 +57,14 @@ struct NoteDetailView: View {
                     }
                     .accessibilityIdentifier("note-delivery-status")
                 }
-                if !(note.audioSynchronizationRetries ?? []).isEmpty {
-                    Text("Audio synchronization").whimHeading()
-                }
-                ForEach(Array((note.audioSynchronizationRetries ?? []).enumerated()), id: \.element.id) { index, retry in
-                    synchronizationRetryRow(retry, number: index + 1)
+                if note.audioSynchronization != nil || !(note.audioSynchronizationRetries ?? []).isEmpty {
+                    TechnicalDetailsView(rows: AudioSynchronizationDetails(note: note).technicalRows,
+                        identifier: "note-sync-technical-details") {
+                        if !(note.audioSynchronizationRetries ?? []).isEmpty { Text("Audio synchronization").font(.headline) }
+                        ForEach(Array((note.audioSynchronizationRetries ?? []).enumerated()), id: \.element.id) { index, retry in
+                            synchronizationRetryRow(retry, number: index + 1)
+                        }
+                    }
                 }
                 if !note.attempts.isEmpty {
                     Text("Delivery attempts").whimHeading()
@@ -147,6 +152,16 @@ struct NoteDetailView: View {
             }.font(.subheadline)
             Text("Apple Watch → iPhone · \(TimelineFormat.date(retry.startedAt))")
                 .font(.caption).foregroundStyle(.secondary)
+            if let failure = retry.failure {
+                Text(AudioSynchronizationDetails.failureCause(failure)).font(.callout)
+                Text("Failure observed: \(TimelineFormat.date(failure.observedAt))").font(.caption).foregroundStyle(.secondary)
+                ForEach(synchronizationErrorRows(failure.systemError, prefix: "Audio save")) { row in
+                    Text("\(row.label): \(row.value)").font(.caption).textSelection(.enabled)
+                }
+            } else if retry.outcome == .failed { Text("Cause not reported").font(.callout) }
+            if let completedAt = retry.completedAt {
+                Text("Finished: \(TimelineFormat.date(completedAt))").font(.caption).foregroundStyle(.secondary)
+            }
             Divider()
         }
         .accessibilityElement(children: .combine)

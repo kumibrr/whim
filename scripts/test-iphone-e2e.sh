@@ -105,6 +105,7 @@ whim_flows=(
   "$whim_root/e2e/iphone/recovered-review.e2e.test.yaml"
   "$whim_root/e2e/iphone/settings-and-reset.e2e.test.yaml"
   "$whim_root/e2e/iphone/watch-silence-settings.e2e.test.yaml"
+  "$whim_root/e2e/iphone/watch-unavailability.e2e.test.yaml"
   "$whim_root/e2e/iphone/watch-update-onboarding.e2e.test.yaml"
   "$whim_root/e2e/iphone/permission-review.e2e.test.yaml"
   "$whim_root/e2e/iphone/retention.e2e.test.yaml"

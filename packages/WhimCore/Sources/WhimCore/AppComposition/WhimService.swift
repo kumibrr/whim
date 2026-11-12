@@ -222,6 +222,8 @@ public actor WhimService: WhimClient {
     }
 
     public func receivePeer(_ event: PeerEvent) async throws {
+        // Live facts must not enter launch recovery or serialize behind a command.
+        if case .statusChanged = event { publish(.settingsChanged); return }
         let destructive: Bool
         if case .message(let envelope) = event, case .reset = envelope.payload { destructive = true }
         else { destructive = false }
@@ -238,6 +240,7 @@ public actor WhimService: WhimClient {
         guard let peer else { return }
         let changed: NoteID?
         switch event {
+        case .statusChanged: return
         case .activated:
             try? await synchronizeWatchRecordingPreferences()
             try await peer.activated(); publish(.settingsChanged); return
@@ -917,7 +920,7 @@ public enum WhimProductionComposition {
            let debugPeer = try DebugPeerTransport.from(arguments: arguments,
                 fixture: configurationTestFixtureURL(bundle: bundle)) {
             try debugPeer.prepare(root: root)
-            peerTransport = debugPeer
+            peerTransport = debugPeer.transport
         }
         #endif
         let peer = try ConnectivityMergeService(store: store, files: files,

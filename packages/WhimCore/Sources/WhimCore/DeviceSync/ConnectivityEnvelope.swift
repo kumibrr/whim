@@ -43,7 +43,19 @@ public struct AudioTransferRequest: Codable, Equatable, Sendable {
 public struct AudioTransferUnavailable: Codable, Equatable, Sendable {
     public let noteID: NoteID
     public let requestID: UUID?
-    public init(noteID: NoteID, requestID: UUID? = nil) { self.noteID = noteID; self.requestID = requestID }
+    public let reason: String?
+    public init(noteID: NoteID, requestID: UUID? = nil, reason: String? = nil) {
+        self.noteID = noteID; self.requestID = requestID
+        self.reason = reason.flatMap { Self.reasons.contains($0) ? $0 : nil }
+    }
+    private static let reasons: Set<String> = ["missingNote", "missingAudio", "expiredAudio", "unreadableAudio", "sourceNotReady"]
+    private enum CodingKeys: String, CodingKey { case noteID, requestID, reason }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(noteID: try values.decode(NoteID.self, forKey: .noteID),
+            requestID: try values.decodeIfPresent(UUID.self, forKey: .requestID),
+            reason: try values.decodeIfPresent(String.self, forKey: .reason))
+    }
 }
 
 public struct NoteTransfer: Codable, Equatable, Sendable {

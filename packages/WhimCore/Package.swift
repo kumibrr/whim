@@ -3,6 +3,7 @@
 import PackageDescription
 
 let productionSources = [
+    "DeviceSync/PeerConnectionDetails.swift",
     "Preferences/WatchRecordingPreferences.swift",
     "Recording/SilenceAutoStopPolicy.swift",
     "Maintenance/BackgroundScheduler.swift",
@@ -81,6 +82,8 @@ let productionSources = [
     "WebhookConfiguration/WebhookRequestBuilder.swift",
 ]
 let unitTestSources = [
+    "DeviceSync/AudioSynchronization.test.swift",
+    "DeviceSync/PeerConnectionDetails.test.swift",
     "Preferences/WatchRecordingPreferences.test.swift",
     "Maintenance/WatchBackgroundScheduler.test.swift",
     "Recording/CaptureLatencyProbe.test.swift",
@@ -113,6 +116,7 @@ let unitTestSources = [
     "WebhookConfiguration/WebhookRequestBuilder.test.swift",
 ]
 let integrationTestSources = [
+    "DeviceSync/WatchConnectivityAdapter.integration.test.swift",
     "Preferences/WatchRecordingPreferences.integration.test.swift",
     "Maintenance/MaintenanceService.integration.test.swift",
     "Recording/PCMRecorderHardware.integration.test.swift",

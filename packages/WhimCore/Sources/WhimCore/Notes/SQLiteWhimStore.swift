@@ -113,7 +113,11 @@ public actor SQLiteWhimStore: WhimStore {
             if value == nil { retries[index].outcome = .synced }
             else if value?.status == .failed || (value?.transferCount ?? 0) > (previous?.transferCount ?? 0) {
                 retries[index].outcome = .failed
+                retries[index].failure = value?.lastFailure
             } else { retries[index].outcome = .superseded }
+            if retries[index].failure == nil, let failure = previous?.lastFailure,
+               failure.requestID == requestID { retries[index].failure = failure }
+            retries[index].completedAt = time
         }
         if let requestID = value?.requestID, !retries.contains(where: { $0.id == requestID }) {
             retries.append(.init(id: requestID, startedAt: time))

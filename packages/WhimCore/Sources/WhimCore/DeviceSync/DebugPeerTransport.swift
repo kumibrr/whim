@@ -17,6 +17,11 @@ public final class DebugPeerTransport: PeerTransport, @unchecked Sendable {
     }
     public var isAvailable: Bool { scenario != "isolated" }
     public var isActivated: Bool { true }
+    /// Availability journeys retain the real adapter and replace only WCSession's response.
+    var transport: any PeerTransport {
+        scenario.hasPrefix("watch-connection-") || scenario == "watch-app-not-installed"
+            ? WatchConnectivityAdapter(session: DebugWatchConnectionSession(scenario: scenario)) : self
+    }
     private init(scenario: String, fixture: URL) { self.scenario = scenario; self.fixture = fixture }
     public static func from(arguments: [String], fixture: URL) throws -> DebugPeerTransport? {
         guard let index = arguments.firstIndex(of: "-WhimPeerScenario") else {
@@ -25,7 +30,8 @@ public final class DebugPeerTransport: PeerTransport, @unchecked Sendable {
         }
         guard arguments.indices.contains(index + 1),
               ["file-first", "state-first", "receipt-first", "failure-first", "interrupted-pending", "resend-interrupted",
-               "pending-audio", "pending-sent", "sync-failure", "sync-repair", "watch-auto-stop-disabled"].contains(arguments[index + 1]) else {
+               "pending-audio", "pending-sent", "sync-failure", "sync-repair", "watch-auto-stop-disabled",
+               "watch-app-not-installed", "watch-connection-unsupported", "watch-connection-activation-failed"].contains(arguments[index + 1]) else {
             throw WhimServiceError.setupRequired("Unknown development peer scenario.")
         }
         let audio: URL
@@ -157,5 +163,39 @@ public final class DebugPeerTransport: PeerTransport, @unchecked Sendable {
     }
     public func transferFile(at url: URL, metadata: ConnectivityEnvelope) throws {}
     public func updateContext(_ envelope: ConnectivityEnvelope, credentials: StoredWebhookCredentials?) throws {}
+}
+
+private struct DebugWatchConnectionSession: WatchConnectivitySession {
+    let scenario: String
+    let isAvailable = false
+    var isActivated: Bool { scenario == "watch-app-not-installed" }
+    let isReachable = false
+    let outstandingUserInfo: [Data] = []
+    let outstandingFileMetadata: [Data] = []
+    var unavailabilityReason: PeerUnavailabilityReason? {
+        switch scenario {
+        case "watch-connection-unsupported": .unsupported
+        case "watch-connection-activation-failed": .inactive
+        default: .appNotInstalled
+        }
+    }
+    var connectionDetails: PeerConnectionDetails? {
+        switch scenario {
+        case "watch-connection-unsupported": .init(supported: false)
+        case "watch-connection-activation-failed":
+            .init(supported: true, activationState: "notActivated", paired: true,
+                counterpartAppInstalled: true, reachable: false,
+                pendingStateTransfers: 0, pendingAudioTransfers: 0,
+                activationFailure: .init(error: NSError(domain: "WCErrorDomain", code: 7004),
+                    observedAt: Date(timeIntervalSince1970: 1_790_000_000)))
+        default: .init(supported: true, activationState: "activated", paired: true,
+            counterpartAppInstalled: false, reachable: false, pendingStateTransfers: 0, pendingAudioTransfers: 0)
+        }
+    }
+    func activate(receive: @escaping @Sendable (ConnectivitySessionEvent) -> Void) { receive(.statusChanged) }
+    func transferUserInfo(_ data: Data) throws {}
+    func sendMessage(_ data: Data) {}
+    func transferFile(_ url: URL, metadata: Data) throws {}
+    func updateApplicationContext(_ data: Data, credentials: Data?) throws {}
 }
 #endif

@@ -3,6 +3,36 @@ import XCTest
 import WhimCore
 
 final class ConnectivityProtocolTests: XCTestCase {
+    func testStatusNotificationsPassThroughTheRealAdapter() {
+        let observed = expectation(description: "System facts changed")
+        let adapter = WatchConnectivityAdapter(session: ConnectivitySessionProbe())
+        adapter.activate { event in if case .statusChanged = event { observed.fulfill() } }
+        wait(for: [observed], timeout: 1)
+    }
+
+    func testUnavailabilityNamesTheFirstMissingRequirement() throws {
+        XCTAssertEqual(PeerUnavailabilityReason.resolve(activated: false, paired: false, counterpartInstalled: false), .inactive)
+        XCTAssertEqual(PeerUnavailabilityReason.resolve(activated: true, paired: false, counterpartInstalled: false), .unpaired)
+        XCTAssertEqual(PeerUnavailabilityReason.resolve(activated: true, paired: true, counterpartInstalled: false), .appNotInstalled)
+        XCTAssertEqual(PeerUnavailabilityReason.resolve(activated: true, paired: nil, counterpartInstalled: false), .appNotInstalled)
+        XCTAssertNil(PeerUnavailabilityReason.resolve(activated: true, paired: true, counterpartInstalled: true))
+    }
+
+    func testWatchSettingsDecodeLegacyAndUnknownReasonsWithoutLosingCompatibility() throws {
+        // Older peers and stored projections carry no reason; an available Watch never encodes one.
+        let legacy = Data(#"{"availability":"unavailable","lastSynchronizedAt":null,"resetState":"idle"}"#.utf8)
+        XCTAssertNil(try JSONDecoder().decode(WatchSettingsProjection.self, from: legacy).availabilityReason)
+        let explained = WatchSettingsProjection(availability: "unavailable", lastSynchronizedAt: nil, resetState: "idle",
+            availabilityReason: PeerUnavailabilityReason.appNotInstalled.rawValue)
+        let decoded = try JSONDecoder().decode(WatchSettingsProjection.self, from: JSONEncoder().encode(explained))
+        XCTAssertEqual(decoded.availabilityReason, "appNotInstalled")
+        let future = Data(#"{"availability":"unavailable","availabilityReason":"futureSystemReason","resetState":"idle"}"#.utf8)
+        XCTAssertEqual(try JSONDecoder().decode(WatchSettingsProjection.self, from: future).availabilityReason,
+            "futureSystemReason")
+        let available = WatchSettingsProjection(availability: "available", lastSynchronizedAt: nil, resetState: "idle")
+        XCTAssertFalse(String(decoding: try JSONEncoder().encode(available), as: UTF8.self).contains("availabilityReason"))
+    }
+
     func testReplayedMessageIsNotQueuedAgainWhileTheSystemStillHoldsIt() throws {
         let session = ConnectivitySessionProbe()
         let adapter = WatchConnectivityAdapter(session: session)
@@ -109,7 +139,7 @@ private final class ConnectivitySessionProbe: WatchConnectivitySession, @uncheck
     var fileMetadata: [Data] = []
     var durable: [Data] = []; var immediate: [Data] = []; var files: [URL] = []; var contexts: [Data] = []
     var isAvailable: Bool { true }; var isActivated: Bool { true }; var isReachable: Bool { reachable }
-    func activate(receive: @escaping @Sendable (ConnectivitySessionEvent) -> Void) {}
+    func activate(receive: @escaping @Sendable (ConnectivitySessionEvent) -> Void) { receive(.statusChanged) }
     func transferUserInfo(_ data: Data) throws { durable.append(data); outstandingUserInfo.append(data) }
     func sendMessage(_ data: Data) { immediate.append(data) }
     func transferFile(_ url: URL, metadata: Data) throws {

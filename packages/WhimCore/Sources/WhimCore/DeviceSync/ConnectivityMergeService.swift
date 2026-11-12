@@ -8,14 +8,16 @@ public actor ConnectivityMergeService {
     private let device: AttemptDevice
     private let credentials: (any CredentialStore)?
     private let transport: (any PeerTransport)?
+    private let clock: any Clock
     private let preferences: (any PreferenceStoring)?
     public nonisolated let managesPreferences: Bool
     private var lastConfigurationContext: String?
 
     public init(store: any WhimStore, files: any AudioFileManaging, databaseURL: URL,
                 root: URL, device: AttemptDevice, credentials: (any CredentialStore)? = nil, transport: (any PeerTransport)? = nil,
-                preferences: (any PreferenceStoring)? = nil) throws {
+                preferences: (any PreferenceStoring)? = nil, clock: any Clock = SystemClock()) throws {
         self.store = store; self.files = files; self.root = root; self.device = device; self.credentials = credentials; self.transport = transport
+        self.clock = clock
         self.preferences = preferences; managesPreferences = preferences != nil
         journal = try ConnectivityJournal(databaseURL: databaseURL)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -86,7 +88,7 @@ public actor ConnectivityMergeService {
             return nil
         case .audioUnavailable(let request):
             guard device == .iphone else { return nil }
-            try await rejectAudio(request.noteID, respondingTo: request.requestID)
+            try await rejectAudio(request.noteID, respondingTo: request.requestID, reason: request.reason ?? "sourceUnavailable")
             return try await mergeState(request.noteID)
         case .acknowledgement(.audio(let id)):
             try journal.acknowledgeAudio(id, generation: envelope.generation)
@@ -147,22 +149,27 @@ public actor ConnectivityMergeService {
             try await rejectAudio(metadata.id, respondingTo: metadata.audioRequestID)
             return try await mergeState(metadata.id)
         }
-        let destination = pendingFile(metadata.id, generation: envelope.generation)
-        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-        // A resend after an interrupted copy must replace the truncated file, not keep it.
-        if files.audioError(at: destination) != nil {
-            try copyReplacing(destination, from: url, staging: destination.appendingPathExtension("partial"))
+        do {
+            let destination = pendingFile(metadata.id, generation: envelope.generation)
+            try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            // A resend after an interrupted copy must replace the truncated file, not keep it.
+            if files.audioError(at: destination) != nil {
+                try copyReplacing(destination, from: url, staging: destination.appendingPathExtension("partial"))
+            }
+            let durability = SystemFileDurability()
+            let sidecar = destination.appendingPathExtension("plist")
+            try envelope.encoded().write(to: sidecar, options: .atomic)
+            try durability.protect(sidecar, as: .unsent)
+            try durability.synchronizeFile(at: sidecar)
+            try durability.protect(destination, as: .unsent)
+            try durability.synchronizeFile(at: destination)
+            try durability.synchronizeDirectory(at: destination.deletingLastPathComponent())
+            try durability.synchronizeDirectory(at: root)
+            try acknowledgeDurable(envelope)
+        } catch {
+            if envelope.generation == (try? generation()) { await recordSaveFailure(error, metadata: metadata) }
+            throw error
         }
-        let durability = SystemFileDurability()
-        let sidecar = destination.appendingPathExtension("plist")
-        try envelope.encoded().write(to: sidecar, options: .atomic)
-        try durability.protect(sidecar, as: .unsent)
-        try durability.synchronizeFile(at: sidecar)
-        try durability.protect(destination, as: .unsent)
-        try durability.synchronizeFile(at: destination)
-        try durability.synchronizeDirectory(at: destination.deletingLastPathComponent())
-        try durability.synchronizeDirectory(at: root)
-        try acknowledgeDurable(envelope)
         guard envelope.generation == (try generation()) else { return nil }
         try journal.enqueue(.init(generation: envelope.generation, payload: .acknowledgement(.audio(metadata.id))))
         if let existing = try await store.note(id: metadata.id) {
@@ -203,10 +210,24 @@ public actor ConnectivityMergeService {
             return metadata.id
         }
         let destination = files.audioURL(for: metadata.id)
-        if files.audioError(at: destination) != nil {
-            try copyReplacing(destination, from: pending, staging: pending.appendingPathExtension("partial"))
+        do {
+            if files.audioError(at: destination) != nil {
+                try copyReplacing(destination, from: pending, staging: pending.appendingPathExtension("partial"))
+            }
+            guard try files.durableAudio(noteID: metadata.id) != nil else { throw ConnectivityError.invalidFile }
+        } catch {
+            // The pending file belongs to the received request, which can be older than
+            // the Note's current retry. Preserve that identity across recovery, too.
+            var receivedMetadata = metadata
+            if let data = try? Data(contentsOf: pending.appendingPathExtension("plist")),
+               let envelope = try? ConnectivityEnvelope.decode(data),
+               envelope.generation == (try? generation()),
+               case .noteMetadata(let received) = envelope.payload, received.id == metadata.id {
+                receivedMetadata = received
+            }
+            await recordSaveFailure(error, metadata: receivedMetadata)
+            throw error
         }
-        guard try files.durableAudio(noteID: metadata.id) != nil else { throw ConnectivityError.invalidFile }
         if try await store.note(id: metadata.id)?.audioSynchronization != nil {
             try await store.setAudioSynchronization(nil, noteID: metadata.id)
             try journal.reconcileAudioRequest(metadata.id, generation: generation())
@@ -221,7 +242,7 @@ public actor ConnectivityMergeService {
         try await rejectAudio(id, respondingTo: nil)
     }
 
-    private func rejectAudio(_ id: NoteID, respondingTo requestID: UUID?) async throws {
+    private func rejectAudio(_ id: NoteID, respondingTo requestID: UUID?, reason: String = "unreadableReceivedAudio") async throws {
         guard var synchronization = try await store.note(id: id)?.audioSynchronization,
               synchronization.status != .failed else { return }
         let previous = synchronization
@@ -231,6 +252,7 @@ public actor ConnectivityMergeService {
         } else {
             guard synchronization.status == .waiting else { return }
         }
+        synchronization.lastFailure = .init(reason: reason, observedAt: clock.now, requestID: requestID)
         if synchronization.transferCount == AudioSynchronization.maximumTransfers {
             synchronization.status = .failed
             synchronization.requestID = nil
@@ -252,15 +274,43 @@ public actor ConnectivityMergeService {
         if let source, source.source == .appleWatch, source.audioExpiredAt == nil {
             try journal.beginAudioHandoff(request.noteID, generation: generation)
         }
-        guard let note = source, note.source == .appleWatch,
-              note.audioSynchronization == nil, files.audioError(at: note.audioURL) == nil else {
+        if let reason = sourceUnavailability(source) {
             try journal.enqueue(.init(generation: generation,
-                payload: .audioUnavailable(.init(noteID: request.noteID, requestID: request.requestID))))
+                payload: .audioUnavailable(.init(noteID: request.noteID, requestID: request.requestID, reason: reason))))
             return
         }
+        guard let source else { return }
         let metadata = ConnectivityEnvelope(messageID: request.requestID, generation: generation,
-            payload: .noteMetadata(.init(note, audioRequestID: request.requestID)))
-        try journal.enqueue(metadata, file: note.audioURL)
+            payload: .noteMetadata(.init(source, audioRequestID: request.requestID)))
+        try journal.enqueue(metadata, file: source.audioURL)
+    }
+
+    private func sourceUnavailability(_ note: Note?) -> String? {
+        guard let note else { return "missingNote" }
+        if note.audioExpiredAt != nil { return "expiredAudio" }
+        if note.source != .appleWatch || note.audioSynchronization != nil { return "sourceNotReady" }
+        switch files.audioError(at: note.audioURL) {
+        case .missing: return "missingAudio"
+        case .some: return "unreadableAudio"
+        case nil: return nil
+        }
+    }
+
+    /// Diagnostic persistence is best effort and must never replace the original save error.
+    private func recordSaveFailure(_ error: Error, metadata: NoteTransfer) async {
+        do {
+            guard device == .iphone, metadata.source == .appleWatch,
+                  !(try await store.deletions()).contains(where: { $0.noteID == metadata.id }) else { return }
+            let note = try await store.savePendingPeerNote(metadata.finalized(audioURL: files.audioURL(for: metadata.id)))
+            guard var state = note.audioSynchronization else { return }
+            if let requestID = metadata.audioRequestID {
+                guard state.requestID == requestID else { return }
+            } else { guard state.status == .waiting else { return } }
+            let previous = state
+            state.lastFailure = .init(reason: "localSaveFailed", observedAt: clock.now,
+                requestID: state.requestID, systemError: .init(error: error, observedAt: clock.now))
+            _ = try await store.replaceAudioSynchronization(previous, with: state, noteID: metadata.id)
+        } catch { /* Retain the primary exception and all recoverable files. */ }
     }
 
     private func mergeState(_ id: NoteID) async throws -> NoteID? {
@@ -280,7 +330,7 @@ public actor ConnectivityMergeService {
                 } catch WhimStoreError.notEligible { continue }
             case .receipt(let receipt): _ = try await store.apply(.receipt(receipt), to: id)
             case .audioUnavailable(let response) where device == .iphone:
-                try await rejectAudio(id, respondingTo: response.requestID)
+                try await rejectAudio(id, respondingTo: response.requestID, reason: response.reason ?? "sourceUnavailable")
             default: break
             }
         }
@@ -359,7 +409,7 @@ public actor ConnectivityMergeService {
             if files.audioError(at: note.audioURL) == nil {
                 try journal.enqueue(.init(generation: current, payload: metadata.payload), file: note.audioURL)
             } else {
-                try journal.enqueue(.init(generation: current, payload: .audioUnavailable(.init(noteID: id))))
+                try journal.enqueue(.init(generation: current, payload: .audioUnavailable(.init(noteID: id, reason: sourceUnavailability(note)))))
             }
         }
         for attempt in try await store.deliveryAttempts(noteID: id) {
@@ -449,10 +499,13 @@ public actor ConnectivityMergeService {
         let appliedKey = device == .iphone ? "watchRecordingAcknowledged" : "watchRecordingApplied"
         let applied = try journal.read(appliedKey, as: [UInt64].self)?.first
         let preferenceState = expected.map { $0 == applied ? "synchronized" : "pending" } ?? "unavailable"
-        return WatchSettingsProjection(availability: transport?.isAvailable == true ? "available" : "unavailable",
+        let available = transport?.isAvailable == true
+        return WatchSettingsProjection(availability: available ? "available" : "unavailable",
             lastSynchronizedAt: try journal.read("lastSynchronizedAt", as: [Date].self)?.first,
             resetState: reset.generation == .initial ? "idle" : endpoints.count >= 2 ? "synchronized" : "pending",
-            recordingPreferencesState: preferenceState)
+            recordingPreferencesState: preferenceState,
+            availabilityReason: available ? nil : transport?.unavailabilityReason?.rawValue,
+            connectionDetails: transport?.connectionDetails)
     }
 
     public func generation() throws -> ResetGeneration { try journal.resetState().generation }

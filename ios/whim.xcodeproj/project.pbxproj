@@ -92,6 +92,8 @@
 		66893980D6270131C971A8A1 /* 03-OnboardingMicrophone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F9121141A7837DEEBC0A007 /* 03-OnboardingMicrophone.swift */; };
 		84DA189010A3395DD821C492 /* 04-QuickCaptureSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72A5BCA5B12DF6686993C13D /* 04-QuickCaptureSetupView.swift */; };
 		29AC5A208F51827802FC8095 /* 01-AppUpdateWatchRecording.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF2283295B7161A6CB62B2D4 /* 01-AppUpdateWatchRecording.swift */; };
+		62AD0D1DF145D56E86825F03 /* WatchConnectionDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 782271459CC2B8C4ED493EF7 /* WatchConnectionDetails.swift */; };
+		9B1209CBE9A4D9B2C94E03B2 /* TechnicalDetailsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A58804D3D10129D392AE6E0 /* TechnicalDetailsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -245,6 +247,8 @@
 		8F9121141A7837DEEBC0A007 /* 03-OnboardingMicrophone.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "03-OnboardingMicrophone.swift"; path = "../src/iphone/onboarding/pages/03-OnboardingMicrophone.swift"; sourceTree = "<group>"; };
 		72A5BCA5B12DF6686993C13D /* 04-QuickCaptureSetupView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "04-QuickCaptureSetupView.swift"; path = "../src/iphone/onboarding/pages/04-QuickCaptureSetupView.swift"; sourceTree = "<group>"; };
 		BF2283295B7161A6CB62B2D4 /* 01-AppUpdateWatchRecording.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "01-AppUpdateWatchRecording.swift"; path = "../src/iphone/onboarding/updates/01-AppUpdateWatchRecording.swift"; sourceTree = "<group>"; };
+		782271459CC2B8C4ED493EF7 /* WatchConnectionDetails.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchConnectionDetails.swift; path = ../src/iphone/preferences/WatchConnectionDetails.swift; sourceTree = "<group>"; };
+		6A58804D3D10129D392AE6E0 /* TechnicalDetailsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TechnicalDetailsView.swift; path = ../src/iphone/appearance/TechnicalDetailsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -330,6 +334,8 @@
 		1BF21CDB5BDE7D2B1A215FE2 /* WhimIPhone */ = {
 			isa = PBXGroup;
 			children = (
+				782271459CC2B8C4ED493EF7 /* WatchConnectionDetails.swift */,
+				6A58804D3D10129D392AE6E0 /* TechnicalDetailsView.swift */,
 				6A1CDDBAF66816C5DAAFC820 /* PreferencesView.swift */,
 				B1E110DAC34F09627A6A0BD4 /* IPhoneRootView.swift */,
 				A8FF888F0042FF03E1356ED8 /* WhimIPhoneApp.swift */,
@@ -747,6 +753,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9B1209CBE9A4D9B2C94E03B2 /* TechnicalDetailsView.swift in Sources */,
 				7B0E9E1DC4E5E3B5AC5ABFFF /* PreferencesView.swift in Sources */,
 				1094FF3AD4099062FB4B70A6 /* IPhoneRootView.swift in Sources */,
 				882932C7A98CC539F2A0745B /* WhimIPhoneApp.swift in Sources */,

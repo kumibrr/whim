@@ -183,6 +183,16 @@ struct SettingsSectionView: View {
                 .accessibilityIdentifier("watch-recording-sync-status")
             Divider()
             Text("Watch synchronization \(settings.watch.availability).")
+            let details = WatchConnectionDetails(settings: settings.watch)
+            if let cause = details.cause {
+                Text(cause).font(.callout).accessibilityIdentifier("watch-unavailability-reason")
+            }
+            if let recovery = details.recovery {
+                Text(recovery).font(.callout).accessibilityIdentifier("watch-unavailability-recovery")
+            }
+            Button("Refresh status", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
+                .whimGlassButton().accessibilityIdentifier("watch-refresh-status")
+            TechnicalDetailsView(rows: details.technicalRows, identifier: "watch-technical-details") { EmptyView() }
             footnote("Last synchronized: \(settings.watch.lastSynchronizedAt.map(TimelineFormat.date) ?? "Not yet synchronized")")
             if settings.watch.resetState == "pending" {
                 Text("Reset pending on Apple Watch. It will finish after reconnection.").foregroundStyle(.secondary)

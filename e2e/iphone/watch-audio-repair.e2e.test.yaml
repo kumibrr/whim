@@ -60,9 +60,28 @@ appId: app.whim.ios
 - assertVisible: Retry sync
 - assertNotVisible: Queued
 - assertVisible:
+    id: note-sync-cause
+    text: 'This iPhone could not read a playable copy of the audio received from Watch\.'
+- assertVisible:
+    id: note-sync-recovery
+- scrollUntilVisible:
+    element:
+      id: note-sync-technical-details
+    direction: DOWN
+- tapOn:
+    id: note-sync-technical-details
+- scrollUntilVisible:
+    element:
+      id: note-sync-retry-row-1
+    direction: DOWN
+- assertVisible:
     id: note-sync-retry-row-1
     below:
       text: Audio synchronization
+- scrollUntilVisible:
+    element:
+      id: note-sync-retry-row-2
+    direction: DOWN
 - assertVisible:
     id: note-sync-retry-row-2
     below:
@@ -89,6 +108,8 @@ appId: app.whim.ios
     timeout: 30000
 - assertNotVisible: Sync failed
 - assertNotVisible: Retry sync
+- assertNotVisible:
+    id: note-sync-cause
 - tapOn:
     id: note-play-.*
     childOf:
