@@ -62,8 +62,25 @@ import XCTest
         XCTAssertLessThanOrEqual(baselineClearance, 18, "Keep the label within its allotted space")
     }
 
-    // Break: Corner uses a straight logo or merely rotates the entire straight mark.
-    func testCornerLogoArtworkBendsItsTwoLeadInsInOppositeDirections() throws {
+    func testCompleteLogoUsesAWiderCornerWithoutWideningStatusIcons() throws {
+        let date = Date()
+        let recording = RecordingProjection(sessionID: "session", noteID: "note", source: .appleWatch, createdAt: date)
+        let cases: [(ComplicationSnapshot, Int)] = [
+            (.idle, 56),
+            (.init(recording: recording, hasFailedNotes: false), 38),
+            (.init(recording: nil, hasFailedNotes: true), 38),
+        ]
+        for (snapshot, expectedWidth) in cases {
+            let renderer = ImageRenderer(content: WhimCornerComplicationContent(entry: .init(date: date, snapshot: snapshot))
+                .frame(height: 38).background(.black))
+            renderer.proposedSize = .init(width: 38, height: 38)
+            renderer.scale = 1
+            let image = try XCTUnwrap(renderer.cgImage)
+            XCTAssertEqual(image.width, expectedWidth, "The complete logo should claim the available horizontal space")
+        }
+    }
+
+    func testCornerLogoEndsStayNearlyLevel() throws {
         let (image, pixels) = try renderLogoArtwork()
         func meanY(at fraction: Double) throws -> Double {
             let x = Int(Double(image.width) * fraction)
@@ -74,15 +91,50 @@ import XCTest
             _ = try XCTUnwrap(rows.first, "The Corner logo must be present in the compiled asset catalog")
             return Double(rows.reduce(0, +)) / Double(rows.count)
         }
-        let leftSlope = try meanY(at: 0.075) - meanY(at: 0.04)
-        let rightSlope = try meanY(at: 0.96) - meanY(at: 0.925)
-        XCTAssertGreaterThan(abs(leftSlope), 2, "The left lead-in must follow an arc")
-        XCTAssertGreaterThan(abs(rightSlope), 2, "The right lead-out must follow an arc")
-        XCTAssertLessThan(leftSlope * rightSlope, 0, "A curved logo has opposing end slopes; rotating a straight logo is insufficient")
+        let centers = try [0.06, 0.14, 0.86, 0.94].map { try meanY(at: $0) }
+        let highest = try XCTUnwrap(centers.min())
+        let lowest = try XCTUnwrap(centers.max())
+        XCTAssertLessThan(lowest - highest, 2,
+                          "Keep the outer ends almost level instead of sweeping down")
     }
 
-    // Break: extending the curved logo retains blunt, constant-width ends.
-    func testCornerLogoHasLongTaperedWedgesAtBothEnds() throws {
+    // Break: Corner still uses the shortened mark, omitting the full logo's floating dot.
+    func testCornerShowsTheCompleteWaveformAndItsFloatingDot() throws {
+        let (image, pixels) = try renderLogoArtwork()
+        var remaining = Set((0..<(image.width * image.height)).filter { index in
+            let offset = index * 4
+            return pixels[offset] > 200 && pixels[offset + 1] > 200 && pixels[offset + 2] > 200
+        })
+        var components = [[Int]]()
+        while let first = remaining.first {
+            remaining.remove(first)
+            var component = [first]
+            var cursor = 0
+            while cursor < component.count {
+                let point = component[cursor]
+                let x = point % image.width, y = point / image.width
+                let neighbors = [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)]
+                for (nx, ny) in neighbors where nx >= 0 && nx < image.width && ny >= 0 && ny < image.height {
+                    let neighbor = ny * image.width + nx
+                    if remaining.remove(neighbor) != nil { component.append(neighbor) }
+                }
+                cursor += 1
+            }
+            components.append(component)
+        }
+        components.sort { $0.count > $1.count }
+        XCTAssertEqual(components.count, 2, "Show the continuous full waveform and its separate floating dot")
+        guard components.count == 2 else { return }
+        let waveform = components[0], dot = components[1]
+        XCTAssertGreaterThan(waveform.count, dot.count * 10)
+        XCTAssertGreaterThan(dot.count, 15, "The complete logo's dot must remain visible")
+        let dotX = Double(dot.map { $0 % image.width }.reduce(0, +)) / Double(dot.count * image.width)
+        XCTAssertGreaterThan(dotX, 0.54)
+        XCTAssertLessThan(dotX, 0.61, "Keep the floating dot in its original position in the full mark")
+    }
+
+    // Break: the extended ends finish in sharp wedge points rather than soft caps.
+    func testCornerLogoFinishesWithSoftRoundedEnds() throws {
         let (image, pixels) = try renderLogoArtwork()
         func thickness(at fraction: Double) -> Double {
             let x = Int(Double(image.width) * fraction)
@@ -91,10 +143,12 @@ import XCTest
                 return pixels[offset] > 200 && pixels[offset + 1] > 200 && pixels[offset + 2] > 200
             }.count)
         }
-        for (tip, base) in [(0.04, 0.09), (0.96, 0.91)] {
-            XCTAssertGreaterThan(thickness(at: tip), 0, "Each extended tip must remain visible")
-            XCTAssertLessThan(thickness(at: tip), thickness(at: base) * 0.65,
-                              "The long ends must taper into wedges rather than round off at full width")
+        for (edge, cap, base) in [(0.003, 0.015, 0.1), (0.997, 0.985, 0.9)] {
+            XCTAssertGreaterThan(thickness(at: edge), 0, "Each soft cap must remain visible")
+            XCTAssertGreaterThan(thickness(at: cap), thickness(at: base) * 0.6,
+                                 "Finish softly at useful thickness, not in a sharp point")
+            XCTAssertLessThan(thickness(at: edge), thickness(at: cap) * 0.9,
+                              "Round off the very end rather than cutting it square")
         }
     }
 

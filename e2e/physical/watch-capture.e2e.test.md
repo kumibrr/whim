@@ -47,14 +47,16 @@ Status: pending physical-device execution.
 1. Edit an Infograph watch face and choose each of its four Corner slots in turn.
    Verify Whim → Record a Whim is available and can be added. Keep a Circular
    Whim complication on the same face to check existing support.
-2. While idle, verify the Corner shows the compact Whim mark curved along the
+2. While idle, verify the Corner shows the complete Whim waveform and floating dot along the
    dial, with a matching curved “Record” label and no circular background. Tap it with
    microphone access granted: expect immediate capture. Return to the face and
    verify the red recording glyph sits close to the curved elapsed-time label,
    with a tight clear gap and no overlap. The lifted label must stay fully
    visible in every corner. The timer remains on the bezel.
-   The logo's two ends must extend into tapered wedges following the same arc,
-   with both tips fully visible.
+   Verify the tall central waveform, right-hand strokes, and floating dot are
+   visible, with the original level outer strokes and rounded caps. The complete
+   mark must use the wider horizontal area without cropping or covering the
+   adjacent clock details. Stop and warning retain their existing sizes.
    The Stop symbol must follow the same local angle as the text, rather than
    remaining upright. Repeat in all four corners; orientation follows each slot.
 3. Tap the Corner during capture: expect the same Recording Session, not a
@@ -72,7 +74,7 @@ Status: pending physical-device execution.
 
 Evidence: Watch model/watchOS version, build, screenshots of the picker and
 each Corner state, and the saved Note. Deterministic companion coverage checks
-the compiled widget's family registration, curved tapered logo artwork, and shared bezel gap for Stop and warning;
+the compiled widget's family registration, complete waveform, floating dot, and rounded logo ends, and shared bezel gap for Stop and warning;
 installed-app complication launch
 coverage checks capture and saving. Face layout and system picker installation
 remain physical acceptance cases.

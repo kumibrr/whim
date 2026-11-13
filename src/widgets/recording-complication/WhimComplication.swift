@@ -107,11 +107,17 @@ struct WhimComplicationContent: View {
 
 struct WhimCornerComplicationContent: View {
     static let logoAssetName = "whim.corner"
+    static let logoWidth: CGFloat = 56
     let entry: WhimComplicationEntry
+
+    private var displaysLogo: Bool {
+        entry.snapshot.activeRecording(at: entry.date) == nil && !entry.snapshot.hasFailedNotes
+    }
 
     var body: some View {
         glyph
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .frame(minWidth: displaysLogo ? Self.logoWidth : nil,
+                   maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .widgetAccentable()
             .widgetCurvesContent()
             .widgetLabel { WhimCornerComplicationLabel(entry: entry) }
@@ -136,6 +142,7 @@ struct WhimCornerComplicationContent: View {
             Image(Self.logoAssetName)
                 .resizable()
                 .scaledToFit()
+                .frame(width: Self.logoWidth, height: 14)
                 .accessibilityLabel("Record a Whim")
         }
     }
