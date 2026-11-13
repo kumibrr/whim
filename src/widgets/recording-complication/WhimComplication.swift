@@ -23,6 +23,8 @@ struct WhimComplicationProvider: TimelineProvider {
     }
 }
 struct WhimComplication: Widget {
+    static let supportedFamilies: [WidgetFamily] = [.accessoryCircular, .accessoryCorner, .accessoryRectangular, .accessoryInline]
+
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "app.whim.recording", provider: WhimComplicationProvider()) { entry in
             WhimComplicationView(entry: entry)
@@ -31,16 +33,22 @@ struct WhimComplication: Widget {
         }
         .configurationDisplayName("Record a Whim")
         .description("Start recording. See recording time and Notes needing attention.")
-        .supportedFamilies([.accessoryCircular, .accessoryRectangular, .accessoryInline])
+        .supportedFamilies(Self.supportedFamilies)
     }
 }
 private struct WhimComplicationView: View {
     let entry: WhimComplicationEntry
     @Environment(\.widgetFamily) private var family
+    var body: some View { WhimComplicationContent(entry: entry, family: family) }
+}
+struct WhimComplicationContent: View {
+    let entry: WhimComplicationEntry
+    let family: WidgetFamily
     var body: some View {
         switch family {
         case .accessoryInline: content
         case .accessoryCircular: circular
+        case .accessoryCorner: WhimCornerComplicationContent(entry: entry)
         default: VStack(spacing: 2) { content }.font(.caption)
         }
     }
@@ -93,6 +101,76 @@ private struct WhimComplicationView: View {
             Label("Whim", systemImage: "exclamationmark.triangle.fill").accessibilityLabel("Record a Whim. Failed Notes need attention")
         } else {
             Label("Whim", image: "whim.waveform").accessibilityLabel("Record a Whim")
+        }
+    }
+}
+
+struct WhimCornerComplicationContent: View {
+    static let logoAssetName = "whim.corner"
+    static let logoWidth: CGFloat = 56
+    let entry: WhimComplicationEntry
+
+    private var displaysLogo: Bool {
+        entry.snapshot.activeRecording(at: entry.date) == nil && !entry.snapshot.hasFailedNotes
+    }
+
+    var body: some View {
+        glyph
+            .frame(minWidth: displaysLogo ? Self.logoWidth : nil,
+                   maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .widgetAccentable()
+            .widgetCurvesContent()
+            .widgetLabel { WhimCornerComplicationLabel(entry: entry) }
+    }
+
+    @ViewBuilder private var glyph: some View {
+        if entry.snapshot.activeRecording(at: entry.date) != nil {
+            Image(systemName: "stop.fill")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 14, height: 14)
+                .foregroundStyle(.red)
+                .accessibilityLabel("Whim recording")
+        } else if entry.snapshot.hasFailedNotes {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .symbolRenderingMode(.monochrome)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 18, height: 18, alignment: .bottom)
+                .foregroundStyle(.white)
+                .accessibilityLabel("Record a Whim. Failed Notes need attention")
+        } else {
+            Image(Self.logoAssetName)
+                .resizable()
+                .scaledToFit()
+                .frame(width: Self.logoWidth, height: 14)
+                .accessibilityLabel("Record a Whim")
+        }
+    }
+}
+
+// WidgetKit places this label on the dial's inner curve and gives the outer
+// glyph its own space. Keep it separate from Circular's stacked presentation.
+struct WhimCornerComplicationLabel: View {
+    let entry: WhimComplicationEntry
+
+    var body: some View { label.baselineOffset(14) }
+
+    @ViewBuilder private var label: some View {
+        if let recording = entry.snapshot.activeRecording(at: entry.date) {
+            let timer = Text(timerInterval: recording.createdAt...recording.createdAt.addingTimeInterval(recording.maximumDurationSeconds), countsDown: false)
+            if entry.snapshot.hasFailedNotes {
+                (Text(Image(systemName: "exclamationmark.triangle.fill").symbolRenderingMode(.monochrome)) + Text(" ") + timer)
+                    .monospacedDigit()
+                    .accessibilityLabel("Whim recording elapsed time. Failed Notes need attention")
+                    .accessibilityValue(timer)
+            } else {
+                timer.monospacedDigit()
+                    .accessibilityLabel("Whim recording elapsed time")
+                    .accessibilityValue(timer)
+            }
+        } else {
+            Text(entry.snapshot.hasFailedNotes ? "Check Notes" : "Record")
         }
     }
 }
