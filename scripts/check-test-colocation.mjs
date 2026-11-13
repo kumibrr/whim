@@ -75,6 +75,9 @@ function scalar(body, property) {
 
 function intendedXcodeTarget(file) {
   if (file.startsWith('e2e/iphone/') && file.endsWith('.e2e.test.swift')) return 'WhimPerformanceTests';
+  if (file.startsWith('src/widgets/recording-complication/') && file.endsWith('.test.swift')) {
+    return 'WhimWatchTests';
+  }
   if ((file.startsWith('src/intents/') || file.startsWith('src/widgets/')) && file.endsWith('.test.swift')) {
     return 'WhimSystemSurfaceTests';
   }

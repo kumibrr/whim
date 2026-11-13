@@ -19,6 +19,9 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
+		A20261112000000000000004 /* WidgetAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5E1A0C2B7D3F4A6B8C9D0E11 /* WidgetAssets.xcassets */; };
+		A20261112000000000000001 /* WhimComplication.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20261112000000000000003 /* WhimComplication.test.swift */; };
+		A20261112000000000000002 /* WhimComplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E2CC9DEE4028B726179F8C3 /* WhimComplication.swift */; };
 		02AD38C3AEAA02A053E9693E /* WhimComplication.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 8D0F24C361BA28F073832C7D /* WhimComplication.appex */; };
 		04B87BAFEC13211E27CAA6EC /* StopWhimRecordingIntent.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E22C537A7645A856E8D8514 /* StopWhimRecordingIntent.test.swift */; };
 		07B56A6A64EC1E7D872EAE9E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 7F011AC3443B58190BBE7148 /* PrivacyInfo.xcprivacy */; };
@@ -199,6 +202,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A20261112000000000000003 /* WhimComplication.test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../src/widgets/recording-complication/WhimComplication.test.swift"; sourceTree = "<group>"; };
 		0268557010B2F2F63F56A531 /* RecordWhimControl.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RecordWhimControl.test.swift; path = "../src/widgets/recording-control/RecordWhimControl.test.swift"; sourceTree = "<group>"; };
 		0CA472B526C542ABA4BE87A0 /* RecordWhimControl.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RecordWhimControl.swift; path = "../src/widgets/recording-control/RecordWhimControl.swift"; sourceTree = "<group>"; };
 		13223D7E7DF7C8AB293FF6B0 /* ComplicationLaunch.e2e.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ComplicationLaunch.e2e.test.swift; path = ../e2e/watch/ComplicationLaunch.e2e.test.swift; sourceTree = "<group>"; };
@@ -530,6 +534,7 @@
 				6669F944A11B49959359F223 /* WhimWidgetsBundle.swift */,
 				743EC904890B7C139F9BA16D /* WhimLiveActivity.swift */,
 				7E2CC9DEE4028B726179F8C3 /* WhimComplication.swift */,
+				A20261112000000000000003 /* WhimComplication.test.swift */,
 				77D0FE36A5FCB961521494ED /* RecordWhimControl.swift */,
 				5E1A0C2B7D3F4A6B8C9D0E11 /* WidgetAssets.xcassets */,
 			);
@@ -774,6 +779,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A20261112000000000000004 /* WidgetAssets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -955,6 +961,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				F60B53E4DEDAF6369B054FA0 /* WatchModel.integration.test.swift in Sources */,
+				A20261112000000000000001 /* WhimComplication.test.swift in Sources */,
+				A20261112000000000000002 /* WhimComplication.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
