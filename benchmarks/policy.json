@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "protocol": "iphone-ui-v1",
+  "fixture": "notes-1000-v1",
+  "configuration": "optimized-debug",
+  "warmups": 2,
+  "samples": 10,
+  "relativeTolerance": 0.2,
+  "absoluteToleranceMS": 100,
+  "maxMADFraction": 0.15,
+  "maxRecordBytes": 262144
+}

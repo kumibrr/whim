@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-13
 
-**Status:** Proposed; implementation awaits design approval
+**Status:** Approved by the user on 2026-11-13; implementation in progress
 
 ## Intent and decisions
 
