@@ -43,46 +43,48 @@
 
 **Interfaces:** `summarize(samples, policy)`, `evaluateMetric(batches, baseline, policy)`, `evaluateRun(observation, baseline, policy)`, `validateObservation(value, policy)`. Swift `BenchmarkMetrics` implements the same statistics/decision contract with shared conformance vectors.
 
-- [ ] Add failing companion tests for exact combined thresholds, spread, confirmation, missing/negative/nonfinite samples, metric completeness, and deterministic evaluation.
-- [ ] Run `node --test scripts/benchmark-metrics.test.mjs`; observe missing-module failure.
-- [ ] Implement policy/validation/comparison and native support; share JSON conformance cases between Node and Swift tests.
-- [ ] Run affected Node and Swift support suites; verify agreement on all vectors.
-- [ ] Commit the verified slice.
+- [x] Add failing companion tests for exact combined thresholds, spread, confirmation, missing/negative/nonfinite samples, metric completeness, and deterministic evaluation.
+- [x] Run `node --test scripts/benchmark-metrics.test.mjs`; observe missing-module failure.
+- [x] Implement policy/validation/comparison and native support; share JSON conformance cases between Node and Swift tests.
+- [x] Run affected Node and Swift support suites; verify agreement on all vectors.
+- [x] Commit the verified slice.
 
 ### Task 2: Permanent history and release-compatible source identity
 
 **Interfaces:** `readHistory(root, ref)`, `freezeSnapshot(root, source, historyRef)`, `appendResults(root, records)`, `publishResults(root, records, options)`, `sourceTree(root, ref)`, `isBenchmarkData(path)`. Use existing `runCommand(exe,args,{cwd,capture})` at Git/process boundaries.
 
-- [ ] Add failing real-Git tests for immutable records, deterministic README, identical replay, conflicting replay, reordered results and an intervening main push.
-- [ ] Add release regressions: result-only appends preserve release validity; code/policy/provenance changes fail; release preparation never drops existing history.
-- [ ] Implement frozen snapshot/hash validation, optimistic append/push, and exact generated-path source identity; integrate only the needed release comparisons.
-- [ ] Run the history suite and complete release-tooling regressions.
-- [ ] Commit the verified slice.
+- [x] Add failing real-Git tests for immutable records, deterministic README, identical replay, conflicting replay, reordered results and an intervening main push.
+- [x] Add release regressions: result-only appends preserve release validity; code/policy/provenance changes fail; release preparation never drops existing history.
+- [x] Implement frozen snapshot/hash validation, optimistic append/push, and exact generated-path source identity; integrate only the needed release comparisons.
+- [x] Run the history suite and complete release-tooling regressions.
+- [x] Commit the verified slice.
 
 ### Task 3: Seeded native app performance tests
 
 **Interfaces:** DEBUG `BenchmarkFixture` validates a UUID-isolated fixture request and seeds exactly 0/1000 Notes using real WhimStore and files; native app launch uses existing typed composition. `WhimPerformanceTests` writes complete raw observations as a keep-always XCTest JSON attachment.
 
-- [ ] Add failing fixture integration coverage for deterministic population, isolation, idempotent setup, and invalid fixture inputs.
-- [ ] Add native measurement tests first; add dedicated test target/scheme and source membership checks. The expected preimplementation failure is missing fixture/ready state.
-- [ ] Implement minimum fixture composition, metrics support, native input snapshot build phase, real accessibility observations, and local `test:performance` runner.
-- [ ] Run fixture integration, support conformance, target/source checkers, optimized native tests, and a controlled-delay regression; preserve native XCResult for collector integration.
-- [ ] Commit the verified slice.
+- [x] Add failing fixture integration coverage for deterministic population, isolation, idempotent setup, and invalid fixture inputs.
+- [x] Add native measurement tests first; add dedicated test target/scheme and source membership checks. The expected preimplementation failure is missing fixture/ready state.
+- [x] Implement minimum fixture composition, metrics support, native input snapshot build phase, real accessibility observations, and local `test:performance` runner.
+- [x] Run fixture integration, support conformance, target/source checkers, optimized native tests, and a controlled-delay regression; preserve native XCResult for collector integration.
+- [x] Commit the verified slice.
 
 ### Task 4: Cloud scheduling and trusted collection
 
 **Interfaces:** `benchmarkCloudPhase(phase, root, {env,run,request})`; workflow IDs identify native measurement versus main-only publisher. GitHub/ASC clients have injectable HTTP boundaries. Collector inputs are native artifact/build metadata plus frozen trusted Git context; outputs are validated immutable records and input refs.
 
-- [ ] Add failing hook tests for credential-free measurement actions, main-only publisher, unchanged Default/Release gates, generated-only updates, and original test-failure propagation.
-- [ ] Add API-boundary integration tests for paginated/out-of-order jobs, immutable input refs, baseline-first scheduling, failed-run attachment collection, wrong source/build identities, expired/malformed artifacts, and publication replay after policy changes.
-- [ ] Implement scoped API clients/JWT auth, native attachment extraction with archive validation, queue/reconciliation and fixed-snapshot verdict verification. Fail visibly on partial collection rather than dropping it.
-- [ ] Wire hooks per role; do not install functional E2E dependencies or keychain state in benchmark-only roles. Add collector-only build scheme, workflow setup instructions, and explicit secret names.
-- [ ] Run Cloud tooling/history/metrics suites and extract the actual Task 3 XCResult attachment through the collector seam.
-- [ ] Commit the verified slice.
+- [x] Add failing hook tests for credential-free measurement actions, main-only publisher, unchanged Default/Release gates, generated-only updates, and original test-failure propagation.
+- [x] Add API-boundary integration tests for paginated/out-of-order jobs, immutable input refs, baseline-first scheduling, failed-run attachment collection, wrong source/build identities, expired/malformed artifacts, and publication replay after policy changes.
+- [x] Implement scoped API clients/JWT auth, native attachment extraction with archive validation, queue/reconciliation and fixed-snapshot verdict verification. Fail visibly on partial collection rather than dropping it.
+- [x] Wire hooks per role; do not install functional E2E dependencies or keychain state in benchmark-only roles. Add collector-only build scheme, workflow setup instructions, and explicit secret names.
+- [x] Run Cloud tooling/history/metrics suites and extract the actual Task 3 XCResult attachment through the collector seam.
+- [x] Commit the verified slice.
 
 ### Task 5: Full verification and review
 
-- [ ] Update physical acceptance and Cloud setup/rollout documentation, mark the approved design, and document actual checks without claiming live deployment.
+- [x] Update physical acceptance and Cloud setup/rollout documentation, mark the approved design, and document actual checks without claiming live deployment.
 - [ ] Run root `test:all`, `test:performance`, release fixture/source checks and whitespace validation. Diagnose failures; add regressions before fixes.
-- [ ] Have one fresh reviewer inspect the whole implementation against the plan/spec. Fix consequential findings with reproducing tests.
-- [ ] Commit verified changes, report results and any outstanding live Cloud configuration/credential prerequisites. Do not push to main or create a release.
+- [x] Have one fresh reviewer inspect the whole implementation against the plan/spec. Fix consequential findings with reproducing tests.
+- [x] Commit verified changes, report results and any outstanding live Cloud configuration/credential prerequisites. Do not push to main or create a release.
+
+Verification status (2026-11-13): implementation and review fixes are committed; the final optimized native benchmark and independent observation verification passed. The complete `test:all` entrypoint was run repeatedly but remains unverified because native iPhone test-host startup stalled. See `docs/performance-benchmark-verification.md` for completed suites and rollout prerequisites.

@@ -38,7 +38,7 @@ These settings are a deployment step after merging the implementation. Repositor
 
 **Benchmark**
 
-- One native iOS **Test** action using scheme `WhimPerformanceTests`, scheme configuration `DebugBenchmark`, one fixed supported arm64 iPhone simulator/runtime, and a fixed Xcode/macOS image. Disable parallel test execution and Auto-cancel Builds. Keep this destination/toolchain unchanged within a series.
+- One native iOS **Test** action using scheme `WhimPerformanceTests`, scheme configuration `DebugBenchmark`, one fixed supported arm64 iPhone simulator/runtime, and a fixed Xcode/macOS image. Use one test configuration. Disable parallel test execution, test repetitions/retry-on-failure, code coverage, sanitizers and Auto-cancel Builds; the comparator performs its own confirmation batch. Keep this destination/toolchain unchanged within a series.
 - Branch Changes: names beginning with `benchmark-input/`, all files. No PR, main, tag or schedule triggers. Manual runs/rebuilds must also select an input ref.
 - Add `WHIM_BENCHMARK_WORKFLOW_ID` containing this workflow's UUID. Do not add publisher credentials, including through shared environment-variable groups. There is no TestFlight action.
 - Require the native performance status where appropriate. Because measurements run on exact input branches, their status is attached to the source SHA; confirm the actual status/check context in GitHub before adding branch-protection requirements.
