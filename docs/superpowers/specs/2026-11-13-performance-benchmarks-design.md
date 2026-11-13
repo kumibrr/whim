@@ -56,7 +56,7 @@ Proposed initial protocol: two untimed warmups and ten recorded samples per metr
 benchmarks/
   policy.json
   README.md
-  results/<source-sha>/<run-id>-<attempt>.json
+  results/<source-sha>/<run-id>.json (coverage gaps add a context suffix)
 ```
 
 `policy.json` is reviewed source configuration. Only `results/**` and the generated `README.md` are benchmark data. Tests, scripts, policy, fixtures, and workflows are never classified as data-only changes.

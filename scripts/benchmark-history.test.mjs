@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -182,4 +182,19 @@ test('a shallow Cloud checkout expands source ancestry before commit discovery a
   assert.equal((await exec('git', ['rev-list', '--count', 'HEAD'], { cwd: checkout })).stdout.trim(), '1');
   await ensureFullHistory(checkout);
   assert.equal((await exec('git', ['rev-list', '--count', 'HEAD'], { cwd: checkout })).stdout.trim(), '2');
+});
+
+
+test('publication rejects symlinked generated destinations before writing outside its checkout', async t => {
+  const { appendResults, verifyObservation } = await import('./benchmark-history.mjs');
+  for (const destination of ['results', 'README.md']) {
+    const h = await repository(t);
+    const record = await verifyObservation(h.root, await observation(h));
+    const outside = join(h.root, 'outside');
+    if (destination === 'results') await mkdir(outside);
+    else await writeFile(outside, 'preserve this file');
+    await symlink(outside, join(h.root, 'benchmarks', destination));
+    await assert.rejects(appendResults(h.root, [record]), /symlink|directory|destination/i);
+    if (destination === 'README.md') assert.equal(await readFile(outside, 'utf8'), 'preserve this file');
+  }
 });

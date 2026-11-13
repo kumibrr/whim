@@ -18,11 +18,13 @@ The fixture isolates SQLite, audio files, credentials and preferences by UUID. S
 
 ## Execution and history
 
-1. The trusted history workflow enumerates main ancestry from the configured rollout SHA and the current histories of open PRs. It preserves observed PR backlog commits under `benchmark-queue/pr/<number>/<sha>` before scheduling, so subsequent closure/force-push cannot discard them. Queue refs contain source commits, not benchmark data, and do not match any build start condition.
+1. The trusted history workflow enumerates main ancestry from the configured rollout SHA and the current histories of open PRs, plus original PR heads observed in this product’s Cloud build metadata (including superseded and closed PRs). New PR work must have a commit time at or after the rollout commit time; already retained pending work survives a later cutoff. It preserves observed PR backlog commits under `benchmark-queue/pr/<number>/<sha>` before scheduling, so subsequent closure/force-push cannot discard them. Queue refs contain source commits, not benchmark data, and do not match any build start condition.
 2. It creates one immutable `benchmark-input/main/<sha>` or `benchmark-input/pr/<number>/<sha>` ref per ready lineage. Main seeds first; PRs wait for an accepted ancestor baseline. The native workflow tests the exact source SHA, rather than a temporary PR merge. Earlier work is never canceled for a newer commit.
 3. Build-for-testing freezes trusted main history, policy hash and candidate baselines in a test-bundle resource. The test destination selects the matching environment and emits a keep-always `whim-benchmark-observation.json` XCTest attachment, including partial samples on failure. Source/Node are not required during test-without-building.
 4. On its next sweep, the history workflow downloads Apple's native `.xcresult` artifacts, validates attribution and bounded archive/JSON contents, recomputes the frozen decision, and appends the result to `benchmarks/results/<source-sha>/<cloud-build-uuid>.json`. It regenerates [the benchmark list](../benchmarks/README.md) and pushes a normal data-only commit to main. Concurrent main updates are fetched and retried without force pushes.
-5. Input/backlog refs are removed only after recording a terminal outcome. A provisional PR input is retained; when matching main evidence becomes available the collector starts a fresh native run against that ref. A newer in-flight run takes precedence over older completed runs during reconciliation.
+5. Input/backlog refs are removed only after recording a terminal outcome. Automatic input deletion additionally requires a result newly collected in that sweep; an old published result cannot close a newly recreated input while its new Cloud run is not yet visible. A provisional PR input is retained; when matching main evidence becomes available the collector starts a fresh native run against that ref. A newer in-flight run takes precedence over older completed runs during reconciliation.
+
+Missing-runner coverage records use a `-coverage-main` or `-coverage-pr-<number>` filename suffix: their UUID identifies the real collector build, and the suffix distinguishes source contexts without inventing a measurement build.
 
 Each result retains raw milliseconds, summaries, environment, source parents/time, run identity, frozen history/policy/baseline hashes and verdict. Publication replay is immutable and idempotent. No audio, transcripts, secrets or simulator UDIDs enter history. Source revisions never observed or no longer retrievable are outside coverage; this is not retrospective coverage before rollout.
 
@@ -52,13 +54,14 @@ These settings are a deployment step after merging the implementation. Repositor
 | `WHIM_BENCHMARK_HISTORY_WORKFLOW_ID` | History workflow UUID | No |
 | `WHIM_BENCHMARK_WORKFLOW_ID` | Benchmark workflow UUID | No |
 | `WHIM_BENCHMARK_REPOSITORY` | `kumibrr/whim` | No |
+| `WHIM_BENCHMARK_PRODUCT_ID` | Whim Cloud product UUID (`b675c35b-56c1-482b-b43d-ac966e431519`) | No |
 | `WHIM_BENCHMARK_ROLLOUT_SHA` | Full main source SHA containing this implementation | No |
 | `WHIM_BENCHMARK_GITHUB_TOKEN` | Repository-scoped credential: contents read/write and PR metadata read | Yes |
 | `WHIM_ASC_ISSUER_ID` | App Store Connect API issuer | Yes |
 | `WHIM_ASC_KEY_ID` | API key ID | Yes |
 | `WHIM_ASC_PRIVATE_KEY` | ES256 `.p8` private key, actual newlines or literal `\n` | Yes |
 
-The ASC key must read this product's Cloud workflows, runs, actions and artifacts and start a rebuild when a provisional PR needs comparison. Signed artifact downloads receive neither API credential. The Git credential must create/delete execution/queue refs and append to main under the repository's rules. If protection rejects publication, fix the bot's authorized rule configuration; do not disable protection or force push. A PR-based publication mode is not implemented.
+The ASC key must read this product's Cloud workflows, runs, original PR metadata, actions and artifacts and start a rebuild when a provisional PR needs comparison. Signed artifact downloads receive neither API credential. The Git credential must create/delete execution/queue refs and append to main under the repository's rules. If protection rejects publication, fix the bot's authorized rule configuration; do not disable protection or force push. A PR-based publication mode is not implemented.
 
 Keep existing Default and Release workflows, including release-preparation Actions. Their branch start conditions must exclude both `benchmark-input/` and `benchmark-queue/`; the Default PR condition remains targeting main. Configure generated-history file exclusions on ordinary main changes. Release builds always retain their full gates.
 
@@ -75,7 +78,7 @@ npm run test:performance
 
 The runner prints the `.xcresult` path, then extracts and validates the same JSON attachment used by Cloud. Local observations are labeled `local` and are not published as main baselines. Optional `WHIM_DERIVED_DATA_PATH` moves products/results; `WHIM_XCODE_PACKAGE_CACHE_PATH` selects an Xcode package cache. Run functional `npm run test:all` separately so competing suites do not distort timing.
 
-For a failed collector, rerun **Benchmark history on main**; completed native runs are re-read, not measured again or reevaluated against moving policy. For a new measurement attempt, use Cloud's rebuild control on the existing input run (new Cloud build identity). If its input was already closed/deleted, recreate the exact input ref at its encoded SHA with the authorized Git credential and start the Benchmark workflow manually; never move an existing ref. The collector permanently retains every distinct run it discovers. Verify that the new run is visible before sweeping an intentionally recreated ref.
+For a failed collector, rerun **Benchmark history on main**; completed native runs are re-read, not measured again or reevaluated against moving policy. For a new measurement attempt, use Cloud's rebuild control on the existing input run (new Cloud build identity). If its input was already closed/deleted, recreate the exact input ref at its encoded SHA with the authorized Git credential and start the Benchmark workflow manually; never move an existing ref. The collector permanently retains every distinct run it discovers. The collector retains a recreated ref while only its old published run is visible. A crash after publication but before deletion can also leave a completed input ref behind; it does not block the next terminally covered source. Rebuild it or prune it manually only after checking that no newer run is pending.
 
 For a PR that reports no compatible baseline, seed/rebuild the eligible main source using the configured destination/toolchain, then run the collector. It retains the original provisional record and requests a new PR run once that compatible main evidence exists. Host changes can start a new environment series even with the same simulator model.
 

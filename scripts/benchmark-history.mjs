@@ -7,7 +7,7 @@ import { evaluateRun, metricIDs, validatePolicy } from './benchmark-metrics.mjs'
 
 export const shaPattern = /^[a-f0-9]{40}$/;
 export const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
-const resultPathPattern = /^benchmarks\/results\/[a-f0-9]{40}\/[a-f0-9-]{36}\.json$/;
+const resultPathPattern = /^benchmarks\/results\/[a-f0-9]{40}\/[a-f0-9-]{36}(?:-coverage-(?:main|local|pr-[1-9]\d*))?\.json$/;
 const environmentKeys = ['architecture', 'cpu', 'macOS', 'kernel', 'xcode', 'runtime', 'device', 'configuration'];
 const gitAt = (root, run = runCommand) => async (...args) => (await run('git', args, { cwd: root, capture: true })).trimEnd();
 const sorted = value => Array.isArray(value) ? value.map(sorted) : value && typeof value === 'object'
@@ -17,7 +17,9 @@ export const contentHash = value => createHash('sha256').update(canonicalJSON(va
 export const isBenchmarkData = path => path === 'benchmarks/README.md' || path.startsWith('benchmarks/results/');
 export const resultPath = record => {
   if (!shaPattern.test(record?.source?.sha ?? '') || !uuidPattern.test(record?.run?.id ?? '')) throw Error('Invalid result identity.');
-  return `benchmarks/results/${record.source.sha}/${record.run.id.toLowerCase()}.json`;
+  const coverage = record.failure?.code === 'missingRunner' ? `-coverage-${record.source.context.replace('/', '-')}` : '';
+  if (coverage && !/^(main|local|pr\/[1-9]\d*)$/.test(record.source.context)) throw Error('Invalid coverage context.');
+  return `benchmarks/results/${record.source.sha}/${record.run.id.toLowerCase()}${coverage}.json`;
 };
 const exactKeys = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === keys.length && keys.every(k => Object.hasOwn(value, k));
 const boundedText = value => typeof value === 'string' && value.length > 0 && value.length <= 180 && !/[\x00-\x1f]/.test(value);
@@ -150,8 +152,8 @@ async function workingHistory(root) {
   for (const entry of await readdir(directory, { withFileTypes: true }).catch(e => { if (e.code === 'ENOENT') return []; throw e; })) {
     if (!entry.isDirectory() || !shaPattern.test(entry.name)) throw Error('Invalid history directory.');
     for (const file of await readdir(join(directory, entry.name), { withFileTypes: true })) {
-      if (!file.isFile() || !uuidPattern.test(file.name.replace(/\.json$/, ''))) throw Error('Invalid history record path.');
       const path = `benchmarks/results/${entry.name}/${file.name}`;
+      if (!file.isFile() || !resultPathPattern.test(path)) throw Error('Invalid history record path.');
       const record = JSON.parse(await readFile(join(root, path), 'utf8'));
       if (resultPath(record) !== path) throw Error('History record identity mismatch.');
       records.push(record);
@@ -173,10 +175,20 @@ export function historyIndex(records, { repositoryURL = null } = {}) {
 }
 
 export async function appendResults(root, records, { repositoryURL = null } = {}) {
+  const directory = async path => {
+    let stat = await lstat(path).catch(error => { if (error.code !== 'ENOENT') throw error; });
+    if (!stat) { await mkdir(path); stat = await lstat(path); }
+    if (!stat.isDirectory() || stat.isSymbolicLink()) throw Error('Benchmark destination must be a real directory, not a symlink.');
+  };
+  await directory(join(root, 'benchmarks'));
+  await directory(join(root, 'benchmarks/results'));
+  const index = join(root, 'benchmarks/README.md');
+  const indexStat = await lstat(index).catch(error => { if (error.code !== 'ENOENT') throw error; });
+  if (indexStat && !indexStat.isFile()) throw Error('Benchmark index destination must be a regular file, not a symlink.');
   let written = 0;
   for (const record of records) {
     const path = join(root, resultPath(record));
-    await mkdir(join(root, 'benchmarks/results', record.source.sha), { recursive: true });
+    await directory(join(root, 'benchmarks/results', record.source.sha));
     const bytes = canonicalJSON(record);
     try { await writeFile(path, bytes, { flag: 'wx' }); written++; }
     catch (error) {
@@ -185,8 +197,7 @@ export async function appendResults(root, records, { repositoryURL = null } = {}
     }
   }
   const all = await workingHistory(root);
-  await mkdir(join(root, 'benchmarks'), { recursive: true });
-  await writeFile(join(root, 'benchmarks/README.md'), historyIndex(all, { repositoryURL }));
+  await writeFile(index, historyIndex(all, { repositoryURL }));
   return written;
 }
 

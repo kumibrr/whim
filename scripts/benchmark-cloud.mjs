@@ -67,6 +67,16 @@ export function assertCloudAttribution(raw, build, source) {
     || raw.run?.number !== build.attributes.number) throw Error('Native benchmark attribution mismatch.');
 }
 
+export function qualifyNativeResult(record, completionStatus) {
+  // Performance assertions deliberately fail for complete regressions/noise.
+  // Other native failures (including UI integrity assertions) must never turn
+  // numerically passing samples into accepted baseline evidence.
+  if (completionStatus !== 'SUCCEEDED' && !record.failure && ['baseline', 'pass'].includes(record.evaluation.outcome)) {
+    return { ...record, failure: { code: 'measurementFailed' }, evaluation: { outcome: 'error', metrics: {} } };
+  }
+  return record;
+}
+
 export function latestInputBuilds(runs) {
   const references = new Map(runs.included.filter(x => x.type === 'scmGitReferences').map(x => [x.id, x]));
   const latest = new Map();
@@ -144,12 +154,75 @@ async function githubList(github, path) {
   throw Error('GitHub discovery page limit reached.');
 }
 
+export async function listExecutionRefs(github, repository, prefix) {
+  if (!['benchmark-input', 'benchmark-queue'].includes(prefix)) throw Error('Invalid execution ref prefix.');
+  // GitHub matching-refs has no numbered-pagination parameters. Repeating a
+  // full (100+) response would abort every sweep as soon as a backlog grew.
+  const refs = await github('GET', `/repos/${repository}/git/matching-refs/heads/${prefix}/`);
+  if (!Array.isArray(refs) || refs.length > 10000) throw Error('Invalid/oversized execution ref response.');
+  return refs;
+}
+
+export async function discoverPRSources(root, { repository, productID, rollout, backlog, api, run = runCommand }) {
+  const git = async (...args) => (await run('git', args, { cwd: root, capture: true })).trim();
+  const since = Date.parse(await git('show', '-s', '--format=%cI', rollout));
+  const sources = new Map(), issues = [];
+  const add = async (sha, context, retained = false) => {
+    if (!retained && (Date.parse(await git('show', '-s', '--format=%cI', sha)) < since
+      || await isDataOnlyCommit(root, sha, { run }))) return;
+    sources.set(`${context}/${sha}`, { sha, context, ancestors: (await git('rev-list', sha)).split('\n') });
+  };
+  const lineage = async (sha, number, base) => {
+    if (!shaPattern.test(sha ?? '') || !shaPattern.test(base ?? '') || !Number.isSafeInteger(number) || number <= 0) throw Error('Invalid observed PR source metadata.');
+    await git('fetch', '--no-tags', 'origin', sha);
+    try { await git('cat-file', '-e', `${base}^{commit}`); }
+    catch { await git('fetch', '--no-tags', 'origin', base); }
+    for (const commit of (await git('rev-list', '--reverse', '--topo-order', `${base}..${sha}`)).split('\n').filter(Boolean)) {
+      await add(commit, `pr/${number}`);
+    }
+  };
+  // Already queued work survives closure, force-push, and a later rollout cutoff.
+  for (const ref of backlog) {
+    const match = /^refs\/heads\/benchmark-queue\/(pr\/[1-9]\d*)\/([a-f0-9]{40})$/.exec(ref.ref);
+    if (!match || ref.object?.sha !== match[2]) throw Error('Immutable PR backlog source mismatch.');
+    try { await git('fetch', '--no-tags', 'origin', match[2]); await add(match[2], match[1], true); }
+    catch (error) { issues.push(`Pending PR source ${match[2]} is unavailable: ${error.message}`); }
+  }
+  try {
+    const builds = await paginated(api.asc, `/v1/ciProducts/${productID}/buildRuns?limit=200&include=pullRequest`);
+    const requests = new Map(builds.included.filter(x => x.type === 'scmPullRequests').map(x => [x.id, x.attributes]));
+    for (const build of builds.data) {
+      if (!build.attributes?.isPullRequestBuild) continue;
+      const observedAt = Date.parse(build.attributes.createdDate);
+      if (!Number.isFinite(observedAt)) { issues.push('Cloud PR observation has no creation time.'); continue; }
+      if (observedAt < since) continue;
+      const pr = requests.get(build.relationships?.pullRequest?.data?.id);
+      if (!pr) { issues.push('Cloud PR observation has no authenticated pull-request metadata.'); continue; }
+      if (`${pr.destinationRepositoryOwner}/${pr.destinationRepositoryName}`.toLowerCase() !== repository.toLowerCase()
+        || pr.destinationBranchName !== 'main') continue;
+      const sha = build.attributes.sourceCommit?.commitSha;
+      // Pending builds can precede source resolution; revisit them next sweep.
+      if (!sha && build.attributes.executionProgress !== 'COMPLETE') continue;
+      try { await lineage(sha, pr.number, build.attributes.destinationCommit?.commitSha); }
+      catch (error) { issues.push(`Observed Cloud PR ${pr.number} could not be preserved: ${error.message}`); }
+    }
+  } catch (error) { issues.push(`Cloud PR discovery failed: ${error.message}`); }
+  try {
+    for (const pull of await githubList(api.github, `/repos/${repository}/pulls?state=open&base=main`)) {
+      try { await lineage(pull.head?.sha, pull.number, pull.base?.sha); }
+      catch (error) { issues.push(`Current PR ${pull.number} could not be preserved: ${error.message}`); }
+    }
+  } catch (error) { issues.push(`Current PR discovery failed: ${error.message}`); }
+  return { sources: [...sources.values()].sort((a, b) => a.ancestors.length - b.ancestors.length), issues };
+}
+
 export async function collectBenchmarkHistory(root, { env = process.env, run = runCommand, api = createBenchmarkAPI({ env }), log = console.log } = {}) {
   if (cloudBenchmarkRole(env) !== 'history') throw Error('Collection requires the trusted history workflow.');
   const repository = env.WHIM_BENCHMARK_REPOSITORY;
   const rollout = env.WHIM_BENCHMARK_ROLLOUT_SHA;
+  const productID = env.WHIM_BENCHMARK_PRODUCT_ID;
   if (!/^[a-zA-Z0-9][\w.-]*\/[a-zA-Z0-9][\w.-]*$/.test(repository ?? '') || !shaPattern.test(rollout ?? '')
-    || !uuidPattern.test(env.WHIM_BENCHMARK_WORKFLOW_ID ?? '')) throw Error('Configure benchmark repository, rollout SHA and workflow ID.');
+    || !uuidPattern.test(env.WHIM_BENCHMARK_WORKFLOW_ID ?? '') || !uuidPattern.test(productID ?? '')) throw Error('Configure benchmark repository, rollout SHA, product and workflow IDs.');
   const token = env.WHIM_BENCHMARK_GITHUB_TOKEN;
   if (!token) throw Error('Missing benchmark GitHub write credential.');
   const authorizedRun = (exe, args, options = {}) => run(exe, args, { ...options, env: { ...process.env,
@@ -161,8 +234,8 @@ export async function collectBenchmarkHistory(root, { env = process.env, run = r
   await git('merge-base', '--is-ancestor', rollout, 'origin/main');
   const policy = JSON.parse(await git('show', 'origin/main:benchmarks/policy.json'));
   const existing = (await readHistory(root, 'origin/main', { run: authorizedRun })).map(x => x.record);
-  const refs = await githubList(api.github, `/repos/${repository}/git/matching-refs/heads/benchmark-input/`);
-  const backlog = await githubList(api.github, `/repos/${repository}/git/matching-refs/heads/benchmark-queue/`);
+  const refs = await listExecutionRefs(api.github, repository, 'benchmark-input');
+  const backlog = await listExecutionRefs(api.github, repository, 'benchmark-queue');
   const runs = await paginated(api.asc, `/v1/ciWorkflows/${env.WHIM_BENCHMARK_WORKFLOW_ID}/buildRuns?limit=200&include=sourceBranchOrTag`);
   const latest = latestInputBuilds(runs);
   const references = new Map(runs.included.filter(x => x.type === 'scmGitReferences').map(x => [x.id, x]));
@@ -222,7 +295,9 @@ export async function collectBenchmarkHistory(root, { env = process.env, run = r
       validatingArtifact = true;
       const raw = await extractNativeObservation(archive, directory, { run: authorizedRun });
       assertCloudAttribution(raw, build, source);
-      const record = await verifyObservation(root, raw, { run: authorizedRun, trustedRef: 'origin/main' });
+      const verified = await verifyObservation(root, raw, { run: authorizedRun, trustedRef: 'origin/main' });
+      const record = qualifyNativeResult(verified, actions.data.filter(a => a.attributes.actionType === 'TEST')
+        .every(a => a.attributes.completionStatus === 'SUCCEEDED') ? 'SUCCEEDED' : 'FAILED');
       collected.push(record); completedRefs.add(inputRef(source));
     } catch (error) {
       if (validatingArtifact) {
@@ -238,24 +313,8 @@ export async function collectBenchmarkHistory(root, { env = process.env, run = r
   const sources = [];
   const mainSHAs = [rollout, ...(await git('rev-list', '--reverse', '--topo-order', `${rollout}..origin/main`)).split('\n').filter(Boolean)];
   for (const sha of mainSHAs) if (!await isDataOnlyCommit(root, sha, { run: authorizedRun })) sources.push({ sha, context: 'main' });
-  for (const ref of backlog) {
-    const match = /^refs\/heads\/benchmark-queue\/(pr\/[1-9]\d*)\/([a-f0-9]{40})$/.exec(ref.ref);
-    if (!match || ref.object?.sha !== match[2]) throw Error('Immutable PR backlog source mismatch.');
-    await git('fetch', '--no-tags', 'origin', match[2]);
-    sources.push({ sha: match[2], context: match[1], ancestors: (await git('rev-list', match[2])).split('\n') });
-  }
-  const pulls = await githubList(api.github, `/repos/${repository}/pulls?state=open&base=main`);
-  for (const pull of pulls) {
-    if (!Number.isSafeInteger(pull.number) || pull.number <= 0 || !shaPattern.test(pull.head?.sha ?? '') || !shaPattern.test(pull.base?.sha ?? '')) throw Error('Invalid PR discovery metadata.');
-    await git('fetch', '--no-tags', 'origin', `refs/pull/${pull.number}/head`);
-    const head = await git('rev-parse', 'FETCH_HEAD');
-    if (head !== pull.head.sha) { failures.push(`PR ${pull.number} changed during discovery; retry next sweep.`); continue; }
-    const shas = (await git('rev-list', '--reverse', '--topo-order', `${pull.base.sha}..${head}`)).split('\n').filter(Boolean);
-    for (const sha of shas) {
-      if (await isDataOnlyCommit(root, sha, { run: authorizedRun })) continue;
-      sources.push({ sha, context: `pr/${pull.number}`, ancestors: (await git('rev-list', sha)).split('\n') });
-    }
-  }
+  const discovered = await discoverPRSources(root, { repository, productID, rollout, backlog, api, run: authorizedRun });
+  sources.push(...discovered.sources); failures.push(...discovered.issues);
   const uniqueSources = [...new Map(sources.map(s => [`${s.context}/${s.sha}`, s])).values()];
   sources.length = 0;
   sources.push(...uniqueSources.filter(s => s.context === 'main'),
@@ -306,7 +365,11 @@ export async function collectBenchmarkHistory(root, { env = process.env, run = r
     await ensureInputRef(api.github, repository, source);
     log(`Queued ${source.context} source ${source.sha}.`);
   }
-  for (const ref of refs.filter(r => completedRefs.has(r.ref))) {
+  // A ref may have been recreated for a manual rerun while ASC still exposes
+  // only its old, already-published build. Only a newly collected terminal
+  // result can close the current entry; an old record is never that evidence.
+  for (const ref of refs.filter(r => completedRefs.has(r.ref) && collected.some(record =>
+    inputRef(record.source) === r.ref && (!latest.has(r.ref) || latest.get(r.ref).id.toLowerCase() === record.run.id.toLowerCase())))) {
     await api.github('DELETE', `/repos/${repository}/git/refs/${ref.ref.slice('refs/'.length)}`);
   }
   for (const ref of backlog) {

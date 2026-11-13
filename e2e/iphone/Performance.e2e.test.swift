@@ -155,7 +155,10 @@ final class WhimPerformanceTests: XCTestCase {
         }
         app.buttons["record-button"].tap()
         try ready(app.buttons["stop-recording"])
-        XCTAssertFalse(app.staticTexts["Note saved"].exists, "A previous session's feedback cannot complete this measurement")
+        guard !app.staticTexts["Note saved"].exists else {
+            XCTFail("A previous session's feedback cannot complete this measurement")
+            throw BenchmarkMetrics.InvalidMeasurement.samples
+        }
         let start = ProcessInfo.processInfo.systemUptime
         app.buttons["stop-recording"].tap()
         try ready(app.staticTexts["Note saved"], interactive: false)
@@ -166,7 +169,10 @@ final class WhimPerformanceTests: XCTestCase {
         app.buttons["history-hint"].tap()
         let first = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "note-row-")).firstMatch
         try ready(first)
-        XCTAssertFalse(first.label.contains("Benchmark Note"), "Stop must durably save a new Note")
+        guard !first.label.contains("Benchmark Note") else {
+            XCTFail("Stop must durably save a new Note")
+            throw BenchmarkMetrics.InvalidMeasurement.samples
+        }
         first.tap()
         try ready(app.buttons["note-delete"])
         app.buttons["note-delete"].tap()

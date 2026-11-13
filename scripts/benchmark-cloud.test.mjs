@@ -93,7 +93,7 @@ test('native result archives reject symlinks and escaping members before invokin
   }
 });
 
-for (const scenario of ['buildFailed', 'invalidArtifact', 'missingArtifact', 'missingRunner']) test(`${scenario} is permanently recorded without fabricated timings and the next source is scheduled`, async t => {
+for (const scenario of ['buildFailed', 'invalidArtifact', 'missingArtifact', 'missingRunner', 'missingRunnerBoth']) test(`${scenario} is permanently recorded without fabricated timings and the next source is scheduled`, async t => {
   const { collectBenchmarkHistory } = await import('./benchmark-cloud.mjs');
   const root = await mkdtemp(join(tmpdir(), 'whim-benchmark-collect-'));
   t.after(() => rm(root, { force: true, recursive: true }));
@@ -103,13 +103,13 @@ for (const scenario of ['buildFailed', 'invalidArtifact', 'missingArtifact', 'mi
   await mkdir(join(root, 'benchmarks'));
   const storedPolicy = await readFile(new URL('../benchmarks/policy.json', import.meta.url), 'utf8');
   await writeFile(join(root, 'benchmarks/policy.json'), storedPolicy); await writeFile(join(root, 'app.swift'), 'initial');
-  if (scenario !== 'missingRunner') {
+  if (!scenario.startsWith('missingRunner')) {
     for (const path of ['ios/whim.xcodeproj/xcshareddata/xcschemes/WhimPerformanceTests.xcscheme', 'e2e/iphone/Performance.e2e.test.swift', 'scripts/benchmark-input.mjs']) {
       await mkdir(join(root, path, '..'), { recursive: true }); await writeFile(join(root, path), 'native runner');
     }
   }
   await git('add', '.'); await git('commit', '-m', 'rollout'); const first = await git('rev-parse', 'HEAD');
-  if (scenario === 'missingRunner') {
+  if (scenario.startsWith('missingRunner')) {
     for (const path of ['ios/whim.xcodeproj/xcshareddata/xcschemes/WhimPerformanceTests.xcscheme', 'e2e/iphone/Performance.e2e.test.swift', 'scripts/benchmark-input.mjs']) {
       await mkdir(join(root, path, '..'), { recursive: true }); await writeFile(join(root, path), 'native runner');
     }
@@ -125,12 +125,12 @@ for (const scenario of ['buildFailed', 'invalidArtifact', 'missingArtifact', 'mi
     github: async (method, path, body) => {
       calls.push({ method, path, body });
       if (path.includes('matching-refs/heads/benchmark-input/')) return [{ ref, object: { sha: first } }];
-      if (path.includes('matching-refs/heads/benchmark-queue/')) return [];
+      if (path.includes('matching-refs/heads/benchmark-queue/')) return scenario === 'missingRunnerBoth' ? [{ ref: `refs/heads/benchmark-queue/pr/7/${first}`, object: { sha: first } }] : [];
       if (path.includes('/pulls?')) return [];
       return {};
     },
     asc: async (method, path) => {
-      if (scenario === 'missingRunner' && path.includes('/buildRuns?')) return { data: [] };
+      if (scenario.startsWith('missingRunner') && path.includes('/buildRuns?')) return { data: [] };
       if (path === `/v1/ciBuildRuns/${buildID}`) return { data: { id: buildID, attributes: { number: 7, createdDate: '2026-11-13T13:00:00Z' } } };
       if (path.includes('/buildRuns?')) return { data: [{ id: buildID, attributes: { sourceCommit: { commitSha: first }, number: 7,
         executionProgress: 'COMPLETE', completionStatus: 'FAILED', finishedDate: '2026-11-13T13:00:00Z' },
@@ -147,17 +147,31 @@ for (const scenario of ['buildFailed', 'invalidArtifact', 'missingArtifact', 'mi
     if (exe === 'git' && actual[0] === 'clone') actual[actual.length - 2] = remote;
     return (await exec(exe, actual, { cwd: options.cwd, env: options.env })).stdout;
   };
-  const collection = collectBenchmarkHistory(root, { api, run, log: () => {}, env: { CI_WORKFLOW_ID: 'history', WHIM_BENCHMARK_HISTORY_WORKFLOW_ID: 'history',
+  const options = { api, run, log: () => {}, env: { CI_WORKFLOW_ID: 'history', WHIM_BENCHMARK_HISTORY_WORKFLOW_ID: 'history',
     CI_BRANCH: 'main', CI_BUILD_ID: buildID, WHIM_BENCHMARK_REPOSITORY: 'owner/repo', WHIM_BENCHMARK_ROLLOUT_SHA: first,
-    WHIM_BENCHMARK_WORKFLOW_ID: workflow, WHIM_BENCHMARK_GITHUB_TOKEN: 'synthetic' } });
-  if (scenario === 'buildFailed' || scenario === 'missingRunner') await collection;
+    WHIM_BENCHMARK_WORKFLOW_ID: workflow, WHIM_BENCHMARK_PRODUCT_ID: workflow, WHIM_BENCHMARK_GITHUB_TOKEN: 'synthetic' } };
+  const collection = collectBenchmarkHistory(root, options);
+  if (scenario === 'buildFailed' || scenario.startsWith('missingRunner')) await collection;
   else await assert.rejects(collection);
-  const file = (await exec('git', ['--git-dir', remote, 'show', `main:benchmarks/results/${first}/${buildID}.json`])).stdout;
+  const coverageSuffix = scenario.startsWith('missingRunner') ? '-coverage-main' : '';
+  const file = (await exec('git', ['--git-dir', remote, 'show', `main:benchmarks/results/${first}/${buildID}${coverageSuffix}.json`])).stdout;
   const record = JSON.parse(file);
-  assert.equal(record.evaluation.outcome, 'error'); assert.equal(record.failure.code, scenario); assert.deepEqual(record.metrics, {});
+  assert.equal(record.evaluation.outcome, 'error'); assert.equal(record.failure.code, scenario.startsWith('missingRunner') ? 'missingRunner' : scenario); assert.deepEqual(record.metrics, {});
   assert.ok(calls.some(c => c.method === 'POST' && c.body?.sha === second));
-  if (scenario !== 'missingRunner') assert.ok(calls.some(c => c.method === 'DELETE' && c.path.endsWith(first)));
+  if (!scenario.startsWith('missingRunner')) assert.ok(calls.some(c => c.method === 'DELETE' && c.path.endsWith(first)));
   assert.ok(!calls.some(c => c.method === 'POST' && c.body?.sha === first));
+  if (scenario === 'buildFailed') {
+    // The API returns a newly recreated input but still only the old native run.
+    calls.length = 0;
+    await collectBenchmarkHistory(root, options);
+    assert.ok(!calls.some(c => c.method === 'DELETE' && c.path.endsWith(first)), 'An old record cannot close a newly recreated queue entry');
+  }
+  if (scenario === 'missingRunnerBoth') {
+    const pr = JSON.parse((await exec('git', ['--git-dir', remote, 'show', `main:benchmarks/results/${first}/${buildID}-coverage-pr-7.json`])).stdout);
+    assert.equal(pr.source.context, 'pr/7'); assert.equal(pr.run.id, record.run.id);
+    const { publishResults } = await import('./benchmark-history.mjs');
+    assert.deepEqual(await publishResults(root, [record, pr], { run, remoteURL: remote }), { published: false });
+  }
 });
 
 test('observed PR backlog refs preserve superseded commits without triggering measurements before a baseline', async () => {
@@ -190,4 +204,73 @@ test('out-of-order Cloud pages retain the newest pending build for each exact in
   const latest = latestInputBuilds({ data: [build(2), build(1)], included: [reference] });
   assert.equal([...latest.values()][0].id, '2');
   assert.throws(() => latestInputBuilds({ data: [{ ...build(3), attributes: { number: 3, sourceCommit: { commitSha: sha('b') } } }], included: [reference] }), /attribution|source/i);
+});
+
+test('a failed native integrity assertion cannot promote numerically complete measurements to a baseline', async () => {
+  const { qualifyNativeResult } = await import('./benchmark-cloud.mjs');
+  const metrics = Object.fromEntries(['launch.empty', 'launch.populated', 'record.populated', 'stop.populated', 'timeline.populated']
+    .map(id => [id, { batches: [Array(10).fill(1000)] }]));
+  const baseline = { metrics, evaluation: { outcome: 'baseline', metrics: {} } };
+  const rejected = qualifyNativeResult(baseline, 'FAILED');
+  assert.equal(rejected.evaluation.outcome, 'error');
+  assert.equal(rejected.failure.code, 'measurementFailed');
+  assert.deepEqual(rejected.metrics, metrics);
+  assert.equal(qualifyNativeResult(baseline, 'SUCCEEDED'), baseline);
+  for (const outcome of ['regression', 'inconclusive']) {
+    const performanceFailure = { metrics, evaluation: { outcome, metrics: {} } };
+    assert.equal(qualifyNativeResult(performanceFailure, 'FAILED'), performanceFailure);
+  }
+});
+
+test('matching-ref discovery uses its unpaginated API contract for more than 100 backlog entries', async () => {
+  const { listExecutionRefs } = await import('./benchmark-cloud.mjs');
+  const refs = Array.from({ length: 101 }, (_, i) => ({ ref: `refs/heads/benchmark-queue/pr/${i + 1}/${sha('a')}`, object: { sha: sha('a') } }));
+  const calls = [];
+  const result = await listExecutionRefs(async (method, path) => { calls.push({ method, path }); return refs; }, 'owner/repo', 'benchmark-queue');
+  assert.equal(result.length, 101);
+  assert.deepEqual(calls, [{ method: 'GET', path: '/repos/owner/repo/git/matching-refs/heads/benchmark-queue/' }]);
+});
+
+test('PR discovery reconciles closed superseded Cloud heads, applies rollout to new work, and retains older pending work', async t => {
+  const { discoverPRSources } = await import('./benchmark-cloud.mjs');
+  const root = await mkdtemp(join(tmpdir(), 'whim-pr-discovery-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const exec = promisify(execFile);
+  const git = async (...args) => (await exec('git', args, { cwd: root })).stdout.trim();
+  const commit = async (name, date) => {
+    await writeFile(join(root, 'app.swift'), name); await git('add', '.');
+    await exec('git', ['commit', '-m', name], { cwd: root, env: { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } });
+    return git('rev-parse', 'HEAD');
+  };
+  await git('init', '-b', 'main'); await git('config', 'user.name', 'Test'); await git('config', 'user.email', 'test@example.com');
+  const base = await commit('base', '2026-11-10T12:00:00Z');
+  await git('checkout', '-b', 'feature');
+  const before = await commit('before rollout', '2026-11-11T12:00:00Z');
+  const observed = await commit('superseded Cloud head', '2026-11-13T12:00:00Z');
+  const current = await commit('current force-pushed head', '2026-11-14T12:00:00Z');
+  await git('checkout', 'main');
+  const rollout = await commit('benchmark rollout', '2026-11-12T12:00:00Z');
+  const remote = join(root, 'remote.git'); await exec('git', ['init', '--bare', remote]); await git('remote', 'add', 'origin', remote);
+  await git('push', 'origin', 'main', 'feature');
+  let pulls = [];
+  const product = '33333333-3333-4333-8333-333333333333';
+  const api = {
+    github: async () => pulls,
+    asc: async (method, path) => {
+      assert.match(path, new RegExp(`/ciProducts/${product}/buildRuns`));
+      return { data: [{ attributes: { isPullRequestBuild: true, createdDate: '2026-11-13T13:00:00Z',
+        sourceCommit: { commitSha: observed }, destinationCommit: { commitSha: rollout } }, relationships: { pullRequest: { data: { id: 'pr7' } } } }],
+      included: [{ id: 'pr7', type: 'scmPullRequests', attributes: { number: 7, isClosed: true,
+        destinationRepositoryOwner: 'owner', destinationRepositoryName: 'repo', destinationBranchName: 'main' } }] };
+    },
+  };
+  const options = { api, repository: 'owner/repo', productID: product, rollout, backlog: [] };
+  const closed = await discoverPRSources(root, options);
+  assert.deepEqual(closed.issues, []); assert.deepEqual(closed.sources.map(s => s.sha), [observed]);
+  pulls = [{ number: 7, head: { sha: current }, base: { sha: rollout } }];
+  const spanning = await discoverPRSources(root, options);
+  assert.deepEqual(spanning.sources.map(s => s.sha), [observed, current]);
+  assert.ok(!spanning.sources.some(s => s.sha === before || s.sha === base));
+  const retained = await discoverPRSources(root, { ...options, backlog: [{ ref: `refs/heads/benchmark-queue/pr/7/${before}`, object: { sha: before } }] });
+  assert.ok(retained.sources.some(s => s.sha === before && s.context === 'pr/7'));
 });
