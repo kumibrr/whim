@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const executables = ['whim', 'Watch/WhimWatch.app/WhimWatch', 'PlugIns/WhimLiveActivity.appex/WhimLiveActivity', 'Watch/WhimWatch.app/PlugIns/WhimComplication.appex/WhimComplication'];
-const fixtureMarkers = ['-WhimFixtureAudio', '-WhimFixtureWebhookURL', '-WhimFixtureOffline', '-WhimWatchTestID', '-WhimPeerScenario', '-WhimPlaybackFailureOnce', 'DebugFixtureRecorder', 'DebugFixtureTransport', 'DebugPeerTransport'];
+const fixtureMarkers = ['-WhimBenchmarkID', '-WhimBenchmarkNotes', '-WhimBenchmarkSetup', '-WhimFixtureAudio', '-WhimFixtureWebhookURL', '-WhimFixtureOffline', '-WhimWatchTestID', '-WhimPeerScenario', '-WhimPlaybackFailureOnce', 'DebugFixtureRecorder', 'DebugFixtureTransport', 'DebugPeerTransport'];
 export async function checkReleaseFixtures(root, app) {
   const errors = [];
   let approved;

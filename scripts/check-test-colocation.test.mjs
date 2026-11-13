@@ -45,6 +45,14 @@ test('rejects tests without adjacent implementations', async (t) => {
   assert.ok(errors.some((error) => error.includes('Missing.test.ts')));
 });
 
+test('requires native iPhone benchmark journeys in their dedicated UI test target', async t => {
+  const root = await fixture(t, {
+    'e2e/iphone/Performance.e2e.test.swift': '',
+    'ios/whim.xcodeproj/project.pbxproj': '/* missing test target */',
+  });
+  assert.ok((await checkRepository(root)).some(error => error.includes('WhimPerformanceTests')));
+});
+
 test('rejects generic architecture folders', async (t) => {
   const root = await fixture(t, { 'src/iphone/components/Button.tsx': '' });
 
@@ -140,5 +148,10 @@ test('rejects dangling Xcode package products before a clean extension build', a
   await writeFile(path.join(root, 'ios/whim.xcodeproj/project.pbxproj'), project + `
     CORE /* WhimCore */ = {isa = XCSwiftPackageProductDependency; package = PACKAGE /* WhimCore */; productName = WhimCore; };
   `);
+  assert.deepEqual(await checkRepository(root), []);
+});
+
+test('Node boundary tests can be adjacent to a Ruby project generator', async t => {
+  const root = await fixture(t, { 'scripts/configure-xcode-project.rb': '', 'scripts/configure-xcode-project.test.mjs': '' });
   assert.deepEqual(await checkRepository(root), []);
 });

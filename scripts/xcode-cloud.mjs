@@ -2,10 +2,26 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { runCommand } from './prepare-release-version.mjs';
 import { verifyCloudRelease } from './prepare-cloud-release.mjs';
+import { cloudBenchmarkRole } from './benchmark-cloud.mjs';
+import { isDataOnlyCommit, shaPattern } from './benchmark-history.mjs';
 
 export async function cloudPhase(phase, root = process.cwd(), { env = process.env, run = runCommand } = {}) {
   const execute = (exe, args) => run(exe, args, { cwd: root });
   if ((env.CI_WORKFLOW === 'Release' || env.CI_WORKFLOW_ID === '62dc6f87-fa57-4e9e-810a-43aa1dd13728') && !env.CI_BRANCH?.startsWith('release-build/')) throw Error('Release requires a prepared release-build/<tag> branch.');
+  const benchmarkRole = cloudBenchmarkRole(env);
+  if (benchmarkRole) {
+    if (phase === 'clone') return;
+    const action = env.CI_XCODEBUILD_ACTION;
+    const allowed = benchmarkRole === 'measure' ? ['build-for-testing', 'test-without-building'] : ['build'];
+    if (!allowed.includes(action)) throw Error('Unsupported benchmark Cloud action.');
+    if (phase === 'pre') {
+      if (benchmarkRole === 'history') await execute(process.execPath, ['scripts/benchmark-cloud.mjs']);
+      return;
+    }
+    if (phase !== 'post') throw Error(`Unknown Cloud hook: ${phase}`);
+    if (env.CI_XCODEBUILD_EXIT_CODE !== '0') throw Error(`Native benchmark Cloud action failed (${env.CI_XCODEBUILD_EXIT_CODE ?? 'missing exit code'}).`);
+    return;
+  }
   if (phase === 'clone') {
     if (env.CI_TAG) throw Error('Tag-triggered Cloud builds are disabled. Build the prepared release-build/<tag> branch.');
     if (env.CI_BRANCH?.startsWith('release-build/')) await verifyCloudRelease(root, env.CI_BRANCH, { run });
@@ -16,6 +32,8 @@ export async function cloudPhase(phase, root = process.cwd(), { env = process.en
   // Keep one native Archive action for releases, or Build for PR CI. Never silently omit gates.
   if (!['archive', 'build'].includes(action)) throw Error(`Unsupported Cloud action ${action}; configure Archive (release) or Build (PR CI).`);
   if (phase === 'pre') {
+    if (action === 'build' && env.CI_BRANCH === 'main' && !env.CI_PULL_REQUEST_NUMBER && shaPattern.test(env.CI_COMMIT ?? '')
+      && await isDataOnlyCommit(root, env.CI_COMMIT, { run })) return;
     if (env.CI_BRANCH?.startsWith('release-build/')) await verifyCloudRelease(root, env.CI_BRANCH, { run });
     await execute('npm', ['ci', '--no-audit', '--no-fund']);
     await execute('bash', ['scripts/check-release-privacy.sh']);

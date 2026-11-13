@@ -14,6 +14,7 @@
     "test:e2e:watch": "./scripts/test-watch-e2e.sh",
     "test:e2e": "npm run test:e2e:iphone && npm run test:e2e:watch",
     "test:all": "./scripts/test-all.sh",
+    "test:performance": "./scripts/test-performance.sh",
     "test:integration:webhook": "npm run test:integration --workspace @whim/reference-webhook",
     "changeset": "changeset",
     "release:version": "node scripts/prepare-release-version.mjs",

@@ -275,6 +275,52 @@ end
 project.build_configurations.each do |configuration|
   %w[OTHER_CFLAGS OTHER_CPLUSPLUSFLAGS OTHER_SWIFT_FLAGS].each { |key| configuration.build_settings.delete(key) }
 end
+
+# Dedicated native Cloud Test products carry their frozen input into the
+# source-free test-without-building phase. Nothing is bundled in the app.
+performance_tests = project.targets.find { |target| target.name == 'WhimPerformanceTests' } || project.new_target(:ui_test_bundle, 'WhimPerformanceTests', :ios, '18.0')
+configure_target(performance_tests, 'app.whim.ios.performancetests', '18.0')
+performance_group = virtual_group(project, 'WhimPerformanceTests')
+%w[../e2e/iphone/Performance.e2e.test.swift ../benchmarks/support/BenchmarkMetrics.swift].each do |path|
+  ref = file_reference(performance_group, path)
+  performance_tests.add_file_references([ref]) unless performance_tests.source_build_phase.files_references.include?(ref)
+end
+performance_tests.add_dependency(app_target) unless performance_tests.dependencies.any? { |dependency| dependency.target == app_target }
+performance_tests.build_configurations.each do |configuration|
+  configuration.build_settings['TEST_TARGET_NAME'] = 'whim'
+  configuration.build_settings['TARGETED_DEVICE_FAMILY'] = '1'
+  configuration.build_settings['DEVELOPMENT_TEAM'] = app_target.build_settings('Debug')['DEVELOPMENT_TEAM']
+end
+input_phase = performance_tests.shell_script_build_phases.find { |phase| phase.name == 'Freeze benchmark input' } || performance_tests.new_shell_script_build_phase('Freeze benchmark input')
+input_phase.shell_path = '/bin/bash'
+input_phase.always_out_of_date = '1'
+input_phase.output_paths = ['$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/BenchmarkInput.json']
+input_phase.shell_script = <<~'SH'
+  set -euo pipefail
+  if [[ "${CI_XCODE_CLOUD:-}" == "TRUE" || "${CI:-}" == "TRUE" ]]; then
+    source "$SRCROOT/ci_scripts/ci_environment.sh"
+  fi
+  node "$SRCROOT/../scripts/benchmark-input.mjs" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/BenchmarkInput.json"
+SH
+history_target = project.targets.find { |target| target.name == 'WhimBenchmarkHistory' } || project.new_aggregate_target('WhimBenchmarkHistory')
+
+# Clone each target's Debug settings, including its own widget/surface defines.
+# The supported benchmark series is an arm64 simulator with optimization on.
+([project] + project.targets).each do |owner|
+  debug = owner.build_configurations.find { |configuration| configuration.name == 'Debug' }
+  benchmark = owner.build_configurations.find { |configuration| configuration.name == 'DebugBenchmark' }
+  unless benchmark
+    benchmark = project.new(Xcodeproj::Project::Object::XCBuildConfiguration)
+    benchmark.name = 'DebugBenchmark'
+    owner.build_configuration_list.build_configurations << benchmark
+  end
+  benchmark.build_settings = Marshal.load(Marshal.dump(debug.build_settings))
+  benchmark.base_configuration_reference = debug.base_configuration_reference
+  benchmark.build_settings.merge!('SWIFT_OPTIMIZATION_LEVEL' => '-O', 'SWIFT_COMPILATION_MODE' => 'wholemodule',
+    'GCC_OPTIMIZATION_LEVEL' => 's', 'DEBUG_INFORMATION_FORMAT' => '', 'ONLY_ACTIVE_ARCH' => 'YES', 'ARCHS' => 'arm64')
+  flags = benchmark.build_settings['SWIFT_ACTIVE_COMPILATION_CONDITIONS'].to_s
+  benchmark.build_settings['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] = [flags, 'DEBUG'].join(' ').strip unless flags.split.include?('DEBUG')
+end
 # Remove unreachable project objects after source membership changes.
 reachable = {}
 visit = lambda do |value|
@@ -293,11 +339,15 @@ visit.call(project.root_object.uuid)
 project.objects.reject { |object| reachable[object.uuid] }.each(&:remove_from_project)
 project.save
 
-def save_scheme(project_path, name, launch_target, test_targets)
+def save_scheme(project_path, name, launch_target, test_targets, configuration: nil)
   scheme = Xcodeproj::XCScheme.new
   scheme.add_build_target(launch_target)
   scheme.set_launch_target(launch_target)
   test_targets.each { |target| scheme.add_test_target(target) }
+  if configuration
+    scheme.test_action.build_configuration = configuration
+    scheme.launch_action.build_configuration = configuration
+  end
   scheme.save_as(project_path, name, true)
 
   schemes_directory = File.join(project_path, 'xcshareddata', 'xcschemes')
@@ -315,3 +365,5 @@ end
 save_scheme(project_path, 'Whim', app_target, [surface_tests])
 save_scheme(project_path, 'WhimWatch', watch_target, [watch_tests, watch_ui_tests])
 save_scheme(project_path, 'WhimWatchUITests', watch_target, [watch_ui_tests])
+save_scheme(project_path, 'WhimPerformanceTests', app_target, [performance_tests], configuration: 'DebugBenchmark')
+save_scheme(project_path, 'WhimBenchmarkHistory', history_target, [])

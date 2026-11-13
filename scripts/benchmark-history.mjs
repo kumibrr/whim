@@ -35,7 +35,8 @@ export function validateObservation(value, policy) {
     || !/^(main|local|pr\/[1-9]\d*)$/.test(value.source.context) || !Number.isFinite(Date.parse(value.source.committedAt))
     || !exactKeys(value.run, ['id', 'number', 'url', 'measuredAt']) || !uuidPattern.test(value.run.id)
     || !Number.isInteger(value.run.number) || value.run.number < 0 || !Number.isFinite(Date.parse(value.run.measuredAt))
-    || !(value.source.context === 'local' && value.run.url === 'local' || /^https:\/\/appstoreconnect\.apple\.com\/[a-zA-Z0-9/_-]+$/.test(value.run.url))
+    || !(value.source.context === 'local' && value.run.url === 'local' || /^https:\/\/appstoreconnect\.apple\.com\/[a-zA-Z0-9/_-]+$/.test(value.run.url)
+      || /^https:\/\/api\.appstoreconnect\.apple\.com\/v1\/ciBuildRuns\/[a-f0-9-]{36}$/i.test(value.run.url))
     || !exactKeys(value.environment, environmentKeys) || !environmentKeys.every(k => boundedText(value.environment[k]))
     || value.environment.configuration !== policy.configuration
     || !exactKeys(value.snapshot, ['historySHA', 'policyHash', 'baselinePath', 'baselineHash']) || !shaPattern.test(value.snapshot.historySHA)
@@ -45,13 +46,14 @@ export function validateObservation(value, policy) {
     throw Error('Invalid benchmark observation schema or provenance.');
   }
   if (failure) {
-    if (!exactKeys(value.failure, ['code']) || !['measurementFailed', 'baselineUnavailable'].includes(value.failure.code)) throw Error('Invalid benchmark failure code.');
+    if (!exactKeys(value.failure, ['code']) || !['measurementFailed', 'baselineUnavailable', 'buildFailed', 'missingArtifact', 'invalidArtifact', 'missingRunner'].includes(value.failure.code)) throw Error('Invalid benchmark failure code.');
     if (!value.metrics || typeof value.metrics !== 'object' || Array.isArray(value.metrics)) throw Error('Invalid partial metrics.');
     for (const [id, metric] of Object.entries(value.metrics)) {
       if (!metricIDs.includes(id) || !exactKeys(metric, ['batches']) || !Array.isArray(metric.batches) || metric.batches.length > 2
         || !metric.batches.every(batch => Array.isArray(batch) && batch.length <= policy.samples && batch.every(x => Number.isFinite(x) && x >= 0 && x <= 3600000))) throw Error('Invalid partial metric samples.');
     }
   } else {
+    if (environmentKeys.some(k => ['pending', 'unavailable'].includes(value.environment[k]))) throw Error('Incomplete benchmark environment metadata.');
     for (const id of metricIDs) {
       if (!exactKeys(value.metrics?.[id], ['batches'])) throw Error('Invalid benchmark metric.');
     }
@@ -86,6 +88,11 @@ export async function readHistory(root, ref = 'HEAD', { run = runCommand } = {})
   return records;
 }
 
+export async function ensureFullHistory(root, { run = runCommand } = {}) {
+  const git = gitAt(root, run);
+  if (await git('rev-parse', '--is-shallow-repository') === 'true') await git('fetch', '--unshallow', '--no-tags', 'origin');
+}
+
 export async function freezeSnapshot(root, source, historyRef = 'origin/main', { run = runCommand } = {}) {
   if (!shaPattern.test(source)) throw Error('Invalid source SHA.');
   const git = gitAt(root, run);
@@ -95,8 +102,15 @@ export async function freezeSnapshot(root, source, historyRef = 'origin/main', {
   const ranks = new Map(ancestors.map((sha, index) => [sha, index]));
   const records = await readHistory(root, historySHA, { run });
   const mainAncestors = new Set((await git('rev-list', historySHA)).split('\n'));
-  const candidates = records.filter(({ record: r }) => r.source.context === 'main' && ranks.has(r.source.sha) && mainAncestors.has(r.source.sha)
-    && r.protocol === policy.protocol && r.fixture === policy.fixture && ['baseline', 'pass'].includes(r.evaluation?.outcome))
+  const candidates = records.filter(({ record: r }) => {
+    if (r.source.context !== 'main' || !ranks.has(r.source.sha) || !mainAncestors.has(r.source.sha)
+      || r.protocol !== policy.protocol || r.fixture !== policy.fixture || !['baseline', 'pass'].includes(r.evaluation?.outcome) || r.failure) return false;
+    try {
+      const { evaluation, ...observation } = r;
+      validateObservation(observation, policy);
+      return evaluateRun(r.metrics, null, policy).outcome === 'baseline';
+    } catch { return false; }
+  })
     .sort((a, b) => ranks.get(a.record.source.sha) - ranks.get(b.record.source.sha)
       || b.record.run.measuredAt.localeCompare(a.record.run.measuredAt) || a.path.localeCompare(b.path));
   // Keep one nearest ancestor per environment; this is complete for the decision,
@@ -125,7 +139,9 @@ export async function verifyObservation(root, observation, { run = runCommand, t
   if ((baseline?.path ?? null) !== observation.snapshot.baselinePath || (baseline?.hash ?? null) !== observation.snapshot.baselineHash) {
     throw Error('Frozen baseline identity or hash mismatch.');
   }
-  return { ...observation, evaluation: observation.failure ? { outcome: 'error', metrics: {} } : evaluateRun(observation.metrics, baseline?.record.metrics ?? null, policy) };
+  const evaluation = observation.failure ? { outcome: 'error', metrics: {} } : evaluateRun(observation.metrics, baseline?.record.metrics ?? null, policy);
+  if (!observation.failure && observation.source.context.startsWith('pr/') && !baseline && evaluation.outcome === 'baseline') evaluation.outcome = 'inconclusive';
+  return { ...observation, evaluation };
 }
 
 async function workingHistory(root) {
@@ -144,18 +160,19 @@ async function workingHistory(root) {
   return records;
 }
 
-export function historyIndex(records) {
-  const rows = [...records].sort((a, b) => a.source.committedAt.localeCompare(b.source.committedAt)
-    || a.source.sha.localeCompare(b.source.sha) || a.run.measuredAt.localeCompare(b.run.measuredAt) || a.run.id.localeCompare(b.run.id));
-  return '# iPhone performance benchmark history\n\nGenerated from immutable simulator observations. Times are medians in milliseconds; fixture capture does not measure physical microphone onset.\n\n'
+export function historyIndex(records, { repositoryURL = null } = {}) {
+  if (repositoryURL !== null && !/^https:\/\/github\.com\/[a-zA-Z0-9][\w.-]*\/[a-zA-Z0-9][\w.-]*$/.test(repositoryURL)) throw Error('Invalid history repository URL.');
+  const rows = [...records].sort((a, b) => Date.parse(a.source.committedAt) - Date.parse(b.source.committedAt)
+    || a.source.sha.localeCompare(b.source.sha) || Date.parse(a.run.measuredAt) - Date.parse(b.run.measuredAt) || a.run.id.localeCompare(b.run.id));
+  return '# iPhone performance benchmark history\n\nGenerated from immutable simulator observations. Times are medians in milliseconds; fixture capture does not measure physical microphone onset. Generated-data-only commits are excluded to avoid recursively benchmarking history updates.\n\n'
     + '| Source | Context | Run | Launch empty | Launch 1,000 | Record | Stop/save | History | Outcome | Baseline |\n'
     + '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |\n'
-    + rows.map(r => `| [${r.source.sha.slice(0, 7)}](../../commit/${r.source.sha}) | ${r.source.context} | ${r.run.url === 'local' ? r.run.id : `[${r.run.id}](${r.run.url})`} | `
+    + rows.map(r => `| ${repositoryURL ? `[${r.source.sha.slice(0, 7)}](${repositoryURL}/commit/${r.source.sha})` : r.source.sha.slice(0, 7)} | ${r.source.context} | ${r.run.url === 'local' ? r.run.id : `[${r.run.id}](${r.run.url})`} | `
       + metricIDs.map(id => r.evaluation?.metrics?.[id]?.summaries?.[0]?.median?.toFixed(2) ?? 'n/a').join(' | ')
       + ` | ${r.evaluation.outcome} | ${r.snapshot.baselinePath?.split('/')[2]?.slice(0, 7) ?? 'new series'} |`).join('\n') + '\n';
 }
 
-export async function appendResults(root, records) {
+export async function appendResults(root, records, { repositoryURL = null } = {}) {
   let written = 0;
   for (const record of records) {
     const path = join(root, resultPath(record));
@@ -169,19 +186,20 @@ export async function appendResults(root, records) {
   }
   const all = await workingHistory(root);
   await mkdir(join(root, 'benchmarks'), { recursive: true });
-  await writeFile(join(root, 'benchmarks/README.md'), historyIndex(all));
+  await writeFile(join(root, 'benchmarks/README.md'), historyIndex(all, { repositoryURL }));
   return written;
 }
 
-export async function publishResults(root, records, { run = runCommand, attempts = 3 } = {}) {
+export async function publishResults(root, records, { run = runCommand, attempts = 3, remoteURL } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'whim-benchmark-publish-'));
   const git = gitAt(root, run);
-  const remote = await git('remote', 'get-url', 'origin');
+  const remote = remoteURL ?? await git('remote', 'get-url', 'origin');
+  const github = /^https:\/\/github\.com\/([a-zA-Z0-9][\w.-]*\/[a-zA-Z0-9][\w.-]*?)(?:\.git)?$/.exec(remote);
   try {
     for (let attempt = 0; attempt < attempts; attempt++) {
       const checkout = join(directory, `attempt-${attempt}`);
       await run('git', ['clone', '--quiet', '--no-tags', '--branch', 'main', remote, checkout], { cwd: root, capture: true });
-      if (await appendResults(checkout, records) === 0) return { published: false };
+      if (await appendResults(checkout, records, { repositoryURL: github ? `https://github.com/${github[1]}` : null }) === 0) return { published: false };
       const local = gitAt(checkout, run);
       await local('add', '--', 'benchmarks/results', 'benchmarks/README.md');
       await local('-c', 'user.name=Whim benchmarks', '-c', 'user.email=benchmarks@users.noreply.github.com', 'commit', '--quiet', '-m', 'chore: record performance benchmarks');

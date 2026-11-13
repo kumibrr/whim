@@ -40,7 +40,7 @@ test('history validates raw observations and never accepts an incomplete/forged 
   const record = await verifyObservation(h.root, value);
   assert.equal(record.evaluation.outcome, 'baseline');
   for (const mutation of [v => { v.source.sha = '../escape'; }, v => { v.run.id = '../../escape'; },
-    v => { v.environment.secret = 'arbitrary'; }, v => { delete v.metrics['launch.empty']; },
+    v => { v.environment.secret = 'arbitrary'; }, v => { v.environment.cpu = 'unavailable'; }, v => { delete v.metrics['launch.empty']; },
     v => { v.metrics['record.populated'].batches[0][0] = -1; }, v => { v.snapshot.policyHash = '0'.repeat(64); }]) {
     const bad = structuredClone(value); mutation(bad);
     await assert.rejects(async () => verifyObservation(h.root, bad));
@@ -130,4 +130,56 @@ test('publication retries a concurrent main update without dropping either resul
   const checkout = join(h.root, 'check'); await exec('git', ['clone', '--branch', 'main', remote, checkout]);
   assert.equal(await readFile(join(checkout, 'another.swift'), 'utf8'), 'new app source');
   assert.ok((await readFile(join(checkout, 'benchmarks/README.md'), 'utf8')).includes(record.run.id));
+});
+
+test('publication can use a credential-free canonical remote independently of the source checkout URL', async t => {
+  const h = await repository(t);
+  const { publishResults, verifyObservation } = await import('./benchmark-history.mjs');
+  const remote = join(h.root, 'remote.git'); await exec('git', ['init', '--bare', remote]);
+  await h.git('push', remote, 'main');
+  const record = await verifyObservation(h.root, await observation(h));
+  await publishResults(h.root, [record], { remoteURL: remote });
+  assert.ok((await exec('git', ['--git-dir', remote, 'show', 'main:benchmarks/README.md'])).stdout.includes(record.run.id));
+});
+
+test('the history list sorts real commit times across time zones and links to the configured GitHub repository', async t => {
+  const h = await repository(t);
+  const { verifyObservation, historyIndex } = await import('./benchmark-history.mjs');
+  const record = await verifyObservation(h.root, await observation(h));
+  const earlier = structuredClone(record); earlier.source.sha = 'a'.repeat(40); earlier.source.committedAt = '2026-11-13T15:00:00+09:00';
+  const later = structuredClone(record); later.source.sha = 'b'.repeat(40); later.source.committedAt = '2026-11-13T08:00:00Z';
+  const index = historyIndex([later, earlier], { repositoryURL: 'https://github.com/owner/repo' });
+  assert.ok(index.indexOf('aaaaaaa') < index.indexOf('bbbbbbb'));
+  assert.ok(index.includes(`https://github.com/owner/repo/commit/${earlier.source.sha}`));
+});
+
+test('a PR observation without a compatible main baseline is provisional and cannot pass its gate', async t => {
+  const h = await repository(t);
+  const { verifyObservation } = await import('./benchmark-history.mjs');
+  const raw = await observation(h);
+  raw.source.context = 'pr/7';
+  const record = await verifyObservation(h.root, raw);
+  assert.equal(record.evaluation.outcome, 'inconclusive');
+  assert.equal(record.snapshot.baselinePath, null);
+});
+
+test('incomplete or explicitly failed historical records cannot seed even if their stored verdict claims pass', async t => {
+  const h = await repository(t);
+  const { appendResults, freezeSnapshot, verifyObservation } = await import('./benchmark-history.mjs');
+  const record = await verifyObservation(h.root, await observation(h));
+  delete record.metrics['record.populated'];
+  record.evaluation.outcome = 'pass';
+  await appendResults(h.root, [record]); await h.git('add', '.'); await h.git('commit', '-m', 'malformed historical record');
+  assert.equal((await freezeSnapshot(h.root, h.sha, 'HEAD')).candidates.length, 0);
+});
+
+test('a shallow Cloud checkout expands source ancestry before commit discovery and baseline selection', async t => {
+  const h = await repository(t);
+  const { ensureFullHistory } = await import('./benchmark-history.mjs');
+  await h.git('commit', '--allow-empty', '-m', 'second');
+  const checkout = join(h.root, 'cloud');
+  await exec('git', ['clone', '--depth', '1', `file://${h.root}`, checkout]);
+  assert.equal((await exec('git', ['rev-list', '--count', 'HEAD'], { cwd: checkout })).stdout.trim(), '1');
+  await ensureFullHistory(checkout);
+  assert.equal((await exec('git', ['rev-list', '--count', 'HEAD'], { cwd: checkout })).stdout.trim(), '2');
 });

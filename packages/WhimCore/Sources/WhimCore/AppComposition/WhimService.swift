@@ -824,6 +824,12 @@ public final class UserDefaultsPreferenceStore: PreferenceStoring, @unchecked Se
 }
 
 public enum WhimProductionComposition {
+    public static var preferenceSuiteName: String {
+        #if DEBUG
+        if let benchmark = try? BenchmarkFixture.from(arguments: ProcessInfo.processInfo.arguments) { return benchmark.suiteName }
+        #endif
+        return appGroupIdentifier
+    }
     #if os(watchOS)
     public static let appGroupIdentifier = "group.app.whim.watch.shared"
     private static let credentialService = "app.whim.watch.webhook"
@@ -841,6 +847,14 @@ public enum WhimProductionComposition {
         var suiteName = appGroupIdentifier
         var keychainService = credentialService
         var permissions: any PermissionAdapter = SystemPermissionAdapter()
+        #if DEBUG
+        let benchmark = try BenchmarkFixture.from(arguments: ProcessInfo.processInfo.arguments)
+        if let benchmark {
+            suiteName = benchmark.suiteName
+            keychainService += ".benchmark." + benchmark.id.uuidString
+            permissions = BenchmarkPermissions()
+        }
+        #endif
         #if DEBUG && os(watchOS)
         if let testID = watchTestID {
             suiteName += ".test." + testID
@@ -857,11 +871,15 @@ public enum WhimProductionComposition {
             recorder = try DebugFixtureRecorder.from(arguments: ProcessInfo.processInfo.arguments) ?? AVAudioRecorderAdapter()
         }
         #elseif DEBUG
-        recorder = try DebugFixtureRecorder.from(arguments: ProcessInfo.processInfo.arguments) ?? AVAudioRecorderAdapter()
+        if benchmark != nil { recorder = DebugFixtureRecorder(fixture: try configurationTestFixtureURL(bundle: bundle)) }
+        else { recorder = try DebugFixtureRecorder.from(arguments: ProcessInfo.processInfo.arguments) ?? AVAudioRecorderAdapter() }
         #else
         recorder = AVAudioRecorderAdapter()
         #endif
         let files = try AudioFileStore(root: root.appendingPathComponent("Audio"), closeWriter: { _ in })
+        #if DEBUG
+        if let benchmark { try await benchmark.prepare(store: store, files: files, fixture: configurationTestFixtureURL(bundle: bundle)) }
+        #endif
         #if canImport(ActivityKit) && os(iOS)
         let activity = LiveActivityAdapter(system: ActivityKitRecordingSystem())
         await activity.reconcile(activeSessionID: nil)
@@ -923,6 +941,9 @@ public enum WhimProductionComposition {
             peerTransport = debugPeer.transport
         }
         #endif
+        #if DEBUG
+        if benchmark != nil { peerTransport = nil }
+        #endif
         let peer = try ConnectivityMergeService(store: store, files: files,
             databaseURL: root.appendingPathComponent("whim.sqlite"), root: root.appendingPathComponent("Peer"),
             device: deliveryDevice, credentials: credentials, transport: peerTransport, preferences: preferences)
@@ -980,6 +1001,9 @@ public enum WhimProductionComposition {
     #endif
 
     public static func sharedRoot() throws -> URL {
+        #if DEBUG
+        if let benchmark = try BenchmarkFixture.from(arguments: ProcessInfo.processInfo.arguments) { return benchmark.root }
+        #endif
         #if DEBUG && os(watchOS)
         if let testID = watchTestID {
             return FileManager.default.temporaryDirectory.appendingPathComponent("WhimWatchTests/" + testID)

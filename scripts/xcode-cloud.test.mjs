@@ -40,6 +40,43 @@ test('failed full test suite blocks the native cloud build', async () => {
   await assert.rejects(result, /Boundary failed/);
 });
 
+test('native benchmark actions do not rerun the functional suites or the release archive', async () => {
+  for (const action of ['build-for-testing', 'test-without-building']) {
+    const { calls, result } = await phase('pre', { CI_XCODEBUILD_ACTION: action, CI_WORKFLOW_ID: 'measure',
+      WHIM_BENCHMARK_WORKFLOW_ID: 'measure', CI_BRANCH: `benchmark-input/main/${'a'.repeat(40)}` });
+    await result;
+    assert.deepEqual(calls, []);
+  }
+});
+
+test('only the trusted-main history action invokes collection and native failure remains visible', async () => {
+  const env = { CI_XCODEBUILD_ACTION: 'build', CI_WORKFLOW_ID: 'history', WHIM_BENCHMARK_HISTORY_WORKFLOW_ID: 'history', CI_BRANCH: 'main' };
+  const { calls, result } = await phase('pre', env); await result;
+  assert.equal(calls.length, 1); assert.ok(calls[0].args.includes('scripts/benchmark-cloud.mjs'));
+  await assert.rejects((await phase('pre', { ...env, CI_PULL_REQUEST_NUMBER: '1' })).result, /trusted main/);
+  await assert.rejects((await phase('post', { ...env, CI_XCODEBUILD_EXIT_CODE: '65' })).result, /failed/);
+});
+
+test('generated-only main updates skip custom gates but mixed code updates retain the full suite', async () => {
+  const { cloudPhase } = await import('./xcode-cloud.mjs');
+  for (const mixed of [false, true]) {
+    const calls = [];
+    await cloudPhase('pre', '/checkout', { env: { CI_BRANCH: 'main', CI_COMMIT: 'a'.repeat(40), CI_XCODEBUILD_ACTION: 'build' },
+      run: async (exe, args) => { calls.push([exe, args]); return exe === 'git' ? 'benchmarks/results/run.json\0' + (mixed ? 'src/app.swift\0' : '') : ''; } });
+    assert.equal(calls.some(([exe, args]) => exe === 'npm' && args.includes('test:all')), mixed);
+  }
+});
+
+test('native test-without-building hooks need no source checkout, Node bootstrap, or publisher secrets', async () => {
+  const env = { ...process.env, CI_PRIMARY_REPOSITORY_PATH: '/checkout-not-present-in-native-test-action',
+    CI_WORKFLOW_ID: 'measure', WHIM_BENCHMARK_WORKFLOW_ID: 'measure', CI_XCODEBUILD_ACTION: 'test-without-building',
+    CI_BRANCH: `benchmark-input/main/${'a'.repeat(40)}`, CI_COMMIT: 'a'.repeat(40), CI_XCODEBUILD_EXIT_CODE: '0' };
+  const executeHook = (name, extra = {}) => promisify(execFile)('bash', [new URL(`../ios/ci_scripts/ci_${name}_xcodebuild.sh`, import.meta.url).pathname], { env: { ...env, ...extra } });
+  await executeHook('pre'); await executeHook('post');
+  await assert.rejects(executeHook('post', { CI_XCODEBUILD_EXIT_CODE: '65' }));
+  await assert.rejects(executeHook('pre', { WHIM_ASC_PRIVATE_KEY: 'synthetic-private-key' }));
+});
+
 test('post-build checks all embedded bundles in the actual native archive', async () => {
   const { calls, result } = await phase('post', { CI_XCODEBUILD_ACTION: 'archive', CI_XCODEBUILD_EXIT_CODE: '0', CI_ARCHIVE_PATH: '/cloud/native.xcarchive' });
   await result;

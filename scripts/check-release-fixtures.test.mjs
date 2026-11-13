@@ -26,5 +26,7 @@ test('release gate requires approved runtime audio and rejects fixture injection
       assert.ok((await checkReleaseFixtures(root, app)).some(error => error.includes(binary)));
       await put(app, binary, 'production executable');
     }
+    await put(app, 'whim', 'production\0-WhimBenchmarkID\0');
+    assert.ok((await checkReleaseFixtures(root, app)).some(error => error.includes('-WhimBenchmarkID')));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
