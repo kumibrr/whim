@@ -80,7 +80,7 @@ import XCTest
         }
     }
 
-    func testCornerLogoEndsStayNearlyLevel() throws {
+    func testCompleteCornerLogoFollowsAGentleArc() throws {
         let (image, pixels) = try renderLogoArtwork()
         func meanY(at fraction: Double) throws -> Double {
             let x = Int(Double(image.width) * fraction)
@@ -91,11 +91,14 @@ import XCTest
             _ = try XCTUnwrap(rows.first, "The Corner logo must be present in the compiled asset catalog")
             return Double(rows.reduce(0, +)) / Double(rows.count)
         }
-        let centers = try [0.06, 0.14, 0.86, 0.94].map { try meanY(at: $0) }
-        let highest = try XCTUnwrap(centers.min())
-        let lowest = try XCTUnwrap(centers.max())
-        XCTAssertLessThan(lowest - highest, 2,
-                          "Keep the outer ends almost level instead of sweeping down")
+        let leftRise = try meanY(at: 0.06) - meanY(at: 0.14)
+        let rightRise = try meanY(at: 0.94) - meanY(at: 0.86)
+        for rise in [leftRise, rightRise] {
+            XCTAssertGreaterThan(abs(rise), 4, "Warp the complete logo along the label's arc")
+            XCTAssertLessThan(abs(rise), 9, "Keep the bend gentle at the rounded ends")
+        }
+        XCTAssertGreaterThan(leftRise * rightRise, 0, "Both ends follow the same arc")
+        XCTAssertEqual(leftRise, rightRise, accuracy: 1.5, "Keep the logo centered on the arc")
     }
 
     // Break: Corner still uses the shortened mark, omitting the full logo's floating dot.

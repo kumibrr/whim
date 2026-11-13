@@ -54,7 +54,7 @@ Status: pending physical-device execution.
    with a tight clear gap and no overlap. The lifted label must stay fully
    visible in every corner. The timer remains on the bezel.
    Verify the tall central waveform, right-hand strokes, and floating dot are
-   visible, with the original level outer strokes and rounded caps. The complete
+   visible, with a gentle, centered warp following the label’s radius and rounded caps. The complete
    mark must use the wider horizontal area without cropping or covering the
    adjacent clock details. Stop and warning retain their existing sizes.
    The Stop symbol must follow the same local angle as the text, rather than
@@ -74,7 +74,7 @@ Status: pending physical-device execution.
 
 Evidence: Watch model/watchOS version, build, screenshots of the picker and
 each Corner state, and the saved Note. Deterministic companion coverage checks
-the compiled widget's family registration, complete waveform, floating dot, and rounded logo ends, and shared bezel gap for Stop and warning;
+the compiled widget's family registration, complete waveform, floating dot, gentle centered arc, and rounded logo ends, and shared bezel gap for Stop and warning;
 installed-app complication launch
 coverage checks capture and saving. Face layout and system picker installation
 remain physical acceptance cases.
