@@ -61,7 +61,7 @@ Status: pending physical-device execution.
    remaining upright. Repeat in all four corners; orientation follows each slot.
 3. Tap the Corner during capture: expect the same Recording Session, not a
    second one. Stop in Whim and verify one playable Note and the idle mark.
-4. Produce a failed Note. While idle, verify an angled warning glyph and curved
+4. Produce a failed Note. While idle, verify an angled white SF warning symbol with a black exclamation cutout and curved
    “Check Notes” label. While recording, verify the warning sits beside the
    curved elapsed time, clear of the red glyph. Repeat with a tinted face and
    Always On dimming; verify legibility and VoiceOver labels in all four Corners.

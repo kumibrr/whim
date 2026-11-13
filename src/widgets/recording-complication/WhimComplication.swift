@@ -133,10 +133,11 @@ struct WhimCornerComplicationContent: View {
                 .accessibilityLabel("Whim recording")
         } else if entry.snapshot.hasFailedNotes {
             Image(systemName: "exclamationmark.triangle.fill")
+                .symbolRenderingMode(.monochrome)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 18, height: 18, alignment: .bottom)
-                .foregroundStyle(.yellow)
+                .foregroundStyle(.white)
                 .accessibilityLabel("Record a Whim. Failed Notes need attention")
         } else {
             Image(Self.logoAssetName)
@@ -159,7 +160,7 @@ struct WhimCornerComplicationLabel: View {
         if let recording = entry.snapshot.activeRecording(at: entry.date) {
             let timer = Text(timerInterval: recording.createdAt...recording.createdAt.addingTimeInterval(recording.maximumDurationSeconds), countsDown: false)
             if entry.snapshot.hasFailedNotes {
-                (Text(Image(systemName: "exclamationmark.triangle.fill")) + Text(" ") + timer)
+                (Text(Image(systemName: "exclamationmark.triangle.fill").symbolRenderingMode(.monochrome)) + Text(" ") + timer)
                     .monospacedDigit()
                     .accessibilityLabel("Whim recording elapsed time. Failed Notes need attention")
                     .accessibilityValue(timer)

@@ -35,14 +35,19 @@ import XCTest
         XCTAssertEqual(whitePixels, 0, "The main Corner content must not contain the Circular timer")
     }
 
-    func testCornerWarningUsesTheSameSmallBezelGapAsRecording() throws {
+    func testCornerWarningIsMonochromeWithTheSameSmallBezelGapAsRecording() throws {
         let entry = WhimComplicationEntry(date: Date(), snapshot: .init(recording: nil, hasFailedNotes: true))
         let (image, pixels) = try render(WhimComplicationContent(entry: entry, family: .accessoryCorner)
-            .frame(width: 38, height: 38).background(.black))
+            .foregroundStyle(.pink).frame(width: 38, height: 38).background(.black))
         let warningPixels = stride(from: 0, to: pixels.count, by: 4).filter {
-            pixels[$0] > 200 && pixels[$0 + 1] > 140 && pixels[$0 + 2] < 100
+            pixels[$0] > 200 && pixels[$0 + 1] > 200 && pixels[$0 + 2] > 200
         }
-        XCTAssertGreaterThan(warningPixels.count, 60, "The warning must remain legible")
+        XCTAssertGreaterThan(warningPixels.count, 60, "The white SF Symbol must remain legible")
+        let coloredPixels = stride(from: 0, to: pixels.count, by: 4).filter {
+            let channels = pixels[$0...($0 + 2)]
+            return Int(channels.max()!) - Int(channels.min()!) > 5
+        }
+        XCTAssertTrue(coloredPixels.isEmpty, "Render the warning in black and white, without a colored tint")
         let lastRow = try XCTUnwrap(warningPixels.map { ($0 / 4) / image.width }.max())
         XCTAssertEqual(Double(image.height - 1 - lastRow), 0, accuracy: 1,
                        "Warning and Stop should sit equally close to their curved labels")
