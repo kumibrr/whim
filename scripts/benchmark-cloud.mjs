@@ -196,7 +196,18 @@ export async function discoverPRSources(root, { repository, productID, rollout, 
       const observedAt = Date.parse(build.attributes.createdDate);
       if (!Number.isFinite(observedAt)) { issues.push('Cloud PR observation has no creation time.'); continue; }
       if (observedAt < since) continue;
-      const pr = requests.get(build.relationships?.pullRequest?.data?.id);
+      const requestID = build.relationships?.pullRequest?.data?.id;
+      let pr = requests.get(requestID);
+      // Apple's included resources can be identity-only references, including
+      // for completed/closed PR builds. Resolve each referenced PR once per sweep.
+      if (!pr && uuidPattern.test(requestID ?? '')) {
+        try {
+          const { data } = await api.asc('GET', `/v1/scmPullRequests/${requestID}`);
+          if (data?.type !== 'scmPullRequests' || data.id !== requestID) throw Error('Cloud PR metadata identity mismatch.');
+          pr = data.attributes;
+          requests.set(requestID, pr);
+        } catch (error) { issues.push(`Cloud PR metadata lookup failed: ${error.message}`); continue; }
+      }
       if (!pr) { issues.push('Cloud PR observation has no authenticated pull-request metadata.'); continue; }
       if (`${pr.destinationRepositoryOwner}/${pr.destinationRepositoryName}`.toLowerCase() !== repository.toLowerCase()
         || pr.destinationBranchName !== 'main') continue;

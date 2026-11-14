@@ -3,6 +3,28 @@ import WhimCore
 @testable import WhimIPhone
 
 @MainActor final class IPhoneModelIntegrationTests: XCTestCase {
+    func testDelayedStopEventPreservesCompletedSaveFeedback() async throws {
+        let harness = try WhimFacadeHarness()
+        defer { harness.remove() }
+        let stopped = expectation(description: "Real service Stop event held for late delivery")
+        let client = DeferredRecordingEventsClient(base: harness.makeService(permissions: GrantedPermissions()), stopped: stopped)
+        defer { client.cancel() }
+        let model = IPhoneModel(client: client)
+        await model.start()
+        defer { model.stop() }
+        await model.startRecording()
+        client.holdEvents()
+        await model.stopRecording()
+        XCTAssertEqual(model.feedback, "Note saved")
+        await fulfillment(of: [stopped], timeout: 1)
+        let expectedRevision = model.revision + client.releaseEvents()
+        for _ in 0..<200 where model.revision < expectedRevision {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertGreaterThanOrEqual(model.revision, expectedRevision, "Consume the held native events before checking feedback")
+        XCTAssertEqual(model.feedback, "Note saved", "A late Stop event must preserve the command's confirmed save")
+    }
+
     func testRecordAndStopFinishBeforeInitialStartupProjection() async throws {
         let harness = try WhimFacadeHarness()
         defer { harness.remove() }

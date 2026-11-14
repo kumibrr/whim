@@ -16,6 +16,8 @@ The fixture isolates SQLite, audio files, credentials and preferences by UUID. S
 
 `benchmarks/policy.json` defines two warmups and ten samples per metric. A median slowdown must exceed **both 20% and 100 ms**, then recur in a second ten-sample batch, to fail as a regression. Median absolute deviation above 15% produces an inconclusive failure. Failed/incomplete and inconclusive runs cannot advance a baseline. Baselines must be accepted main-context ancestors with the same protocol, fixture and complete environment metadata. A new series can seed on main; an uncomparable PR result remains provisional and fails its native gate.
 
+The serial benchmark case requests a 30-minute [XCTest execution allowance](https://developer.apple.com/documentation/xctest/xctestcase/executiontimeallowance), including untimed setup, cleanup and confirmation batches. This replaces XCTest's default ten-minute case timeout; it does not change the samples or regression thresholds.
+
 ## Execution and history
 
 1. The trusted history workflow enumerates main ancestry from the configured rollout SHA and the current histories of open PRs, plus original PR heads observed in this product’s Cloud build metadata (including superseded and closed PRs). New PR work must have a commit time at or after the rollout commit time; already retained pending work survives a later cutoff. It preserves observed PR backlog commits under `benchmark-queue/pr/<number>/<sha>` before scheduling, so subsequent closure/force-push cannot discard them. Queue refs contain source commits, not benchmark data, and do not match any build start condition.
@@ -56,12 +58,15 @@ These settings are a deployment step after merging the implementation. Repositor
 | `WHIM_BENCHMARK_REPOSITORY` | `kumibrr/whim` | No |
 | `WHIM_BENCHMARK_PRODUCT_ID` | Whim Cloud product UUID (`b675c35b-56c1-482b-b43d-ac966e431519`) | No |
 | `WHIM_BENCHMARK_ROLLOUT_SHA` | Full main source SHA containing this implementation | No |
+| `GIT_CONFIG_GLOBAL` | `/dev/null`, to prevent Cloud's read-only checkout proxy rewriting the publication remote | No |
 | `WHIM_BENCHMARK_GITHUB_TOKEN` | Repository-scoped credential: contents read/write and PR metadata read | Yes |
 | `WHIM_ASC_ISSUER_ID` | App Store Connect API issuer | Yes |
 | `WHIM_ASC_KEY_ID` | API key ID | Yes |
 | `WHIM_ASC_PRIVATE_KEY` | ES256 `.p8` private key, actual newlines or literal `\n` | Yes |
 
 The ASC key must read this product's Cloud workflows, runs, original PR metadata, actions and artifacts and start a rebuild when a provisional PR needs comparison. Signed artifact downloads receive neither API credential. The Git credential must create/delete execution/queue refs and append to main under the repository's rules. If protection rejects publication, fix the bot's authorized rule configuration; do not disable protection or force push. A PR-based publication mode is not implemented.
+
+The collector's `GIT_CONFIG_GLOBAL` override keeps its authenticated publication on the canonical GitHub HTTPS remote. Apply it only to **Benchmark history**; the measurement workflow remains credential-free. Cloud PR references are resolved through Apple's authenticated PR-detail endpoint when list responses omit their attributes.
 
 Keep existing Default and Release workflows, including release-preparation Actions. Their branch start conditions must exclude both `benchmark-input/` and `benchmark-queue/`; the Default PR condition remains targeting main. Configure generated-history file exclusions on ordinary main changes. Release builds always retain their full gates.
 
