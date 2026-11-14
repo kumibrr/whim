@@ -69,12 +69,32 @@ test('generated-only main updates skip custom gates but mixed code updates retai
 
 test('native test-without-building hooks need no source checkout, Node bootstrap, or publisher secrets', async () => {
   const env = { ...process.env, CI_PRIMARY_REPOSITORY_PATH: '/checkout-not-present-in-native-test-action',
+    CI_PULL_REQUEST_NUMBER: '', CI_TAG: '', WHIM_ASC_PRIVATE_KEY: '', WHIM_BENCHMARK_GITHUB_TOKEN: '',
     CI_WORKFLOW_ID: 'measure', WHIM_BENCHMARK_WORKFLOW_ID: 'measure', CI_XCODEBUILD_ACTION: 'test-without-building',
     CI_BRANCH: `benchmark-input/main/${'a'.repeat(40)}`, CI_COMMIT: 'a'.repeat(40), CI_XCODEBUILD_EXIT_CODE: '0' };
   const executeHook = (name, extra = {}) => promisify(execFile)('bash', [new URL(`../ios/ci_scripts/ci_${name}_xcodebuild.sh`, import.meta.url).pathname], { env: { ...env, ...extra } });
   await executeHook('pre'); await executeHook('post');
   await assert.rejects(executeHook('post', { CI_XCODEBUILD_EXIT_CODE: '65' }));
-  await assert.rejects(executeHook('pre', { WHIM_ASC_PRIVATE_KEY: 'synthetic-private-key' }));
+  for (const context of [{ CI_PULL_REQUEST_NUMBER: '59' }, { CI_TAG: '1.2.3' }]) {
+    await assert.rejects(executeHook('pre', context), { stderr: /Invalid native benchmark input context/ });
+  }
+  for (const credentials of [{ WHIM_ASC_PRIVATE_KEY: 'synthetic-private-key' }, { WHIM_BENCHMARK_GITHUB_TOKEN: 'synthetic-token' }]) {
+    await assert.rejects(executeHook('pre', credentials), { stderr: /Publisher credentials must never be supplied/ });
+  }
+});
+
+test('native hook fixture isolates its context from the enclosing Cloud action', async () => {
+  for (const enclosingAction of [
+    { CI_PULL_REQUEST_NUMBER: '59' }, { CI_TAG: '1.2.3' },
+    { WHIM_ASC_PRIVATE_KEY: 'synthetic-host-private-key' },
+    { WHIM_BENCHMARK_GITHUB_TOKEN: 'synthetic-host-token' },
+  ]) {
+    const { stdout } = await promisify(execFile)(process.execPath, [
+      '--test', '--test-reporter=tap', '--test-name-pattern', '^native test-without-building hooks need no source checkout',
+      new URL('./xcode-cloud.test.mjs', import.meta.url).pathname,
+    ], { env: { ...process.env, NODE_TEST_CONTEXT: undefined, ...enclosingAction } });
+    assert.match(stdout, /# pass 1\b/);
+  }
 });
 
 test('post-build checks all embedded bundles in the actual native archive', async () => {
