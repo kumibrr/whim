@@ -1,0 +1,98 @@
+{
+  "environment": {
+    "architecture": "arm64",
+    "configuration": "optimized-debug",
+    "cpu": "Apple M2 Ultra (Virtual)",
+    "device": "iPhone 16 Pro",
+    "kernel": "27.2.0",
+    "macOS": "27.2",
+    "runtime": "Version 27.0 (Build 24A434)",
+    "xcode": "Xcode 27.1 Build version 27A9275"
+  },
+  "evaluation": {
+    "metrics": {},
+    "outcome": "error"
+  },
+  "failure": {
+    "code": "measurementFailed"
+  },
+  "fixture": "notes-1000-v1",
+  "metrics": {
+    "launch.empty": {
+      "batches": [
+        [
+          6007.415666666702,
+          5827.890499999967,
+          5526.581541666701,
+          5343.020625000008,
+          5191.678625000122,
+          5048.697291666713,
+          5120.421416666659,
+          5045.677208333245,
+          5134.142874999952,
+          5272.918291666656
+        ]
+      ]
+    },
+    "launch.populated": {
+      "batches": [
+        [
+          5123.2589166666,
+          5067.599083333334,
+          5096.333749999985,
+          5059.573833333388,
+          5186.720124999965,
+          5107.3581666667,
+          5121.147583333368,
+          5093.032791666701,
+          5135.593666666637,
+          5076.401583333336
+        ]
+      ]
+    },
+    "record.populated": {
+      "batches": [
+        [
+          1440.1767083334107,
+          1474.621124999885,
+          1476.6310416666784,
+          1475.5524583333681,
+          1472.2147500001483,
+          1468.6947916668487,
+          1457.2021666665478,
+          1468.8339583333345,
+          1458.6425833333578,
+          1464.9478333333263
+        ]
+      ]
+    },
+    "stop.populated": {
+      "batches": [
+        []
+      ]
+    }
+  },
+  "protocol": "iphone-ui-v1",
+  "run": {
+    "id": "2d482fe7-ecbe-4138-b296-5f21bc831979",
+    "measuredAt": "2026-11-14T16:06:40Z",
+    "number": 89,
+    "url": "https://appstoreconnect.apple.com/teams/3a7fa4a7-7fbd-40c9-b79c-659659e627f6/apps/6818763329/ci/builds/2d482fe7-ecbe-4138-b296-5f21bc831979"
+  },
+  "schemaVersion": 1,
+  "snapshot": {
+    "baselineHash": null,
+    "baselinePath": null,
+    "historySHA": "8b15ce5b412d71c628b9caf601cb29f061622c9a",
+    "policyHash": "c0a187c38d3a779b7165a5191ab63ba2bfbfa37e206b363b2f027f2bbb96c6ab"
+  },
+  "source": {
+    "committedAt": "2026-11-14T14:42:18+01:00",
+    "context": "main",
+    "parents": [
+      "52037f008ec4b2046c6a2534d003c48728046a3f",
+      "1920e80e90890475b2832a4b2f9250da0e8bf75e"
+    ],
+    "sha": "1b1a0e6bef8887a546684a96b04a18291795f4bc"
+  }
+}
