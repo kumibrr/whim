@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { appVersion } from './check-release-metadata.mjs';
 import { prepareReleaseVersion, runCommand } from './prepare-release-version.mjs';
+import { isDataOnlyCommit, sourceTree as benchmarkSourceTree } from './benchmark-history.mjs';
 
 export const provenancePath = '.release/prepared.json';
 const versionFiles = ['ios/package.json', 'ios/CHANGELOG.md', 'package-lock.json', 'ios/whim.xcodeproj/project.pbxproj', provenancePath];
@@ -16,6 +17,15 @@ function context(root, { run = runCommand, repository = process.env.GITHUB_REPOS
   const execute = (exe, args, cwd = root) => run(exe, args, { cwd, capture: true });
   const git = async (...args) => (await execute('git', args)).trim();
   const tree = sha => git('rev-parse', `${sha}^{tree}`);
+  const sourceTree = sha => benchmarkSourceTree(root, sha, { run });
+  const dataOnlyAdvance = async (base, head) => {
+    if (base === head) return true;
+    await git('merge-base', '--is-ancestor', base, head);
+    for (const sha of (await git('rev-list', `${base}..${head}`)).split('\n').filter(Boolean)) {
+      if (!await isDataOnlyCommit(root, sha, { run })) return false;
+    }
+    return true;
+  };
   const show = async (sha, path) => JSON.parse(await git('show', `${sha}:${path}`));
   async function state(tag) {
     const names = ['refs/heads/main', `refs/tags/${tag}`, `refs/heads/release-preparation/${tag}`, `refs/heads/release-build/${tag}`];
@@ -41,18 +51,37 @@ function context(root, { run = runCommand, repository = process.env.GITHUB_REPOS
       throw Error(`Unexpected release preparation change: ${path}`);
     }
     if (current.build) {
-      if (await tree(current.build) !== await tree(prepared)) throw Error('Existing release-build branch differs; it will never be overwritten.');
+      if (await sourceTree(current.build) !== await sourceTree(prepared)) throw Error('Existing release-build branch differs; it will never be overwritten.');
       await git('merge-base', '--is-ancestor', current.build, current.main);
     }
     return metadata;
   }
-  return { execute, git, tree, show, state, verify, repository, log };
+  return { execute, git, tree, sourceTree, dataOnlyAdvance, show, state, verify, repository, log };
+}
+
+async function includeBenchmarkHistory(c, current) {
+  if (current.main === current.source) return current.preparation;
+  const directory = await mkdtemp(join(tmpdir(), 'whim-release-benchmarks-'));
+  const checkout = join(directory, 'checkout');
+  try {
+    await c.git('clone', '--quiet', '--no-checkout', '--no-hardlinks', '.', checkout);
+    const local = async (...args) => (await c.execute('git', args, checkout)).trim();
+    await local('read-tree', current.main);
+    const patch = join(directory, 'version.patch');
+    await writeFile(patch, await c.execute('git', ['diff', '--binary', current.source, current.preparation]));
+    await local('apply', '--cached', patch);
+    const tree = await local('write-tree');
+    const commit = await local('-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com',
+      'commit-tree', tree, '-p', current.main, '-p', current.preparation, '-m', 'chore(ios): retain benchmark history during release preparation');
+    await c.git('fetch', '--no-tags', checkout, commit);
+    return commit;
+  } finally { await rm(directory, { recursive: true, force: true }); }
 }
 
 async function handoff(c, tag, current, { allowMainPush }) {
   await c.verify(tag, current);
   if (current.build) return { state: 'ready', commit: current.build };
-  if (await c.tree(current.main) === await c.tree(current.preparation)) {
+  if (await c.sourceTree(current.main) === await c.sourceTree(current.preparation)) {
     // Squash/rebase/merge PRs are all supported: publish the commit actually on main.
     try { await c.git('push', '--force-with-lease=' + `refs/heads/release-build/${tag}:`, 'origin', `${current.main}:refs/heads/release-build/${tag}`); }
     catch (error) {
@@ -63,12 +92,14 @@ async function handoff(c, tag, current, { allowMainPush }) {
     c.log(`Ready for Xcode Cloud: release-build/${tag} at ${current.main}.`);
     return { state: 'ready', commit: current.main };
   }
-  if (await c.tree(current.main) !== await c.tree(current.source)) throw Error('main advanced or differs from the tagged source. Cloud handoff stopped; publish a new release tag from reconciled main. Do not move the original tag.');
-  if (allowMainPush && current.main === current.source) {
+  if (await c.sourceTree(current.main) !== await c.sourceTree(current.source)) throw Error('main advanced or differs from the tagged source. Cloud handoff stopped; publish a new release tag from reconciled main. Do not move the original tag.');
+  await c.git('merge-base', '--is-ancestor', current.source, current.main);
+  if (allowMainPush) {
+    const publication = await includeBenchmarkHistory(c, current);
     try {
       // Both refs become visible together. A protected/rejected main leaves neither changed.
-      await c.git('push', '--atomic', `--force-with-lease=refs/heads/release-build/${tag}:`, 'origin', `${current.preparation}:refs/heads/main`, `${current.preparation}:refs/heads/release-build/${tag}`);
-      return { state: 'ready', commit: current.preparation };
+      await c.git('push', '--atomic', `--force-with-lease=refs/heads/release-build/${tag}:`, 'origin', `${publication}:refs/heads/main`, `${publication}:refs/heads/release-build/${tag}`);
+      return { state: 'ready', commit: publication };
     } catch (error) {
       const after = await c.state(tag);
       if (after.build) { await c.verify(tag, after); return { state: 'ready', commit: after.build }; }
@@ -98,7 +129,8 @@ export async function prepareCloudRelease(root = process.cwd(), tag, options = {
   let current = await c.state(tag);
   if (!current.preparation) {
     if (current.build) throw Error('Existing release-build branch has no preparation provenance; refusing to overwrite.');
-    if (current.main !== current.source) throw Error('The release tag must match current origin/main. main advanced; publish a new tag after reconciling source.');
+    if (await c.sourceTree(current.main) !== await c.sourceTree(current.source) || !await c.dataOnlyAdvance(current.source, current.main)) throw Error('The release tag must match current origin/main. main advanced; publish a new tag after reconciling source.');
+    await c.git('merge-base', '--is-ancestor', current.source, current.main);
     const directory = await mkdtemp(join(tmpdir(), 'whim-cloud-version-'));
     const checkout = join(directory, 'checkout');
     try {
@@ -121,7 +153,8 @@ export async function prepareCloudRelease(root = process.cwd(), tag, options = {
       await c.git('fetch', '--no-tags', checkout, commit);
       await c.verify(tag, { ...current, preparation: commit });
       const latest = await c.state(tag);
-      if (latest.main !== current.main || latest.tagObject !== current.tagObject) throw Error('main or the original tag changed during version preparation; publication stopped.');
+      if (!await c.dataOnlyAdvance(current.main, latest.main) || latest.tagObject !== current.tagObject) throw Error('main or the original tag changed during version preparation; publication stopped.');
+      await c.git('merge-base', '--is-ancestor', current.main, latest.main);
       try { await c.git('push', `--force-with-lease=refs/heads/release-preparation/${tag}:`, 'origin', `${commit}:refs/heads/release-preparation/${tag}`); }
       catch (error) {
         const after = await c.state(tag);
@@ -152,7 +185,7 @@ export async function verifyCloudRelease(root, branch, options = {}) {
   const current = await c.state(tag);
   await c.verify(tag, current);
   const head = await c.git('rev-parse', 'HEAD');
-  if (!current.build || current.build !== head || await c.tree(current.main) !== await c.tree(head)) throw Error('Cloud checkout or current main differs from the prepared release. Refusing stale source.');
+  if (!current.build || current.build !== head || await c.sourceTree(current.main) !== await c.sourceTree(head)) throw Error('Cloud checkout or current main differs from the prepared release. Refusing stale source.');
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

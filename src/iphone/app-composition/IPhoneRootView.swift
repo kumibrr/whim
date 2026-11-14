@@ -5,7 +5,7 @@ import WhimIPhone
 enum IPhoneRoute: Hashable { case settings, settingsSection(SettingsSection), note(NoteID) }
 private enum IPhoneSheet: String, Identifiable { case history, appUpdate; var id: String { rawValue } }
 struct IPhoneRootView: View {
-    @AppStorage("onboarding.quickCapture.v1.acknowledged", store: UserDefaults(suiteName: WhimProductionComposition.appGroupIdentifier)) private var setupAcknowledged = false
+    @AppStorage("onboarding.quickCapture.v1.acknowledged", store: UserDefaults(suiteName: WhimProductionComposition.preferenceSuiteName)) private var setupAcknowledged = false
     @Bindable var model: IPhoneModel
     var pendingLink: PendingIPhoneLink?
     @Environment(\.scenePhase) private var phase

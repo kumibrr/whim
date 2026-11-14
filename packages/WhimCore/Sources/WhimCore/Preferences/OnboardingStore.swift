@@ -9,7 +9,7 @@ public protocol OnboardingStoring: Sendable {
 public final class UserDefaultsOnboardingStore: OnboardingStoring, @unchecked Sendable {
     private let defaults: UserDefaults
     private let lock = NSLock()
-    public init(suiteName: String = WhimProductionComposition.appGroupIdentifier) {
+    public init(suiteName: String = WhimProductionComposition.preferenceSuiteName) {
         defaults = UserDefaults(suiteName: suiteName) ?? .standard
     }
     public func isComplete() -> Bool { lock.withLock { defaults.bool(forKey: "onboarding.v1.completed") } }

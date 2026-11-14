@@ -230,7 +230,7 @@ import WhimCore
     @ObservationIgnored private var completionGeneration = 0
 
     public init(client: any WhimClient, onboardingCompletedHint: Bool = false, permissionReviewDefaults: UserDefaults = .standard,
-                appUpdateDefaults: UserDefaults = UserDefaults(suiteName: WhimProductionComposition.appGroupIdentifier) ?? .standard) {
+                appUpdateDefaults: UserDefaults = UserDefaults(suiteName: WhimProductionComposition.preferenceSuiteName) ?? .standard) {
         self.client = client; self.onboardingHint = onboardingCompletedHint
         self.appUpdate = AppUpdateModel(client: client, defaults: appUpdateDefaults)
         self.permissionReviewDefaults = permissionReviewDefaults

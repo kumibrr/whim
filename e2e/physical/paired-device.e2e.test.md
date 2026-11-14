@@ -60,3 +60,7 @@ Use [system entry procedures](iphone-system-entry-points.e2e.test.md), [Watch ca
 | VoiceOver/focus | — | — | — | VoiceOver enabled | Navigate capture, history, detail, settings | Labels and focus order permit complete journeys | — | Pending | — | — |
 | Dynamic Type/contrast | — | — | — | Largest accessibility text | Inspect all screens and status colors | No clipped essential controls; distinguishable status | — | Pending | — | — |
 | Haptics/Reduce Motion | — | — | — | Reduce Motion enabled | Start, Stop, Discard; navigate controls | Correct haptics; transitions avoid morph motion | — | Pending | — | — |
+
+## Physical performance acceptance
+
+Pending: record exact source SHA, iPhone model and iOS version; measure Record-to-physical microphone capture and Stop-to-durable playable Note using non-sensitive fixture speech. Exercise ordinary capture, interruption and low-storage preservation separately. Simulator UI timings cannot sign off microphone/encoder latency. The deterministic companions are `e2e/iphone/Performance.e2e.test.swift`, `RecordingService`, `PCMRecorderHardware`, and `BenchmarkFixture` integration tests. See [benchmark protocol and Cloud setup](../../docs/performance-benchmarks.md).

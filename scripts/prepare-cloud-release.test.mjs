@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmod, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { command, releaseFixture } from './release.test-support.mjs';
 
@@ -26,6 +26,42 @@ async function fixture(t, tag = '1.0.1') {
 const remote = (f, ...args) => command(f.root, 'git', ['--git-dir', f.remote, ...args]).trim();
 const prepare = async (f, opts = {}) => (await import('./prepare-cloud-release.mjs')).prepareCloudRelease(f.root, f.tag, { ...f.options, ...opts });
 const resume = async f => (await import('./prepare-cloud-release.mjs')).resumeCloudRelease(f.root, f.options);
+
+test('benchmark-only publication during release preparation preserves history and the original tagged source', async t => {
+  const f = await fixture(t);
+  await mkdir(`${f.root}/benchmarks/results`, { recursive: true });
+  await writeFile(`${f.root}/benchmarks/results/observation.json`, '{"outcome":"baseline"}\n');
+  command(f.root, 'git', ['add', 'benchmarks']);
+  command(f.root, 'git', ['commit', '-m', 'benchmark results after tag']);
+  command(f.root, 'git', ['push', 'origin', 'HEAD:main']);
+  await prepare(f);
+  const built = remote(f, 'rev-parse', `release-build/${f.tag}`);
+  assert.equal(remote(f, 'show', `${built}:benchmarks/results/observation.json`), '{"outcome":"baseline"}');
+  assert.equal(JSON.parse(remote(f, 'show', `${built}:.release/prepared.json`)).source, f.initial);
+  assert.equal(remote(f, 'show', '-s', '--format=%P', `release-preparation/${f.tag}`), f.initial);
+});
+
+test('Cloud archive validity tolerates later benchmark results but rejects benchmark policy changes', async t => {
+  const f = await fixture(t);
+  await prepare(f);
+  command(f.root, 'git', ['fetch', 'origin', `release-build/${f.tag}`]);
+  command(f.root, 'git', ['switch', '--detach', 'FETCH_HEAD']);
+  const prepared = command(f.root, 'git', ['rev-parse', 'HEAD']).trim();
+  await mkdir(`${f.root}/benchmarks/results`, { recursive: true });
+  await writeFile(`${f.root}/benchmarks/results/observation.json`, '{}\n');
+  command(f.root, 'git', ['add', 'benchmarks']); command(f.root, 'git', ['commit', '-m', 'results']);
+  command(f.root, 'git', ['push', 'origin', 'HEAD:main']);
+  const results = command(f.root, 'git', ['rev-parse', 'HEAD']).trim();
+  command(f.root, 'git', ['checkout', '--detach', prepared]);
+  const { verifyCloudRelease } = await import('./prepare-cloud-release.mjs');
+  await verifyCloudRelease(f.root, `release-build/${f.tag}`, f.options);
+  command(f.root, 'git', ['checkout', '--detach', results]);
+  await writeFile(`${f.root}/benchmarks/policy.json`, '{}\n');
+  command(f.root, 'git', ['add', '.']); command(f.root, 'git', ['commit', '-m', 'policy change']);
+  command(f.root, 'git', ['push', 'origin', 'HEAD:main']);
+  command(f.root, 'git', ['checkout', '--detach', prepared]);
+  await assert.rejects(verifyCloudRelease(f.root, `release-build/${f.tag}`, f.options), /differs|source|stale/i);
+});
 
 test('attributes release preparation commits to the reserved GitHub Actions bot', async t => {
   const f = await fixture(t);

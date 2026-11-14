@@ -73,9 +73,21 @@ test('a restoration failure still attempts deletion and cannot hide the test fai
   assert.equal(f.calls.at(-1)[0], 'delete-keychain');
 });
 
-test('the pre-build hook runs validation inside the disposable keychain wrapper', async () => {
-  const { readFile } = await import('node:fs/promises');
-  const hook = await readFile(new URL('../ios/ci_scripts/ci_pre_xcodebuild.sh', import.meta.url), 'utf8');
-  assert.match(hook, /node .*scripts\/cloud-test-keychain\.mjs/);
-  assert.doesNotMatch(hook, /node .*scripts\/xcode-cloud\.mjs.*pre/);
+for (const role of ['functional', 'measure', 'history']) test(`the ${role} pre-build hook uses only its intended validation boundary`, async t => {
+  const { mkdtemp, mkdir, writeFile, readFile, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const root = await mkdtemp(join(tmpdir(), 'whim-pre-hook-'));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  await mkdir(join(root, 'bin'));
+  await mkdir(join(root, 'ios/ci_scripts'), { recursive: true });
+  await writeFile(join(root, 'ios/ci_scripts/ci_environment.sh'), 'whim_setup_test_dependencies() { echo dependencies >> "$WHIM_TEST_LOG"; }\n');
+  await writeFile(join(root, 'bin/node'), '#!/bin/bash\nif [[ "${2:-}" == role ]]; then echo "$WHIM_TEST_ROLE"; else basename "$1" >> "$WHIM_TEST_LOG"; fi\n', { mode: 0o755 });
+  const output = join(root, 'calls');
+  await promisify(execFile)('bash', [new URL('../ios/ci_scripts/ci_pre_xcodebuild.sh', import.meta.url).pathname], {
+    env: { PATH: `${join(root, 'bin')}:${process.env.PATH}`, CI_PRIMARY_REPOSITORY_PATH: root, WHIM_TEST_ROLE: role, WHIM_TEST_LOG: output },
+  });
+  assert.equal(await readFile(output, 'utf8'), role === 'functional' ? 'dependencies\ncloud-test-keychain.mjs\n' : 'xcode-cloud.mjs\n');
 });

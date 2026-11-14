@@ -1,0 +1,11 @@
+[
+  {"name":"first observation", "baseline":null, "values":[[1000]], "expected":"baseline"},
+  {"name":"relative boundary", "baseline":1000, "values":[[1200]], "expected":"pass"},
+  {"name":"absolute boundary", "baseline":100, "values":[[200]], "expected":"pass"},
+  {"name":"needs confirmation", "baseline":1000, "values":[[1201]], "expected":"confirmationRequired"},
+  {"name":"confirmed slowdown", "baseline":1000, "values":[[1300],[1400]], "expected":"regression"},
+  {"name":"confirmation disagrees", "baseline":1000, "values":[[1300],[1000]], "expected":"inconclusive"},
+  {"name":"unstable first observation", "baseline":null, "values":[[1,1,1,1,1,100,100,100,100,100]], "expected":"inconclusive"},
+  {"name":"zero is not a baseline", "baseline":null, "values":[[0]], "expected":"inconclusive"},
+  {"name":"unstable confirmation", "baseline":1000, "values":[[1300],[1000,1000,1000,1000,1000,2000,2000,2000,2000,2000]], "expected":"inconclusive"}
+]

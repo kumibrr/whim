@@ -74,6 +74,7 @@ function scalar(body, property) {
 }
 
 function intendedXcodeTarget(file) {
+  if (file.startsWith('e2e/iphone/') && file.endsWith('.e2e.test.swift')) return 'WhimPerformanceTests';
   if (file.startsWith('src/widgets/recording-complication/') && file.endsWith('.test.swift')) {
     return 'WhimWatchTests';
   }
@@ -133,17 +134,20 @@ function xcodeSourceMemberships(project) {
 
 export async function checkRepository(root = process.cwd()) {
   const errors = [];
-  const scannedRoots = ['src', 'packages', 'scripts'];
+  const scannedRoots = ['src', 'packages', 'scripts', 'e2e'];
   const allFiles = (
     await Promise.all(scannedRoots.map((directory) => filesBelow(root, directory)))
   ).flat();
   const normalizedFiles = new Set(allFiles.map((file) => file.split(path.sep).join('/')));
 
   for (const file of normalizedFiles) {
+    if (file.startsWith('e2e/')) continue;
     if (!/(?:\.integration)?\.test\.(?:[cm]?[jt]sx?|swift)$/.test(file)) continue;
 
     const implementation = implementationFor(file);
-    if (!normalizedFiles.has(implementation)) {
+    const rubyBoundary = file.startsWith('scripts/') && file.endsWith('.test.mjs')
+      && normalizedFiles.has(implementation.replace(/\.mjs$/, '.rb'));
+    if (!normalizedFiles.has(implementation) && !rubyBoundary) {
       errors.push(`${file}: expected adjacent implementation ${implementation}`);
     }
   }

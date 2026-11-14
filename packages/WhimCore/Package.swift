@@ -3,6 +3,7 @@
 import PackageDescription
 
 let productionSources = [
+    "AppComposition/BenchmarkFixture.swift",
     "DeviceSync/PeerConnectionDetails.swift",
     "Preferences/WatchRecordingPreferences.swift",
     "Recording/SilenceAutoStopPolicy.swift",
@@ -116,6 +117,7 @@ let unitTestSources = [
     "WebhookConfiguration/WebhookRequestBuilder.test.swift",
 ]
 let integrationTestSources = [
+    "AppComposition/BenchmarkFixture.integration.test.swift",
     "DeviceSync/WatchConnectivityAdapter.integration.test.swift",
     "Preferences/WatchRecordingPreferences.integration.test.swift",
     "Maintenance/MaintenanceService.integration.test.swift",

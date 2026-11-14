@@ -63,6 +63,8 @@ npm run test:all
 
 `test:all` selects and boots compatible simulators when their IDs are not already supplied. Unit tests need no simulator. Integration tests exercise core and presentation services and the Watch model. E2E runs native iPhone Maestro journeys and Watch XCTest journeys against isolated webhook fixtures. These journeys clear test-app data. Run them on the dedicated CI simulators.
 
+Run `npm run test:performance` separately for launch, Record, Stop/save and timeline benchmarks. See [performance benchmarks](docs/performance-benchmarks.md) for Xcode Cloud workflows, regression policy and the [per-commit history](benchmarks/README.md).
+
 For focused presentation checks, run `swift test` from the repository root. WhimCore tests run with `swift test --package-path packages/WhimCore`. Each package uses explicit source membership with adjacent companion tests. The Node colocation checker validates membership and prevents tests from shipping in production targets.
 
 Run `npm run test:integration:webhook` to test the reference receiver independently on macOS or Linux. These tests also run in the root integration suite and CI.
