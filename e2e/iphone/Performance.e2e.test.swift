@@ -34,6 +34,9 @@ final class WhimPerformanceTests: XCTestCase {
     }
 
     func testBenchmarkOperations() throws {
+        // Serial launches, fixture cleanup and optional confirmation batches
+        // exceed XCTest's default ten-minute case budget on Cloud simulators.
+        executionTimeAllowance = 1800
         // XCTest's stop-on-first-failure raises an Objective-C exception, which
         // can bypass Swift defer and lose the very samples needed on failures.
         continueAfterFailure = true
