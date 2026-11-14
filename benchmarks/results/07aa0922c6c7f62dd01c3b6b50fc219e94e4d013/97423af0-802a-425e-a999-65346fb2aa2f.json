@@ -1,0 +1,107 @@
+{
+  "environment": {
+    "architecture": "arm64",
+    "configuration": "optimized-debug",
+    "cpu": "Apple M2 Ultra (Virtual)",
+    "device": "iPhone 16 Pro",
+    "kernel": "27.2.0",
+    "macOS": "27.2",
+    "runtime": "Version 27.0 (Build 24A434)",
+    "xcode": "Xcode 27.1 Build version 27A9275"
+  },
+  "evaluation": {
+    "metrics": {},
+    "outcome": "error"
+  },
+  "failure": {
+    "code": "measurementFailed"
+  },
+  "fixture": "notes-1000-v1",
+  "metrics": {
+    "launch.empty": {
+      "batches": [
+        [
+          6530.152874999658,
+          5741.741374999947,
+          5523.7467083334195,
+          5345.514499999808,
+          5159.9177499997495,
+          5215.943458333186,
+          5141.280374999951,
+          5177.7282499997455,
+          5171.405166666773,
+          5186.475333333419
+        ]
+      ]
+    },
+    "launch.populated": {
+      "batches": [
+        [
+          5235.811375000139,
+          5140.827291666483,
+          5230.459208333286,
+          5246.814958333289,
+          5093.065166666747,
+          5074.314041666639,
+          5052.37175000002,
+          5103.33750000018,
+          5087.597250000272,
+          5125.376791666895
+        ]
+      ]
+    },
+    "record.populated": {
+      "batches": [
+        [
+          1424.341750000167,
+          1443.7706250000701,
+          1481.2677083336894,
+          1466.0712083332328,
+          1457.8476249998857,
+          1456.682666666893,
+          1467.5200416668304,
+          1468.019958333116,
+          1475.1869166666438,
+          1445.852833333447
+        ]
+      ]
+    },
+    "stop.populated": {
+      "batches": [
+        [
+          2513.5216250000667,
+          2546.417666666912,
+          2543.25687499977,
+          2520.6154583333955,
+          2532.3847916665727,
+          2563.7559166666506,
+          2545.0383333331956,
+          2521.303333333435,
+          2515.476541666885
+        ]
+      ]
+    }
+  },
+  "protocol": "iphone-ui-v1",
+  "run": {
+    "id": "97423af0-802a-425e-a999-65346fb2aa2f",
+    "measuredAt": "2026-11-14T19:06:36Z",
+    "number": 99,
+    "url": "https://appstoreconnect.apple.com/teams/3a7fa4a7-7fbd-40c9-b79c-659659e627f6/apps/6818763329/ci/builds/97423af0-802a-425e-a999-65346fb2aa2f"
+  },
+  "schemaVersion": 1,
+  "snapshot": {
+    "baselineHash": "240cf4e19e96d9fe6c0b9c899b634176fb65384a425d6fe69e2a78a82dbfd8cd",
+    "baselinePath": "benchmarks/results/07aa0922c6c7f62dd01c3b6b50fc219e94e4d013/40653188-b14e-4c1d-96cc-cfda595b68f9.json",
+    "historySHA": "9b9f792043fa458d757ffa84c36461ac21c003c8",
+    "policyHash": "c0a187c38d3a779b7165a5191ab63ba2bfbfa37e206b363b2f027f2bbb96c6ab"
+  },
+  "source": {
+    "committedAt": "2026-11-14T15:09:41+01:00",
+    "context": "pr/61",
+    "parents": [
+      "2d27fdf2ccdc230518c2700348490492d18bbdc4"
+    ],
+    "sha": "07aa0922c6c7f62dd01c3b6b50fc219e94e4d013"
+  }
+}
