@@ -252,7 +252,7 @@ test('matching-ref discovery uses its unpaginated API contract for more than 100
   assert.deepEqual(calls, [{ method: 'GET', path: '/repos/owner/repo/git/matching-refs/heads/benchmark-queue/' }]);
 });
 
-test('PR discovery reconciles closed superseded Cloud heads, applies rollout to new work, and retains older pending work', async t => {
+for (const representation of ['inline', 'reference']) test(`PR discovery reconciles ${representation} metadata for closed superseded Cloud heads and retains older pending work`, async t => {
   const { discoverPRSources } = await import('./benchmark-cloud.mjs');
   const root = await mkdtemp(join(tmpdir(), 'whim-pr-discovery-'));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -275,19 +275,30 @@ test('PR discovery reconciles closed superseded Cloud heads, applies rollout to 
   await git('push', 'origin', 'main', 'feature');
   let pulls = [];
   const product = '33333333-3333-4333-8333-333333333333';
+  const requestID = '44444444-4444-4444-8444-444444444444';
+  const request = { id: requestID, type: 'scmPullRequests', attributes: { number: 7, isClosed: true,
+    destinationRepositoryOwner: 'owner', destinationRepositoryName: 'repo', destinationBranchName: 'main' } };
+  const detailRequests = [];
   const api = {
     github: async () => pulls,
     asc: async (method, path) => {
+      if (path === `/v1/scmPullRequests/${requestID}`) {
+        detailRequests.push(path);
+        return { data: request };
+      }
       assert.match(path, new RegExp(`/ciProducts/${product}/buildRuns`));
-      return { data: [{ attributes: { isPullRequestBuild: true, createdDate: '2026-11-13T13:00:00Z',
-        sourceCommit: { commitSha: observed }, destinationCommit: { commitSha: rollout } }, relationships: { pullRequest: { data: { id: 'pr7' } } } }],
-      included: [{ id: 'pr7', type: 'scmPullRequests', attributes: { number: 7, isClosed: true,
-        destinationRepositoryOwner: 'owner', destinationRepositoryName: 'repo', destinationBranchName: 'main' } }] };
+      const build = { attributes: { isPullRequestBuild: true, createdDate: '2026-11-13T13:00:00Z',
+        sourceCommit: { commitSha: observed }, destinationCommit: { commitSha: rollout } },
+        relationships: { pullRequest: { data: { id: requestID } } } };
+      return { data: [build, { ...build }], included: [representation === 'reference'
+        ? { id: requestID, type: 'scmPullRequests', links: { self: `https://api.appstoreconnect.apple.com/v1/scmPullRequests/${requestID}` } }
+        : request] };
     },
   };
   const options = { api, repository: 'owner/repo', productID: product, rollout, backlog: [] };
   const closed = await discoverPRSources(root, options);
   assert.deepEqual(closed.issues, []); assert.deepEqual(closed.sources.map(s => s.sha), [observed]);
+  assert.deepEqual(detailRequests, representation === 'reference' ? [`/v1/scmPullRequests/${requestID}`] : []);
   pulls = [{ number: 7, head: { sha: current }, base: { sha: rollout } }];
   const spanning = await discoverPRSources(root, options);
   assert.deepEqual(spanning.sources.map(s => s.sha), [observed, current]);
