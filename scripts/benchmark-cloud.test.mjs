@@ -93,7 +93,7 @@ test('native result archives reject symlinks and escaping members before invokin
   }
 });
 
-for (const scenario of ['buildFailed', 'invalidArtifact', 'missingArtifact', 'missingRunner', 'missingRunnerBoth']) test(`${scenario} is permanently recorded without fabricated timings and the next source is scheduled`, async t => {
+for (const scenario of ['buildFailed', 'invalidArtifact', 'invalidArtifactWithPhaseArtifacts', 'ambiguousNativeArtifacts', 'missingArtifact', 'missingRunner', 'missingRunnerBoth']) test(`${scenario} ${scenario === 'ambiguousNativeArtifacts' ? 'stays pending without publishing or deleting its input' : 'is permanently recorded without fabricated timings and the next source is scheduled'}`, async t => {
   const { collectBenchmarkHistory } = await import('./benchmark-cloud.mjs');
   const root = await mkdtemp(join(tmpdir(), 'whim-benchmark-collect-'));
   t.after(() => rm(root, { force: true, recursive: true }));
@@ -137,10 +137,22 @@ for (const scenario of ['buildFailed', 'invalidArtifact', 'missingArtifact', 'mi
         relationships: { sourceBranchOrTag: { data: { id: 'reference' } } } }],
         included: [{ id: 'reference', type: 'scmGitReferences', attributes: { canonicalName: ref } }] };
       if (path.includes('/actions?')) return { data: [{ id: 'compile', attributes: { actionType: scenario === 'buildFailed' ? 'BUILD' : 'TEST', completionStatus: 'FAILED' } }] };
-      if (path.includes('/artifacts?')) return { data: scenario === 'invalidArtifact' ? [{ attributes: { fileType: 'RESULT_BUNDLE', downloadUrl: 'https://storage.example/native.zip' } }] : [] };
+      if (path.includes('/artifacts?')) {
+        const native = { attributes: { fileType: 'RESULT_BUNDLE',
+          fileName: 'whim Build 75 XCResult for WhimPerformanceTests test-without-building on iPhone 16 Pro (iOS 27.2).xcresult.zip',
+          downloadUrl: 'https://storage.example/native.zip' } };
+        return { data: scenario === 'invalidArtifactWithPhaseArtifacts' ? [
+          { attributes: { fileType: 'RESULT_BUNDLE', fileName: 'whim Build 75 XCResult for WhimPerformanceTests build-for-testing.xcresult.zip', downloadUrl: 'https://storage.example/compile.zip' } },
+          native,
+          { attributes: { fileType: 'RESULT_BUNDLE', fileName: 'crash_log_bundle_whim_75_SimulatorTestsTask.zip', downloadUrl: 'https://storage.example/crashes.zip' } },
+        ] : scenario === 'ambiguousNativeArtifacts' ? [native, { attributes: { ...native.attributes,
+          fileName: 'whim Build 75 XCResult for WhimPerformanceTests test-without-building on iPhone 17 Pro (iOS 27.2).xcresult.zip',
+          downloadUrl: 'https://storage.example/second-destination.zip' } }]
+          : scenario === 'invalidArtifact' ? [native] : [] };
+      }
       throw Error(`Unexpected API request ${path}`);
     },
-    download: async (url, output) => writeFile(output, 'invalid native archive'),
+    download: async (url, output) => { calls.push({ method: 'download', url }); await writeFile(output, 'invalid native archive'); },
   };
   const run = async (exe, args, options = {}) => {
     const actual = [...args];
@@ -153,10 +165,19 @@ for (const scenario of ['buildFailed', 'invalidArtifact', 'missingArtifact', 'mi
   const collection = collectBenchmarkHistory(root, options);
   if (scenario === 'buildFailed' || scenario.startsWith('missingRunner')) await collection;
   else await assert.rejects(collection);
+  if (scenario === 'invalidArtifactWithPhaseArtifacts') {
+    assert.deepEqual(calls.filter(c => c.method === 'download').map(c => c.url), ['https://storage.example/native.zip'],
+      'Collect the native test results, excluding build-for-testing and crash-log bundles');
+  }
+  if (scenario === 'ambiguousNativeArtifacts') {
+    assert.deepEqual(calls.filter(c => c.method === 'download' || c.method === 'DELETE' || c.method === 'POST'), []);
+    assert.equal((await exec('git', ['--git-dir', remote, 'ls-tree', '--name-only', 'main', 'benchmarks/results'])).stdout.trim(), '');
+    return;
+  }
   const coverageSuffix = scenario.startsWith('missingRunner') ? '-coverage-main' : '';
   const file = (await exec('git', ['--git-dir', remote, 'show', `main:benchmarks/results/${first}/${buildID}${coverageSuffix}.json`])).stdout;
   const record = JSON.parse(file);
-  assert.equal(record.evaluation.outcome, 'error'); assert.equal(record.failure.code, scenario.startsWith('missingRunner') ? 'missingRunner' : scenario); assert.deepEqual(record.metrics, {});
+  assert.equal(record.evaluation.outcome, 'error'); assert.equal(record.failure.code, scenario.startsWith('missingRunner') ? 'missingRunner' : scenario.startsWith('invalidArtifact') ? 'invalidArtifact' : scenario); assert.deepEqual(record.metrics, {});
   assert.ok(calls.some(c => c.method === 'POST' && c.body?.sha === second));
   if (!scenario.startsWith('missingRunner')) assert.ok(calls.some(c => c.method === 'DELETE' && c.path.endsWith(first)));
   assert.ok(!calls.some(c => c.method === 'POST' && c.body?.sha === first));
