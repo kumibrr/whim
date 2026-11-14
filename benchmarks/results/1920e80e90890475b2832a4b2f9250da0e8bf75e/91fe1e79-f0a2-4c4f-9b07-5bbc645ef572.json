@@ -1,0 +1,43 @@
+{
+  "environment": {
+    "architecture": "unavailable",
+    "configuration": "optimized-debug",
+    "cpu": "unavailable",
+    "device": "unavailable",
+    "kernel": "unavailable",
+    "macOS": "unavailable",
+    "runtime": "unavailable",
+    "xcode": "unavailable"
+  },
+  "evaluation": {
+    "metrics": {},
+    "outcome": "error"
+  },
+  "failure": {
+    "code": "invalidArtifact"
+  },
+  "fixture": "notes-1000-v1",
+  "metrics": {},
+  "protocol": "iphone-ui-v1",
+  "run": {
+    "id": "91fe1e79-f0a2-4c4f-9b07-5bbc645ef572",
+    "measuredAt": "2026-11-14T15:28:38.587Z",
+    "number": 87,
+    "url": "https://api.appstoreconnect.apple.com/v1/ciBuildRuns/91fe1e79-f0a2-4c4f-9b07-5bbc645ef572"
+  },
+  "schemaVersion": 1,
+  "snapshot": {
+    "baselineHash": null,
+    "baselinePath": null,
+    "historySHA": "52037f008ec4b2046c6a2534d003c48728046a3f",
+    "policyHash": "c0a187c38d3a779b7165a5191ab63ba2bfbfa37e206b363b2f027f2bbb96c6ab"
+  },
+  "source": {
+    "committedAt": "2026-11-14T13:40:55+01:00",
+    "context": "main",
+    "parents": [
+      "52037f008ec4b2046c6a2534d003c48728046a3f"
+    ],
+    "sha": "1920e80e90890475b2832a4b2f9250da0e8bf75e"
+  }
+}
