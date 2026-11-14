@@ -1,0 +1,197 @@
+{
+  "environment": {
+    "architecture": "arm64",
+    "configuration": "optimized-debug",
+    "cpu": "Apple M2 Ultra (Virtual)",
+    "device": "iPhone 16 Pro",
+    "kernel": "27.2.0",
+    "macOS": "27.2",
+    "runtime": "Version 27.0 (Build 24A434)",
+    "xcode": "Xcode 27.1 Build version 27A9275"
+  },
+  "evaluation": {
+    "metrics": {
+      "launch.empty": {
+        "baseline": null,
+        "deltaFraction": null,
+        "deltaMS": null,
+        "outcome": "baseline",
+        "summaries": [
+          {
+            "count": 10,
+            "mad": 106.23877083355637,
+            "max": 6101.731208333376,
+            "median": 5208.371291666822,
+            "min": 5098.615916666631
+          }
+        ]
+      },
+      "launch.populated": {
+        "baseline": null,
+        "deltaFraction": null,
+        "deltaMS": null,
+        "outcome": "baseline",
+        "summaries": [
+          {
+            "count": 10,
+            "mad": 45.90445833321155,
+            "max": 5292.945583333449,
+            "median": 5167.161749999991,
+            "min": 5086.3129583333375
+          }
+        ]
+      },
+      "record.populated": {
+        "baseline": null,
+        "deltaFraction": null,
+        "deltaMS": null,
+        "outcome": "baseline",
+        "summaries": [
+          {
+            "count": 10,
+            "mad": 9.80306250016838,
+            "max": 1492.2610833332328,
+            "median": 1437.7636875001372,
+            "min": 1425.9879999999612
+          }
+        ]
+      },
+      "stop.populated": {
+        "baseline": null,
+        "deltaFraction": null,
+        "deltaMS": null,
+        "outcome": "baseline",
+        "summaries": [
+          {
+            "count": 10,
+            "mad": 9.323979166651952,
+            "max": 2553.723624999975,
+            "median": 2516.1646458332143,
+            "min": 2501.3415833332147
+          }
+        ]
+      },
+      "timeline.populated": {
+        "baseline": null,
+        "deltaFraction": null,
+        "deltaMS": null,
+        "outcome": "baseline",
+        "summaries": [
+          {
+            "count": 10,
+            "mad": 32.39508333331287,
+            "max": 2973.6485833332154,
+            "median": 2932.3482708333586,
+            "min": 2878.8941666666688
+          }
+        ]
+      }
+    },
+    "outcome": "baseline"
+  },
+  "fixture": "notes-1000-v1",
+  "metrics": {
+    "launch.empty": {
+      "batches": [
+        [
+          6101.731208333376,
+          5836.357375000034,
+          5781.217291666508,
+          5253.869708333468,
+          5418.952624999974,
+          5105.6491249999,
+          5139.112833333456,
+          5098.615916666631,
+          5126.602750000075,
+          5162.872875000176
+        ]
+      ]
+    },
+    "launch.populated": {
+      "batches": [
+        [
+          5277.875791666702,
+          5121.2842083334635,
+          5086.3129583333375,
+          5292.945583333449,
+          5157.4359166666,
+          5121.230375000096,
+          5125.120083333286,
+          5236.977291666562,
+          5189.510250000012,
+          5176.887583333382
+        ]
+      ]
+    },
+    "record.populated": {
+      "batches": [
+        [
+          1439.5052916668192,
+          1435.406416666865,
+          1474.5073750000302,
+          1461.7468333333363,
+          1492.2610833332328,
+          1434.336541666653,
+          1429.9332499999764,
+          1425.9879999999612,
+          1471.245583333257,
+          1436.0220833334552
+        ]
+      ]
+    },
+    "stop.populated": {
+      "batches": [
+        [
+          2501.3415833332147,
+          2545.910666666714,
+          2553.723624999975,
+          2516.3668333332225,
+          2512.33974999991,
+          2513.3694166668192,
+          2549.41120833314,
+          2515.962458333206,
+          2513.7339166665242,
+          2547.441375000062
+        ]
+      ]
+    },
+    "timeline.populated": {
+      "batches": [
+        [
+          2939.551749999964,
+          2973.0965416667914,
+          2917.3595833333366,
+          2897.2378749999734,
+          2973.6485833332154,
+          2965.007000000014,
+          2878.8941666666688,
+          2925.144791666753,
+          2900.2168333333884,
+          2954.638291666697
+        ]
+      ]
+    }
+  },
+  "protocol": "iphone-ui-v1",
+  "run": {
+    "id": "40653188-b14e-4c1d-96cc-cfda595b68f9",
+    "measuredAt": "2026-11-14T18:14:19Z",
+    "number": 95,
+    "url": "https://appstoreconnect.apple.com/teams/3a7fa4a7-7fbd-40c9-b79c-659659e627f6/apps/6818763329/ci/builds/40653188-b14e-4c1d-96cc-cfda595b68f9"
+  },
+  "schemaVersion": 1,
+  "snapshot": {
+    "baselineHash": null,
+    "baselinePath": null,
+    "historySHA": "b8b4733002af5adb9f8fc757f0612ff8fa609edb",
+    "policyHash": "c0a187c38d3a779b7165a5191ab63ba2bfbfa37e206b363b2f027f2bbb96c6ab"
+  },
+  "source": {
+    "committedAt": "2026-11-14T15:09:41+01:00",
+    "context": "main",
+    "parents": [
+      "2d27fdf2ccdc230518c2700348490492d18bbdc4"
+    ],
+    "sha": "07aa0922c6c7f62dd01c3b6b50fc219e94e4d013"
+  }
+}
