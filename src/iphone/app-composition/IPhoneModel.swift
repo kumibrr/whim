@@ -496,7 +496,9 @@ import WhimCore
             }
             feedback = "Recording started"
         case .recordingStopped:
-            feedback = captureFailureNotice ?? "Recording stopped"
+            // The event's durable Note confirms the save even if a local Stop
+            // command already cleared the active recording before delivery.
+            feedback = captureFailureNotice ?? (event.note == nil ? "Recording stopped" : "Note saved")
             completionGeneration += 1
             let generation = completionGeneration
             if let finishingID, let uuid = UUID(uuidString: finishingID) {

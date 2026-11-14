@@ -5,6 +5,65 @@ import XCTest
 import GRDB
 #endif
 @testable import WhimCore
+
+/// Real commands and persistence, with controlled delivery of the public event stream.
+final class DeferredRecordingEventsClient: WhimClient, @unchecked Sendable {
+    let base: WhimService
+    private let stopped: XCTestExpectation
+    private let pair = AsyncStream.makeStream(of: WhimEvent.self)
+    private let lock = NSLock()
+    private var holding = false
+    private var pending: [WhimEvent] = []
+    private var observation: Task<Void, Never>?
+
+    init(base: WhimService, stopped: XCTestExpectation) {
+        self.base = base; self.stopped = stopped
+        let stream = base.events()
+        observation = Task { [weak self] in
+            for await event in stream {
+                guard !Task.isCancelled else { break }
+                self?.forward(event)
+            }
+        }
+    }
+    func cancel() { observation?.cancel(); pair.continuation.finish() }
+    func holdEvents() { lock.withLock { holding = true } }
+    func releaseEvents() -> Int {
+        lock.withLock {
+            let changes = pending.filter { $0.type != .recordingProgress }.count
+            for event in pending { pair.continuation.yield(event) }
+            pending.removeAll(); holding = false
+            return changes
+        }
+    }
+    private func forward(_ event: WhimEvent) {
+        lock.withLock {
+            if holding {
+                pending.append(event)
+                if event.type == .recordingStopped { stopped.fulfill() }
+            } else { pair.continuation.yield(event) }
+        }
+    }
+    func events() -> AsyncStream<WhimEvent> { pair.stream }
+    func startup() async throws -> StartupProjection { try await base.startup() }
+    func maintain() async throws { try await base.maintain() }
+    func settings() async throws -> SettingsProjection { try await base.settings() }
+    func startRecording(source: CaptureSource) async throws -> RecordingProjection { try await base.startRecording(source: source) }
+    func activeRecording() async throws -> RecordingProjection? { try await base.activeRecording() }
+    func stopRecording() async throws -> NoteProjection? { try await base.stopRecording() }
+    func discardRecording() async throws { try await base.discardRecording() }
+    func listNotes(filter: NoteFilter) async throws -> [NoteProjection] { try await base.listNotes(filter: filter) }
+    func note(id: NoteID) async throws -> NoteDetailProjection? { try await base.note(id: id) }
+    func retry(noteID: NoteID) async throws { try await base.retry(noteID: noteID) }
+    func retryAllFailed() async throws -> Int { try await base.retryAllFailed() }
+    func sendRecovered(noteID: NoteID) async throws { try await base.sendRecovered(noteID: noteID) }
+    func delete(noteID: NoteID) async throws { try await base.delete(noteID: noteID) }
+    func updateWebhook(_ input: WebhookConfigurationInput) async throws -> ConfigurationUpdateResult { try await base.updateWebhook(input) }
+    func testWebhook() async throws -> ConfigurationTestResult { try await base.testWebhook() }
+    func updatePreferences(_ input: PreferenceInput) async throws { try await base.updatePreferences(input) }
+    func reset() async throws { try await base.reset() }
+}
+
 final class WhimFacadeHarness: @unchecked Sendable {
     let root: URL
     let store: SQLiteWhimStore

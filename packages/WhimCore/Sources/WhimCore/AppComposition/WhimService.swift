@@ -660,7 +660,7 @@ public actor WhimService: WhimClient {
         guard let note else { publish(.recordingStopped); return }
         guard !resetInProgress, !suppressedNoteIDs.contains(note.id),
               handledFinalizations.insert(note.id).inserted else { return }
-        publish(.recordingStopped)
+        publish(.recordingStopped, note: .init(note: note))
         publish(.noteChanged, note: .init(note: note))
         startWorkflow(note)
     }
