@@ -1,0 +1,44 @@
+{
+  "environment": {
+    "architecture": "arm64",
+    "configuration": "optimized-debug",
+    "cpu": "Apple M2 Ultra (Virtual)",
+    "device": "iPhone 16 Pro",
+    "kernel": "27.2.0",
+    "macOS": "27.2",
+    "runtime": "Version 27.2 (Build 24B8117)",
+    "xcode": "Xcode 27.2 Build version 27B52"
+  },
+  "evaluation": {
+    "metrics": {},
+    "outcome": "error"
+  },
+  "failure": {
+    "code": "measurementFailed"
+  },
+  "fixture": "notes-1000-v1",
+  "metrics": {},
+  "protocol": "iphone-ui-v1",
+  "run": {
+    "id": "663ef909-2653-4da6-9fe3-122341c0be7e",
+    "measuredAt": "2026-11-14T12:02:13Z",
+    "number": 75,
+    "url": "https://appstoreconnect.apple.com/teams/3a7fa4a7-7fbd-40c9-b79c-659659e627f6/apps/6818763329/ci/builds/663ef909-2653-4da6-9fe3-122341c0be7e"
+  },
+  "schemaVersion": 1,
+  "snapshot": {
+    "baselineHash": null,
+    "baselinePath": null,
+    "historySHA": "52037f008ec4b2046c6a2534d003c48728046a3f",
+    "policyHash": "c0a187c38d3a779b7165a5191ab63ba2bfbfa37e206b363b2f027f2bbb96c6ab"
+  },
+  "source": {
+    "committedAt": "2026-11-14T11:26:39+01:00",
+    "context": "main",
+    "parents": [
+      "40b55b8ac660aa924b17b1cc5ecdeb20823dc2f3",
+      "ec79fe27ce696f3cac94f4e8042b1116d929804b"
+    ],
+    "sha": "52037f008ec4b2046c6a2534d003c48728046a3f"
+  }
+}
