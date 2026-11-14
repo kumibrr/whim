@@ -279,7 +279,10 @@ export async function collectBenchmarkHistory(root, { env = process.env, run = r
       for (const action of actions.data.filter(x => x.attributes.actionType === 'TEST')) {
         artifacts.push(...(await paginated(api.asc, `/v1/ciBuildActions/${action.id}/artifacts?limit=200`)).data);
       }
-      const results = artifacts.filter(x => x.attributes.fileType === 'RESULT_BUNDLE');
+      // A native Test action also exports build-for-testing results and crash
+      // archives under RESULT_BUNDLE. Only the execution bundle owns samples.
+      const results = artifacts.filter(x => x.attributes.fileType === 'RESULT_BUNDLE'
+        && /\btest-without-building\b.*\.xcresult\.zip$/i.test(x.attributes.fileName ?? ''));
       if (results.length !== 1) {
         if (results.length === 0 && actions.data.some(a => a.attributes.actionType !== 'TEST' && a.attributes.completionStatus === 'FAILED')) {
           collected.push(await recordFailure(source, build, 'buildFailed')); completedRefs.add(inputRef(source)); continue;
