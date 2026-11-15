@@ -1,5 +1,11 @@
 # @whim/app
 
+## 1.2.2
+
+### Patch Changes
+
+- Fit the corner complication logo to smaller Apple Watch canvases, including 41 mm models.
+
 ## 1.2.1
 
 ### Patch Changes
