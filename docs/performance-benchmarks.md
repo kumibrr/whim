@@ -72,6 +72,16 @@ Keep existing Default and Release workflows, including release-preparation Actio
 
 Changing the protocol or fixture intentionally starts a new series: review policy/runner changes together and advance the rollout SHA to that implementation. Merely publishing results or updating thresholds must not rewrite an earlier run's frozen decision.
 
+## GitHub release summaries
+
+The existing **Prepare Cloud release** Action maintains a small Performance benchmark section in published stable releases. It runs on publication/resume and on main pushes, including newly collected benchmark history. Its reporting step also runs when version preparation fails; it never creates a release or changes a tag. Native measurements and collection remain entirely in Xcode Cloud.
+
+The summary shows the five medians, each measurement's frozen comparable CI-baseline change, outcome, samples per batch, simulator/toolchain context and an immutable raw-result link. It describes the tagged source in `optimized-debug`, rather than the release-signed binary or physical microphone performance. Only main observations of the tagged code qualify; an ancestor can qualify when its source tree differs solely in generated benchmark data. Failed, noisy and regressed observations retain their visible status. Missing observations show pending and fill in when history arrives.
+
+The Action reuses its existing `contents: write` token and replaces only the block between `<!-- whim:performance:start -->` and `<!-- whim:performance:end -->`. Other release text is retained from a fresh API read. Replays do not write unchanged content. Drafts, prereleases and tags predating benchmark support are left untouched. Broken markers or API errors fail the Action visibly; retry its manual dispatch after correcting the issue. This uses [GitHub's release-body update API](https://docs.github.com/en/rest/releases/releases#update-a-release), without changing release metadata or requesting broader credentials.
+
+`node scripts/benchmark-release.mjs --dry-run` checks prospective updates using the existing `GH_TOKEN` and `GITHUB_REPOSITORY` environment; it makes no release writes.
+
 ## Local verification and recovery
 
 ```sh

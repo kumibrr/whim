@@ -4,6 +4,8 @@ GitHub Actions performs Changesets/npm preparation only. Xcode Cloud owns toolin
 
 ## Publishing
 
+Stable releases of benchmark-enabled source receive a compact performance section in their GitHub notes. The existing preparation Action adds or refreshes it on release events and main history appends, using only results matching the tagged code. Pending statistics fill in automatically as Xcode Cloud publishes results; the rest of the notes stay editable. See [performance summaries](performance-benchmarks.md#github-release-summaries).
+
 1. Commit pending `@whim/app` Changesets with source changes and merge them to main.
 2. Publish a GitHub Release with a **new stable tag** at current main. Use the next Changesets version, either `1.2.3` or `v1.2.3`. A raw stable tag push is also supported; duplicate tag/release events reuse the same preparation. Draft releases do not start preparation. Existing tags are never moved.
 3. Actions prepares the tagged source in an isolated temporary checkout using the trusted version tooling from main. It consumes Changesets and updates the app manifest, changelog, npm lockfile and every Xcode target's marketing version. `.release/prepared.json` records the original tag, tag object, tagged commit and resulting version. `release-preparation/<tag>` retains the generated commit, whose parent is the original source commit.
