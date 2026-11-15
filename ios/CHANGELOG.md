@@ -1,5 +1,11 @@
 # @whim/app
 
+## 1.2.3
+
+### Patch Changes
+
+- 7c7e633: Center the straight compact Whim logo and curved Record caption together on Apple Watch, including 41 mm models. Add matching corner entries while preserving the existing upper-right widget and recording updates.
+
 ## 1.2.2
 
 ### Patch Changes
