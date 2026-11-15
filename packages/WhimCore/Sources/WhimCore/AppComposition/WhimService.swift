@@ -985,7 +985,7 @@ public enum WhimProductionComposition {
         }
         #if os(watchOS)
         await service.observeComplication(store: ComplicationStore(url: root.appendingPathComponent("complication.json"))) {
-            WidgetCenter.shared.reloadTimelines(ofKind: "app.whim.recording")
+            ComplicationWidgetKind.reloadAll { WidgetCenter.shared.reloadTimelines(ofKind: $0) }
         }
         #endif
         return service

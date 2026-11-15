@@ -53,8 +53,83 @@ import XCTest
                        "Warning and Stop should sit equally close to their curved labels")
     }
 
-    func testCornerLabelMovesOutwardToMeetTheGlyph() throws {
+    // Break: the native template places the logo and Record on different axes.
+    func testIdleCornerAlignsStraightLogoAndCurvedRecordInOneCanvas() throws {
+        for (corner, horizontal, vertical, slope): (WhimCornerPosition, Double, Double, Double) in [
+            (.topRight, 1, -1, 1), (.topLeft, -1, -1, -1),
+            (.bottomRight, 1, 1, -1), (.bottomLeft, -1, 1, 1)
+        ] {
+            let entry = WhimComplicationEntry(date: Date(), snapshot: .idle, corner: corner)
+            let content = WhimCornerComplicationContent(entry: entry, imageBundle: Bundle(for: Self.self))
+                .foregroundStyle(.white).frame(width: 34, height: 34)
+            let (image, pixels) = try render(content.background(.black), scale: 2)
+            let angle = slope * atan2(176.0, 215.0)
+            let outward = CGVector(dx: horizontal * abs(sin(angle)), dy: vertical * cos(angle))
+            let tangent = CGVector(dx: cos(angle), dy: sin(angle))
+            let center = Double(image.width - 1) / 2
+            let ink = stride(from: 0, to: pixels.count, by: 4).filter { pixels[$0] > 100 }
+            func projection(_ offset: Int, onto vector: CGVector) -> Double {
+                (Double((offset / 4) % image.width) - center) / 2 * vector.dx
+                + (Double((offset / 4) / image.width) - center) / 2 * vector.dy
+            }
+            let logo = ink.filter { projection($0, onto: outward) > -2 }
+            let caption = ink.filter { projection($0, onto: outward) < -2 }
+            XCTAssertGreaterThan(logo.count, 10)
+            XCTAssertGreaterThan(caption.count, 20, "Draw the curved caption in the same canvas as the logo")
+            for (name, group) in [("logo", logo), ("caption", caption)] {
+                let positions = group.map { projection($0, onto: tangent) }
+                let first = try XCTUnwrap(positions.min()), last = try XCTUnwrap(positions.max())
+                XCTAssertEqual((first + last) / 2, 0, accuracy: 1,
+                               "Center \(corner) \(name) on the same radial axis")
+            }
+            let xs = logo.map { ($0 / 4) % image.width }
+            let leftX = try XCTUnwrap(xs.min()), rightX = try XCTUnwrap(xs.max())
+            func meanY(_ group: [Int]) -> Double {
+                Double(group.map { ($0 / 4) / image.width }.reduce(0, +)) / Double(group.count) / 2
+            }
+            XCTAssertEqual(meanY(logo.filter { ($0 / 4) % image.width <= leftX + 2 }),
+                           meanY(logo.filter { ($0 / 4) % image.width >= rightX - 2 }), accuracy: 1,
+                           "Keep the logo straight")
+            let textPositions = caption.map { projection($0, onto: tangent) }
+            let start = try XCTUnwrap(textPositions.min()), end = try XCTUnwrap(textPositions.max())
+            XCTAssertGreaterThan(slope * (meanY(caption.filter { projection($0, onto: tangent) > end - 3 })
+                                 - meanY(caption.filter { projection($0, onto: tangent) < start + 3 })), 8,
+                                 "Keep Record angled along the dial")
+            let (_, clipped) = try render(content.clipShape(Circle()).background(.black), scale: 2)
+            func coverage(_ values: [UInt8]) -> Double {
+                stride(from: 0, to: values.count, by: 4).reduce(0) { $0 + Double(values[$1]) }
+            }
+            XCTAssertGreaterThan(coverage(clipped), coverage(pixels) * 0.98,
+                                 "Keep both elements inside the circular mask")
+        }
+    }
+
+    // Break: rotating a straight word is not the same as following the dial's arc.
+    func testRecordBendsAlongTheDialRatherThanOnlyRotating() throws {
         let entry = WhimComplicationEntry(date: Date(), snapshot: .idle)
+        let (image, pixels) = try render(WhimCornerComplicationContent(
+            entry: entry, imageBundle: Bundle(for: Self.self))
+            .foregroundStyle(.white).frame(width: 34, height: 34).background(.black), scale: 4)
+        let angle = atan2(176.0, 215.0)
+        let center = Double(image.width - 1) / 2
+        var caption = [(along: Double, radial: Double)]()
+        for offset in stride(from: 0, to: pixels.count, by: 4) where pixels[offset] > 100 {
+            let x = (Double((offset / 4) % image.width) - center) / 4
+            let y = (Double((offset / 4) / image.width) - center) / 4
+            let radial = x * sin(angle) - y * cos(angle)
+            if radial < -2 { caption.append((x * cos(angle) + y * sin(angle), radial)) }
+        }
+        let first = try XCTUnwrap(caption.map(\.along).min())
+        let last = try XCTUnwrap(caption.map(\.along).max())
+        let leading = try XCTUnwrap(caption.filter { $0.along < first + 5.5 }.map(\.radial).max())
+        let trailing = try XCTUnwrap(caption.filter { $0.along > last - 5.5 }.map(\.radial).max())
+        let middle = try XCTUnwrap(caption.filter { abs($0.along) < 3 }.map(\.radial).max())
+        XCTAssertGreaterThan(middle - (leading + trailing) / 2, 0.35,
+                             "Both ends must bend inward from the middle of the curved caption")
+    }
+
+    func testStatusLabelRetainsItsBezelGap() throws {
+        let entry = WhimComplicationEntry(date: Date(), snapshot: .init(recording: nil, hasFailedNotes: true))
         let (image, pixels) = try render(WhimCornerComplicationLabel(entry: entry)
             .font(.system(size: 14)).foregroundStyle(.white)
             .frame(width: 120, height: 40, alignment: .bottom).background(.black))
@@ -62,18 +137,16 @@ import XCTest
             (0..<image.width).contains { x in pixels[(y * image.width + x) * 4] > 200 }
         }
         let lastRow = try XCTUnwrap(rows.max())
-        let baselineClearance = image.height - 1 - lastRow
-        XCTAssertGreaterThanOrEqual(baselineClearance, 16, "Bring the curved label nearly flush with the glyph")
-        XCTAssertLessThanOrEqual(baselineClearance, 18, "Keep the label within its allotted space")
+        XCTAssertEqual(Double(image.height - 1 - lastRow), 17, accuracy: 1,
+                       "Keep the attention label close to its status glyph")
     }
 
     // Break: a fixed 56-point logo overflows the smaller Watch's Corner canvas.
     func testIdleCornerLogoRespectsSmallWatchCanvasSizes() throws {
-        let entry = WhimComplicationEntry(date: Date(), snapshot: .idle)
         // Apple specifies 21 pt for a 41 mm Corner image with text, and 34 pt
         // for its circular canvas. Include the adjacent supported Watch sizes.
         for size: CGFloat in [20, 21, 24, 32, 34, 38] {
-            let content = WhimCornerComplicationContent(entry: entry, imageBundle: Bundle(for: Self.self))
+            let content = WhimCornerLogo(imageBundle: Bundle(for: Self.self))
                 .foregroundStyle(.white)
             let renderer = ImageRenderer(content: content)
             renderer.proposedSize = .init(width: size, height: size)
@@ -84,6 +157,13 @@ import XCTest
             XCTAssertLessThanOrEqual(image.height, Int(size * 2) + 1, "Respect the system's Corner height")
 
             let (canvas, pixels) = try render(content.frame(width: size, height: size).background(.black))
+            let (_, maskedPixels) = try render(content.frame(width: size, height: size)
+                .clipShape(Circle()).background(.black))
+            func coverage(_ values: [UInt8]) -> Double {
+                stride(from: 0, to: values.count, by: 4).reduce(0.0) { $0 + Double(values[$1]) / 255 }
+            }
+            XCTAssertGreaterThan(coverage(maskedPixels), coverage(pixels) * 0.98,
+                                 "Keep the complete compact mark inside the system's circular mask")
             let glyphPixels = stride(from: 0, to: pixels.count, by: 4).filter { pixels[$0] > 100 }
             XCTAssertGreaterThan(glyphPixels.count, 10, "The compiled logo must remain visible")
             let rows = glyphPixels.map { ($0 / 4) / canvas.width }
@@ -94,90 +174,48 @@ import XCTest
         }
     }
 
-    func testCompleteCornerLogoFollowsAGentleArc() throws {
-        let (image, pixels) = try renderLogoArtwork()
-        func meanY(at fraction: Double) throws -> Double {
-            let x = Int(Double(image.width) * fraction)
-            let rows = (0..<image.height).filter { y in
-                let offset = (y * image.width + x) * 4
-                return pixels[offset] > 200 && pixels[offset + 1] > 200 && pixels[offset + 2] > 200
-            }
-            _ = try XCTUnwrap(rows.first, "The Corner logo must be present in the compiled asset catalog")
-            return Double(rows.reduce(0, +)) / Double(rows.count)
-        }
-        let leftRise = try meanY(at: 0.06) - meanY(at: 0.14)
-        let rightRise = try meanY(at: 0.94) - meanY(at: 0.86)
-        for rise in [leftRise, rightRise] {
-            XCTAssertGreaterThan(abs(rise), 4, "Warp the complete logo along the label's arc")
-            XCTAssertLessThan(abs(rise), 9, "Keep the bend gentle at the rounded ends")
-        }
-        XCTAssertGreaterThan(leftRise * rightRise, 0, "Both ends follow the same arc")
-        XCTAssertEqual(leftRise, rightRise, accuracy: 1.5, "Keep the logo centered on the arc")
-    }
-
-    // Break: Corner still uses the shortened mark, omitting the full logo's floating dot.
-    func testCornerShowsTheCompleteWaveformAndItsFloatingDot() throws {
-        let (image, pixels) = try renderLogoArtwork()
-        var remaining = Set((0..<(image.width * image.height)).filter { index in
-            let offset = index * 4
-            return pixels[offset] > 200 && pixels[offset + 1] > 200 && pixels[offset + 2] > 200
+    // Break: recording expiry drops the failed-Note attention state.
+    func testRecordingExpirationPreservesFailedNoteAttention() {
+        let date = Date(timeIntervalSince1970: 100)
+        let recording = RecordingProjection(sessionID: "session", noteID: "note", source: .appleWatch,
+                                            createdAt: date)
+        let provider = WhimComplicationProvider(loadSnapshot: {
+            .init(recording: recording, hasFailedNotes: true)
         })
-        var components = [[Int]]()
-        while let first = remaining.first {
-            remaining.remove(first)
-            var component = [first]
-            var cursor = 0
-            while cursor < component.count {
-                let point = component[cursor]
-                let x = point % image.width, y = point / image.width
-                let neighbors = [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)]
-                for (nx, ny) in neighbors where nx >= 0 && nx < image.width && ny >= 0 && ny < image.height {
-                    let neighbor = ny * image.width + nx
-                    if remaining.remove(neighbor) != nil { component.append(neighbor) }
-                }
-                cursor += 1
-            }
-            components.append(component)
-        }
-        components.sort { $0.count > $1.count }
-        XCTAssertEqual(components.count, 2, "Show the continuous full waveform and its separate floating dot")
-        guard components.count == 2 else { return }
-        let waveform = components[0], dot = components[1]
-        XCTAssertGreaterThan(waveform.count, dot.count * 10)
-        XCTAssertGreaterThan(dot.count, 15, "The complete logo's dot must remain visible")
-        let dotX = Double(dot.map { $0 % image.width }.reduce(0, +)) / Double(dot.count * image.width)
-        XCTAssertGreaterThan(dotX, 0.54)
-        XCTAssertLessThan(dotX, 0.61, "Keep the floating dot in its original position in the full mark")
+        let entries = provider.entries(at: date)
+        XCTAssertEqual(entries.map(\.date), [date, Date(timeIntervalSince1970: 400)])
+        XCTAssertNotNil(entries.first?.snapshot.activeRecording(at: date))
+        XCTAssertNil(entries.last?.snapshot.activeRecording(at: Date(timeIntervalSince1970: 400)))
+        XCTAssertEqual(entries.last?.snapshot.hasFailedNotes, true)
     }
 
-    // Break: the extended ends finish in sharp wedge points rather than soft caps.
-    func testCornerLogoFinishesWithSoftRoundedEnds() throws {
-        let (image, pixels) = try renderLogoArtwork()
-        func thickness(at fraction: Double) -> Double {
-            let x = Int(Double(image.width) * fraction)
-            return Double((0..<image.height).filter { y in
-                let offset = (y * image.width + x) * 4
-                return pixels[offset] > 200 && pixels[offset + 1] > 200 && pixels[offset + 2] > 200
-            }.count)
-        }
-        for (edge, cap, base) in [(0.003, 0.015, 0.1), (0.997, 0.985, 0.9)] {
-            XCTAssertGreaterThan(thickness(at: edge), 0, "Each soft cap must remain visible")
-            XCTAssertGreaterThan(thickness(at: cap), thickness(at: base) * 0.6,
-                                 "Finish softly at useful thickness, not in a sharp point")
-            XCTAssertLessThan(thickness(at: edge), thickness(at: cap) * 0.9,
-                              "Round off the very end rather than cutting it square")
+    func testCornerSelectionSurvivesRefreshAndRecordingExpiration() {
+        let date = Date(timeIntervalSince1970: 100)
+        let recording = RecordingProjection(sessionID: "session", noteID: "note", source: .appleWatch, createdAt: date)
+        for corner in WhimCornerPosition.allCases {
+            let provider = WhimComplicationProvider(corner: corner, loadSnapshot: {
+                .init(recording: recording, hasFailedNotes: false)
+            })
+            XCTAssertEqual(provider.entries(at: date).map(\.corner), [corner, corner])
         }
     }
 
-    private func renderLogoArtwork() throws -> (CGImage, [UInt8]) {
-        try render(Image(WhimCornerComplicationContent.logoAssetName, bundle: Bundle(for: Self.self))
-            .resizable().scaledToFit().foregroundStyle(.white)
-            .frame(width: 304, height: 304).background(.black))
+    func testCornerPickerPreservesExistingIdentityAndUsesDistinctKinds() {
+        XCTAssertEqual(WhimCornerPosition.topRight.widgetKind, "app.whim.recording")
+        XCTAssertEqual(Set(WhimCornerPosition.allCases.map(\.widgetKind)).count, 4)
     }
 
-    private func render<Content: View>(_ content: Content) throws -> (CGImage, [UInt8]) {
+    // Break: interpolated display names crash WidgetKit while it discovers the widgets.
+    func testConfigurationBuildsWithoutFormattedMetadata() {
+        _ = WhimComplication().body
+        _ = WhimTopLeftComplication().body
+        _ = WhimBottomRightComplication().body
+        _ = WhimBottomLeftComplication().body
+    }
+
+    private func render<Content: View>(_ content: Content, scale: CGFloat = 1) throws -> (CGImage, [UInt8]) {
         let renderer = ImageRenderer(content: content)
-        renderer.scale = 1
+        renderer.scale = scale
         let image = try XCTUnwrap(renderer.cgImage)
         var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
         let context = try XCTUnwrap(CGContext(

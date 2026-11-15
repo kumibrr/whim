@@ -1,45 +1,109 @@
 import SwiftUI
 import WidgetKit
 import WhimCore
+#if os(watchOS)
+import WatchKit
+#endif
+
+enum WhimCornerPosition: String, CaseIterable {
+    case topRight, topLeft, bottomRight, bottomLeft
+
+    var widgetKind: String {
+        switch self {
+        case .topRight: ComplicationWidgetKind.recording.rawValue
+        case .topLeft: ComplicationWidgetKind.topLeft.rawValue
+        case .bottomRight: ComplicationWidgetKind.bottomRight.rawValue
+        case .bottomLeft: ComplicationWidgetKind.bottomLeft.rawValue
+        }
+    }
+}
 
 struct WhimComplicationEntry: TimelineEntry {
     let date: Date
     let snapshot: ComplicationSnapshot
+    var corner: WhimCornerPosition = .topRight
 }
 struct WhimComplicationProvider: TimelineProvider {
-    func placeholder(in context: Context) -> WhimComplicationEntry { .init(date: Date(), snapshot: .idle) }
-    func getSnapshot(in context: Context, completion: @escaping (WhimComplicationEntry) -> Void) { completion(entry()) }
+    var corner: WhimCornerPosition = .topRight
+    var loadSnapshot: @Sendable () throws -> ComplicationSnapshot = {
+        try ComplicationStore(url: WhimProductionComposition.sharedRoot()
+            .appendingPathComponent("complication.json")).load()
+    }
+
+    func placeholder(in context: Context) -> WhimComplicationEntry {
+        .init(date: Date(), snapshot: .idle, corner: corner)
+    }
+    func getSnapshot(in context: Context, completion: @escaping (WhimComplicationEntry) -> Void) {
+        completion(entries(at: Date())[0])
+    }
     func getTimeline(in context: Context, completion: @escaping (Timeline<WhimComplicationEntry>) -> Void) {
-        let current = entry()
+        completion(Timeline(entries: entries(at: Date()), policy: .never))
+    }
+    func entries(at date: Date) -> [WhimComplicationEntry] {
+        let snapshot = (try? loadSnapshot()) ?? .idle
+        let current = WhimComplicationEntry(date: date, snapshot: snapshot, corner: corner)
         var entries = [current]
         if let recording = current.snapshot.activeRecording(at: current.date) {
-            entries.append(.init(date: recording.createdAt.addingTimeInterval(recording.maximumDurationSeconds), snapshot: .init(recording: nil, hasFailedNotes: current.snapshot.hasFailedNotes)))
+            entries.append(.init(date: recording.createdAt.addingTimeInterval(recording.maximumDurationSeconds),
+                                 snapshot: .init(recording: nil, hasFailedNotes: current.snapshot.hasFailedNotes),
+                                 corner: corner))
         }
-        completion(Timeline(entries: entries, policy: .never))
-    }
-    private func entry() -> WhimComplicationEntry {
-        let snapshot = try? ComplicationStore(url: WhimProductionComposition.sharedRoot().appendingPathComponent("complication.json")).load()
-        return .init(date: Date(), snapshot: snapshot ?? .idle)
+        return entries
     }
 }
 struct WhimComplication: Widget {
     static let supportedFamilies: [WidgetFamily] = [.accessoryCircular, .accessoryCorner, .accessoryRectangular, .accessoryInline]
-
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "app.whim.recording", provider: WhimComplicationProvider()) { entry in
+        StaticConfiguration(kind: WhimCornerPosition.topRight.widgetKind,
+                            provider: WhimComplicationProvider(corner: .topRight)) { entry in
             WhimComplicationView(entry: entry)
-                .widgetURL(URL(string: "whim://record"))
-                .containerBackground(.black, for: .widget)
         }
         .configurationDisplayName("Record a Whim")
-        .description("Start recording. See recording time and Notes needing attention.")
+        .description("Start recording. For Corner slots, choose the entry matching its position on the face.")
         .supportedFamilies(Self.supportedFamilies)
+    }
+}
+struct WhimTopLeftComplication: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: WhimCornerPosition.topLeft.widgetKind,
+                            provider: WhimComplicationProvider(corner: .topLeft)) { entry in
+            WhimComplicationView(entry: entry)
+        }
+        .configurationDisplayName("Record top left")
+        .description("Start recording. For Corner slots, choose the entry matching its position on the face.")
+        .supportedFamilies([.accessoryCorner])
+    }
+}
+struct WhimBottomRightComplication: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: WhimCornerPosition.bottomRight.widgetKind,
+                            provider: WhimComplicationProvider(corner: .bottomRight)) { entry in
+            WhimComplicationView(entry: entry)
+        }
+        .configurationDisplayName("Record bottom right")
+        .description("Start recording. For Corner slots, choose the entry matching its position on the face.")
+        .supportedFamilies([.accessoryCorner])
+    }
+}
+struct WhimBottomLeftComplication: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: WhimCornerPosition.bottomLeft.widgetKind,
+                            provider: WhimComplicationProvider(corner: .bottomLeft)) { entry in
+            WhimComplicationView(entry: entry)
+        }
+        .configurationDisplayName("Record bottom left")
+        .description("Start recording. For Corner slots, choose the entry matching its position on the face.")
+        .supportedFamilies([.accessoryCorner])
     }
 }
 private struct WhimComplicationView: View {
     let entry: WhimComplicationEntry
     @Environment(\.widgetFamily) private var family
-    var body: some View { WhimComplicationContent(entry: entry, family: family) }
+    var body: some View {
+        WhimComplicationContent(entry: entry, family: family)
+            .widgetURL(URL(string: "whim://record"))
+            .containerBackground(.black, for: .widget)
+    }
 }
 struct WhimComplicationContent: View {
     let entry: WhimComplicationEntry
@@ -106,8 +170,6 @@ struct WhimComplicationContent: View {
 }
 
 struct WhimCornerComplicationContent: View {
-    static let logoAssetName = "whim.corner"
-    static let logoWidth: CGFloat = 56
     let entry: WhimComplicationEntry
     var imageBundle: Bundle = .main
 
@@ -116,12 +178,18 @@ struct WhimCornerComplicationContent: View {
     }
 
     var body: some View {
-        glyph
-            .frame(maxWidth: .infinity, maxHeight: .infinity,
-                   alignment: displaysLogo ? .center : .bottom)
-            .widgetAccentable()
-            .widgetCurvesContent()
-            .widgetLabel { WhimCornerComplicationLabel(entry: entry) }
+        if displaysLogo {
+            WhimCornerIdleContent(corner: entry.corner, imageBundle: imageBundle)
+                .widgetAccentable()
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Record a Whim")
+        } else {
+            glyph
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .widgetAccentable()
+                .widgetCurvesContent()
+                .widgetLabel { WhimCornerComplicationLabel(entry: entry) }
+        }
     }
 
     @ViewBuilder private var glyph: some View {
@@ -141,14 +209,86 @@ struct WhimCornerComplicationContent: View {
                 .foregroundStyle(.white)
                 .accessibilityLabel("Record a Whim. Failed Notes need attention")
         } else {
-            Image(Self.logoAssetName, bundle: imageBundle)
-                .resizable()
-                .scaledToFit()
-                // Corner canvases shrink on smaller Watches. Let the complete
-                // mark fit the proposed size instead of forcing a wider view.
-                .frame(maxWidth: Self.logoWidth, maxHeight: 14)
+            WhimCornerLogo(imageBundle: imageBundle)
                 .accessibilityLabel("Record a Whim")
         }
+    }
+}
+
+// WidgetKit's text/image template offsets these two elements. Render the idle
+// mark and curved caption together so both share one measured radial axis.
+struct WhimCornerIdleContent: View {
+    var corner: WhimCornerPosition = .topRight
+    var imageBundle: Bundle = .main
+
+    private var screenAspectRatio: CGFloat {
+        #if os(watchOS)
+        let bounds = WKInterfaceDevice.current().screenBounds
+        return bounds.width / bounds.height
+        #else
+        return 176.0 / 215.0
+        #endif
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let side = min(proxy.size.width, proxy.size.height)
+            let top = corner == .topRight || corner == .topLeft
+            let right = corner == .topRight || corner == .bottomRight
+            let angle = (top == right ? 1.0 : -1.0) * atan(screenAspectRatio)
+            let outward = CGVector(dx: (right ? 1 : -1) * abs(sin(angle)),
+                                   dy: (top ? -1 : 1) * cos(angle))
+            let tangent = CGVector(dx: cos(angle), dy: sin(angle))
+            let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
+            ZStack {
+                WhimCornerLogo(imageBundle: imageBundle)
+                    .frame(width: side * 0.53, height: side * 0.19)
+                    .position(x: center.x + outward.dx * side * 0.22,
+                              y: center.y + outward.dy * side * 0.22)
+                Canvas { context, _ in
+                    let characters = Array(String(localized: "Record").localizedUppercase)
+                    let glyphs = characters.map { character in
+                        context.resolve(Text(String(character))
+                            .font(.system(size: side * 0.225, weight: .medium))
+                            .foregroundStyle(.white))
+                    }
+                    let widths = glyphs.map { $0.measure(in: CGSize(width: CGFloat.infinity, height: CGFloat.infinity)).width }
+                    let spacing = side * 0.006
+                    let width = widths.reduce(0, +) + spacing * CGFloat(max(0, characters.count - 1))
+                    let scale = min(1, side * 0.84 / max(width, 1))
+                    let radius = side * 3
+                    var cursor = -width * scale / 2
+                    for (glyph, width) in zip(glyphs, widths) {
+                        let advance = width * scale
+                        let offset = (cursor + advance / 2) / radius
+                        let radial = -side * 0.175 + radius * (cos(offset) - 1)
+                        let along = radius * sin(offset)
+                        var layer = context
+                        layer.translateBy(x: center.x + outward.dx * radial + tangent.dx * along,
+                                          y: center.y + outward.dy * radial + tangent.dy * along)
+                        layer.rotate(by: .radians(angle + (top ? offset : -offset)))
+                        layer.scaleBy(x: scale, y: scale)
+                        layer.draw(glyph, at: .zero)
+                        cursor += advance + spacing * scale
+                    }
+                }
+                .accessibilityHidden(true)
+            }
+        }
+    }
+}
+
+// Render the compact mark normally so it remains straight and visible.
+// The separate widget label follows the bezel in each corner.
+struct WhimCornerLogo: View {
+    var imageBundle: Bundle = .main
+
+    var body: some View {
+        Image("whim.small.symbol", bundle: imageBundle)
+            .resizable()
+            .scaledToFit()
+            .frame(maxWidth: 38, maxHeight: 11)
+            .accessibilityLabel("Whim")
     }
 }
 

@@ -42,45 +42,56 @@ During capture, verify Discard is red with a minimum 100 × 44 point target. Tap
 
 ## Corner complication
 
-Status: pending physical-device execution.
+Status: pending physical-device execution. On 2026-11-15, the local Debug build
+was verified on Infograph, Apple Watch Series 9 (41 mm), watchOS 27.0, paired
+with iPhone Air. All four matching corner entries were installed and checked on
+the actual face, then the original upper-right-only selection was restored.
+The small logo stays straight; the caption curves on the same radial axis.
+The upper-right screenshot's angular centerline gap decreased from 6.19° with
+the native text/image template to 0.27° with the shared canvas.
 
-1. Run on a 41 mm Watch and a larger Watch, recording each model and watchOS
-   version. Edit an Infograph watch face and choose each of its four Corner slots in turn.
-   Verify Whim → Record a Whim is available and can be added. Keep a Circular
-   Whim complication on the same face to check existing support.
-2. While idle, verify the Corner shows the complete Whim waveform and floating dot along the
-   dial, with a matching curved “Record” label and no circular background. Tap it with
-   microphone access granted: expect immediate capture. Return to the face and
-   verify the red recording glyph sits close to the curved elapsed-time label,
-   with a tight clear gap and no overlap. The lifted label must stay fully
-   visible in every corner. The timer remains on the bezel.
-   Verify the tall central waveform, right-hand strokes, and floating dot are
-   visible, with a gentle, centered warp following the label’s radius and rounded caps. The complete
-   mark must fit the available Corner canvas without cropping, becoming blank,
-   or covering adjacent clock details. On the 41 mm model, verify that adding
-   Whim from the picker produces a visible idle logo on the actual face, and
-   that it remains visible after wrist-down and returning from the app. Stop and warning retain their existing sizes.
-   The Stop symbol must follow the same local angle as the text, rather than
-   remaining upright. Repeat in all four corners; orientation follows each slot.
-3. Tap the Corner during capture: expect the same Recording Session, not a
-   second one. Stop in Whim and verify one playable Note and the idle mark.
-4. Produce a failed Note. While idle, verify an angled white SF warning symbol with a black exclamation cutout and curved
-   “Check Notes” label. While recording, verify the warning sits beside the
-   curved elapsed time, clear of the red glyph. Repeat with a tinted face and
-   Always On dimming; verify legibility and VoiceOver labels in all four Corners.
-   VoiceOver must announce the actual elapsed duration as well as the recording
-   label, including when failed Notes exist; refocus after a few seconds and
-   verify the announced duration advances.
-   The standalone warning should sit as close to its label as Stop does. Both
-   the standalone warning glyph and the warning beside the timer must align
-   with the text's local angle in each corner, without touching the label.
+Evidence: [aligned upper-right](../../artifacts/complication-previews/watch-series9-41mm-aligned.png),
+[all four aligned corners](../../artifacts/complication-previews/watch-series9-41mm-aligned-all-corners.png),
+and [previous native offset](../../artifacts/complication-previews/watch-series9-41mm-straight-logo-curved-record.png).
 
-Evidence: Watch model/watchOS version, build, screenshots of the picker and
-each Corner state, and the saved Note. Deterministic companion coverage checks
-the compiled widget's family registration, layout fitting 20–38-point canvases, complete waveform, floating dot, gentle centered arc, and rounded logo ends, and shared bezel gap for Stop and warning;
-installed-app complication launch
-coverage checks capture and saving. Face layout and system picker installation
-remain physical acceptance cases.
+Automated validation: `npm run test:all` completed successfully with the focused
+iPhone app-update E2E flow and the full Watch UI suite. Unit and integration
+stages passed, including 27 Watch tests, 22 system-surface tests and nine iPhone
+hardware-boundary tests; all 20 Watch UI tests passed without failures or skips.
+An optional Xcode simulator-diagnostic collector stalled after the system-surface
+tests; stopping that collector allowed the run to finish, and the finalized
+result confirmed all 22 tests passed. Code review found no important production
+issue; its curvature-coverage suggestion was added and verified with a negative
+control. Physical hardware checks below remain pending.
+
+1. Run on a 41 mm Watch and a larger Watch, recording model and watchOS version.
+   Choose Whim → Record a Whim for upper right, and the matching named entry for
+   each other Corner. Check readable position names and previews. Verify an
+   upgrade preserves an existing upper-right entry and Circular support.
+2. While idle, verify the small logo stays straight and centered over the curved
+   Record caption on the same radial line. Check both waveform ends and all
+   letters for cropping or overlap, after wrist-down and returning from the app.
+   Repeat every corner with its matching entry. The caption must actually curve,
+   rather than merely rotate a straight word.
+3. Tap with microphone access granted: expect immediate capture. Return to the
+   face and verify the red glyph sits close to the curved elapsed-time label,
+   without overlap. Tap again during capture: expect the existing Recording
+   Session. Stop in Whim and verify one playable Note and the idle layout.
+   Confirm all four entries refresh together; none may keep a stale timer.
+4. Produce a failed Note. While idle, verify a monochrome white warning symbol
+   with Check Notes. While recording, verify the warning is beside the timer.
+   Check tinting, Always On dimming and VoiceOver in every corner. VoiceOver must
+   announce the actual elapsed duration; refocus after several seconds and verify
+   it advances. Stop and warning retain their tight bezel gap and orientation.
+
+Deterministic coverage checks all four mirrored layouts at device pixel density,
+the common radial centerline, an upright mark, angled text, circular masking,
+real caption curvature, family/kind registration, position retention at recording
+expiry, all-kind reloads, and the existing Stop/warning gap. The curvature test
+was verified to fail when the arc was deliberately flattened, then passed with
+the real arc restored. Installed-app UI coverage verifies launch, capture and
+saving. ImageRenderer cannot prove system picker installation or physical Watch
+rendering, so those acceptance checks remain required.
 
 ## Capture control bounds and history toolbar
 
