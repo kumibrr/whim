@@ -1,9 +1,6 @@
 import SwiftUI
 import WidgetKit
 import WhimCore
-#if os(watchOS)
-import WatchKit
-#endif
 
 enum WhimCornerPosition: String, CaseIterable {
     case topRight, topLeft, bottomRight, bottomLeft
@@ -178,18 +175,12 @@ struct WhimCornerComplicationContent: View {
     }
 
     var body: some View {
-        if displaysLogo {
-            WhimCornerIdleContent(corner: entry.corner, imageBundle: imageBundle)
-                .widgetAccentable()
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Record a Whim")
-        } else {
-            glyph
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                .widgetAccentable()
-                .widgetCurvesContent()
-                .widgetLabel { WhimCornerComplicationLabel(entry: entry) }
-        }
+        glyph
+            .frame(maxWidth: .infinity, maxHeight: .infinity,
+                   alignment: displaysLogo ? .center : .bottom)
+            .widgetAccentable()
+            .widgetCurvesContent(!displaysLogo)
+            .widgetLabel { WhimCornerComplicationLabel(entry: entry) }
     }
 
     @ViewBuilder private var glyph: some View {
@@ -210,70 +201,8 @@ struct WhimCornerComplicationContent: View {
                 .accessibilityLabel("Record a Whim. Failed Notes need attention")
         } else {
             WhimCornerLogo(imageBundle: imageBundle)
+                .frame(maxWidth: 21)
                 .accessibilityLabel("Record a Whim")
-        }
-    }
-}
-
-// WidgetKit's text/image template offsets these two elements. Render the idle
-// mark and curved caption together so both share one measured radial axis.
-struct WhimCornerIdleContent: View {
-    var corner: WhimCornerPosition = .topRight
-    var imageBundle: Bundle = .main
-
-    private var screenAspectRatio: CGFloat {
-        #if os(watchOS)
-        let bounds = WKInterfaceDevice.current().screenBounds
-        return bounds.width / bounds.height
-        #else
-        return 176.0 / 215.0
-        #endif
-    }
-
-    var body: some View {
-        GeometryReader { proxy in
-            let side = min(proxy.size.width, proxy.size.height)
-            let top = corner == .topRight || corner == .topLeft
-            let right = corner == .topRight || corner == .bottomRight
-            let angle = (top == right ? 1.0 : -1.0) * atan(screenAspectRatio)
-            let outward = CGVector(dx: (right ? 1 : -1) * abs(sin(angle)),
-                                   dy: (top ? -1 : 1) * cos(angle))
-            let tangent = CGVector(dx: cos(angle), dy: sin(angle))
-            let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
-            ZStack {
-                WhimCornerLogo(imageBundle: imageBundle)
-                    .frame(width: side * 0.53, height: side * 0.19)
-                    .position(x: center.x + outward.dx * side * 0.22,
-                              y: center.y + outward.dy * side * 0.22)
-                Canvas { context, _ in
-                    let characters = Array(String(localized: "Record").localizedUppercase)
-                    let glyphs = characters.map { character in
-                        context.resolve(Text(String(character))
-                            .font(.system(size: side * 0.225, weight: .medium))
-                            .foregroundStyle(.white))
-                    }
-                    let widths = glyphs.map { $0.measure(in: CGSize(width: CGFloat.infinity, height: CGFloat.infinity)).width }
-                    let spacing = side * 0.006
-                    let width = widths.reduce(0, +) + spacing * CGFloat(max(0, characters.count - 1))
-                    let scale = min(1, side * 0.84 / max(width, 1))
-                    let radius = side * 3
-                    var cursor = -width * scale / 2
-                    for (glyph, width) in zip(glyphs, widths) {
-                        let advance = width * scale
-                        let offset = (cursor + advance / 2) / radius
-                        let radial = -side * 0.175 + radius * (cos(offset) - 1)
-                        let along = radius * sin(offset)
-                        var layer = context
-                        layer.translateBy(x: center.x + outward.dx * radial + tangent.dx * along,
-                                          y: center.y + outward.dy * radial + tangent.dy * along)
-                        layer.rotate(by: .radians(angle + (top ? offset : -offset)))
-                        layer.scaleBy(x: scale, y: scale)
-                        layer.draw(glyph, at: .zero)
-                        cursor += advance + spacing * scale
-                    }
-                }
-                .accessibilityHidden(true)
-            }
         }
     }
 }
@@ -297,7 +226,13 @@ struct WhimCornerLogo: View {
 struct WhimCornerComplicationLabel: View {
     let entry: WhimComplicationEntry
 
-    var body: some View { label.baselineOffset(14) }
+    @ViewBuilder var body: some View {
+        if entry.snapshot.activeRecording(at: entry.date) == nil && !entry.snapshot.hasFailedNotes {
+            label
+        } else {
+            label.baselineOffset(14)
+        }
+    }
 
     @ViewBuilder private var label: some View {
         if let recording = entry.snapshot.activeRecording(at: entry.date) {

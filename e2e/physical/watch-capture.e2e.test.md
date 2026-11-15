@@ -42,37 +42,44 @@ During capture, verify Discard is red with a minimum 100 × 44 point target. Tap
 
 ## Corner complication
 
-Status: pending physical-device execution. On 2026-11-15, the local Debug build
-was verified on Infograph, Apple Watch Series 9 (41 mm), watchOS 27.0, paired
-with iPhone Air. All four matching corner entries were installed and checked on
-the actual face, then the original upper-right-only selection was restored.
-The small logo stays straight; the caption curves on the same radial axis.
-The upper-right screenshot's angular centerline gap decreased from 6.19° with
-the native text/image template to 0.27° with the shared canvas.
+Status: pending physical-device execution. The previous shared-canvas previews
+used custom-drawn lettering and were rejected. The current implementation restores
+plain Text through WidgetKit's native label and keeps the compact logo straight.
+watchOS controls the font, size, curve and placement, including any native radial
+offset between the logo and label. The four published widget kinds remain registered
+so existing face selections survive upgrades.
 
-Evidence: [aligned upper-right](../../artifacts/complication-previews/watch-series9-41mm-aligned.png),
-[all four aligned corners](../../artifacts/complication-previews/watch-series9-41mm-aligned-all-corners.png),
-and [previous native offset](../../artifacts/complication-previews/watch-series9-41mm-straight-logo-curved-record.png).
+Simulator acceptance: on 2026-11-15, the local build was installed on the paired
+Apple Watch Series 9 (41 mm), watchOS 27.0. Infograph displayed the straight
+compact logo and native curved Record label. The native label remains offset
+from the logo; this is not a claim that radial centering is fixed.
+Evidence: [native Record label](../../artifacts/complication-previews/watch-series9-41mm-native-record.png).
 
-Automated validation: `npm run test:all` completed successfully with the focused
-iPhone app-update E2E flow and the full Watch UI suite. Unit and integration
-stages passed, including 27 Watch tests, 22 system-surface tests and nine iPhone
-hardware-boundary tests; all 20 Watch UI tests passed without failures or skips.
-An optional Xcode simulator-diagnostic collector stalled after the system-surface
-tests; stopping that collector allowed the run to finish, and the finalized
-result confirmed all 22 tests passed. Code review found no important production
-issue; its curvature-coverage suggestion was added and verified with a negative
-control. Physical hardware checks below remain pending.
+Size follow-up: increased the straight idle mark from 18 to 21 points wide,
+about 17%, while preserving the native Record label. Verified the larger mark
+on the same 41 mm Infograph face without visible clipping.
+Evidence: [larger straight logo](../../artifacts/complication-previews/watch-series9-41mm-larger-logo.png).
+The updated size regression failed at 18 points before the change, then all 27
+Watch tests passed at 21 points. `npm run test:all` also passed with the focused
+app-update iPhone flow and both complication-launch Watch UI cases selected;
+optional simulator diagnostic collection was disabled for this local run.
+
+Automated validation: both new regressions failed against the custom lettering,
+then all 27 Watch tests passed after restoration. `npm run test:all` passed with
+the app-update iPhone flow and both complication-launch Watch UI cases selected.
+The rerun disabled optional simulator diagnostic collection after Xcode crashed
+while collecting diagnostics on the first attempt. All 22 system-surface tests,
+nine hardware-boundary tests and the selected UI cases passed without failures
+or skipped tests. Physical-device execution remains pending.
 
 1. Run on a 41 mm Watch and a larger Watch, recording model and watchOS version.
-   Choose Whim → Record a Whim for upper right, and the matching named entry for
-   each other Corner. Check readable position names and previews. Verify an
-   upgrade preserves an existing upper-right entry and Circular support.
-2. While idle, verify the small logo stays straight and centered over the curved
-   Record caption on the same radial line. Check both waveform ends and all
-   letters for cropping or overlap, after wrist-down and returning from the app.
-   Repeat every corner with its matching entry. The caption must actually curve,
-   rather than merely rotate a straight word.
+   Verify existing Corner selections survive upgrading, all four published entries
+   remain available, and Circular support remains unchanged.
+2. While idle, verify the small logo stays straight and visible, with the native
+   Record label following the face's bezel. Compare its typography with adjacent
+   system complications. Check cropping and overlap in every corner, after
+   wrist-down and returning from the app. Record any placement offset controlled
+   by watchOS; custom-drawn lettering is not an acceptable workaround.
 3. Tap with microphone access granted: expect immediate capture. Return to the
    face and verify the red glyph sits close to the curved elapsed-time label,
    without overlap. Tap again during capture: expect the existing Recording
@@ -84,14 +91,12 @@ control. Physical hardware checks below remain pending.
    announce the actual elapsed duration; refocus after several seconds and verify
    it advances. Stop and warning retain their tight bezel gap and orientation.
 
-Deterministic coverage checks all four mirrored layouts at device pixel density,
-the common radial centerline, an upright mark, angled text, circular masking,
-real caption curvature, family/kind registration, position retention at recording
-expiry, all-kind reloads, and the existing Stop/warning gap. The curvature test
-was verified to fail when the arc was deliberately flattened, then passed with
-the real arc restored. Installed-app UI coverage verifies launch, capture and
-saving. ImageRenderer cannot prove system picker installation or physical Watch
-rendering, so those acceptance checks remain required.
+Deterministic regression coverage compares the idle label with unmodified Text,
+checks that the main image canvas contains only the straight compact logo, and
+retains circular-mask, family/kind registration, position retention, all-kind
+reload and Stop/warning-gap coverage. Installed-app UI coverage verifies launch,
+capture and saving. ImageRenderer cannot prove WidgetKit's native label rendering
+on a face; simulator and physical acceptance remain required.
 
 ## Capture control bounds and history toolbar
 

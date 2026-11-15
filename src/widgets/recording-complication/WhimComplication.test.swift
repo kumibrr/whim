@@ -53,79 +53,26 @@ import XCTest
                        "Warning and Stop should sit equally close to their curved labels")
     }
 
-    // Break: the native template places the logo and Record on different axes.
-    func testIdleCornerAlignsStraightLogoAndCurvedRecordInOneCanvas() throws {
-        for (corner, horizontal, vertical, slope): (WhimCornerPosition, Double, Double, Double) in [
-            (.topRight, 1, -1, 1), (.topLeft, -1, -1, -1),
-            (.bottomRight, 1, 1, -1), (.bottomLeft, -1, 1, 1)
-        ] {
-            let entry = WhimComplicationEntry(date: Date(), snapshot: .idle, corner: corner)
-            let content = WhimCornerComplicationContent(entry: entry, imageBundle: Bundle(for: Self.self))
-                .foregroundStyle(.white).frame(width: 34, height: 34)
-            let (image, pixels) = try render(content.background(.black), scale: 2)
-            let angle = slope * atan2(176.0, 215.0)
-            let outward = CGVector(dx: horizontal * abs(sin(angle)), dy: vertical * cos(angle))
-            let tangent = CGVector(dx: cos(angle), dy: sin(angle))
-            let center = Double(image.width - 1) / 2
-            let ink = stride(from: 0, to: pixels.count, by: 4).filter { pixels[$0] > 100 }
-            func projection(_ offset: Int, onto vector: CGVector) -> Double {
-                (Double((offset / 4) % image.width) - center) / 2 * vector.dx
-                + (Double((offset / 4) / image.width) - center) / 2 * vector.dy
-            }
-            let logo = ink.filter { projection($0, onto: outward) > -2 }
-            let caption = ink.filter { projection($0, onto: outward) < -2 }
-            XCTAssertGreaterThan(logo.count, 10)
-            XCTAssertGreaterThan(caption.count, 20, "Draw the curved caption in the same canvas as the logo")
-            for (name, group) in [("logo", logo), ("caption", caption)] {
-                let positions = group.map { projection($0, onto: tangent) }
-                let first = try XCTUnwrap(positions.min()), last = try XCTUnwrap(positions.max())
-                XCTAssertEqual((first + last) / 2, 0, accuracy: 1,
-                               "Center \(corner) \(name) on the same radial axis")
-            }
-            let xs = logo.map { ($0 / 4) % image.width }
-            let leftX = try XCTUnwrap(xs.min()), rightX = try XCTUnwrap(xs.max())
-            func meanY(_ group: [Int]) -> Double {
-                Double(group.map { ($0 / 4) / image.width }.reduce(0, +)) / Double(group.count) / 2
-            }
-            XCTAssertEqual(meanY(logo.filter { ($0 / 4) % image.width <= leftX + 2 }),
-                           meanY(logo.filter { ($0 / 4) % image.width >= rightX - 2 }), accuracy: 1,
-                           "Keep the logo straight")
-            let textPositions = caption.map { projection($0, onto: tangent) }
-            let start = try XCTUnwrap(textPositions.min()), end = try XCTUnwrap(textPositions.max())
-            XCTAssertGreaterThan(slope * (meanY(caption.filter { projection($0, onto: tangent) > end - 3 })
-                                 - meanY(caption.filter { projection($0, onto: tangent) < start + 3 })), 8,
-                                 "Keep Record angled along the dial")
-            let (_, clipped) = try render(content.clipShape(Circle()).background(.black), scale: 2)
-            func coverage(_ values: [UInt8]) -> Double {
-                stride(from: 0, to: values.count, by: 4).reduce(0) { $0 + Double(values[$1]) }
-            }
-            XCTAssertGreaterThan(coverage(clipped), coverage(pixels) * 0.98,
-                                 "Keep both elements inside the circular mask")
-        }
+    // Break: custom Canvas letters replace the native watchOS bezel label.
+    func testIdleCornerLeavesRecordOutOfTheLogoCanvas() throws {
+        let entry = WhimComplicationEntry(date: Date(), snapshot: .idle)
+        let (_, actual) = try render(WhimCornerComplicationContent(
+            entry: entry, imageBundle: Bundle(for: Self.self))
+            .foregroundStyle(.white).frame(width: 34, height: 34).background(.black))
+        let (_, expected) = try render(WhimCornerLogo(imageBundle: Bundle(for: Self.self))
+            .frame(maxWidth: 21)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .foregroundStyle(.white).frame(width: 34, height: 34).background(.black))
+        XCTAssertTrue(actual == expected, "Render only the straight 21-point logo in the main canvas")
     }
 
-    // Break: rotating a straight word is not the same as following the dial's arc.
-    func testRecordBendsAlongTheDialRatherThanOnlyRotating() throws {
+    func testIdleRecordUsesAnUnmodifiedSystemTextLabel() throws {
         let entry = WhimComplicationEntry(date: Date(), snapshot: .idle)
-        let (image, pixels) = try render(WhimCornerComplicationContent(
-            entry: entry, imageBundle: Bundle(for: Self.self))
-            .foregroundStyle(.white).frame(width: 34, height: 34).background(.black), scale: 4)
-        let angle = atan2(176.0, 215.0)
-        let center = Double(image.width - 1) / 2
-        var caption = [(along: Double, radial: Double)]()
-        for offset in stride(from: 0, to: pixels.count, by: 4) where pixels[offset] > 100 {
-            let x = (Double((offset / 4) % image.width) - center) / 4
-            let y = (Double((offset / 4) / image.width) - center) / 4
-            let radial = x * sin(angle) - y * cos(angle)
-            if radial < -2 { caption.append((x * cos(angle) + y * sin(angle), radial)) }
-        }
-        let first = try XCTUnwrap(caption.map(\.along).min())
-        let last = try XCTUnwrap(caption.map(\.along).max())
-        let leading = try XCTUnwrap(caption.filter { $0.along < first + 5.5 }.map(\.radial).max())
-        let trailing = try XCTUnwrap(caption.filter { $0.along > last - 5.5 }.map(\.radial).max())
-        let middle = try XCTUnwrap(caption.filter { abs($0.along) < 3 }.map(\.radial).max())
-        XCTAssertGreaterThan(middle - (leading + trailing) / 2, 0.35,
-                             "Both ends must bend inward from the middle of the curved caption")
+        let (_, actual) = try render(WhimCornerComplicationLabel(entry: entry)
+            .font(.system(size: 14)).foregroundStyle(.white))
+        let (_, expected) = try render(Text("Record")
+            .font(.system(size: 14)).foregroundStyle(.white))
+        XCTAssertTrue(actual == expected, "Use plain Text without custom font, scaling, tracking or baseline shifts")
     }
 
     func testStatusLabelRetainsItsBezelGap() throws {
