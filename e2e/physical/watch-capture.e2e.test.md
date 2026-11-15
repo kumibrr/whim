@@ -44,7 +44,8 @@ During capture, verify Discard is red with a minimum 100 × 44 point target. Tap
 
 Status: pending physical-device execution.
 
-1. Edit an Infograph watch face and choose each of its four Corner slots in turn.
+1. Run on a 41 mm Watch and a larger Watch, recording each model and watchOS
+   version. Edit an Infograph watch face and choose each of its four Corner slots in turn.
    Verify Whim → Record a Whim is available and can be added. Keep a Circular
    Whim complication on the same face to check existing support.
 2. While idle, verify the Corner shows the complete Whim waveform and floating dot along the
@@ -55,8 +56,10 @@ Status: pending physical-device execution.
    visible in every corner. The timer remains on the bezel.
    Verify the tall central waveform, right-hand strokes, and floating dot are
    visible, with a gentle, centered warp following the label’s radius and rounded caps. The complete
-   mark must use the wider horizontal area without cropping or covering the
-   adjacent clock details. Stop and warning retain their existing sizes.
+   mark must fit the available Corner canvas without cropping, becoming blank,
+   or covering adjacent clock details. On the 41 mm model, verify that adding
+   Whim from the picker produces a visible idle logo on the actual face, and
+   that it remains visible after wrist-down and returning from the app. Stop and warning retain their existing sizes.
    The Stop symbol must follow the same local angle as the text, rather than
    remaining upright. Repeat in all four corners; orientation follows each slot.
 3. Tap the Corner during capture: expect the same Recording Session, not a
@@ -74,7 +77,7 @@ Status: pending physical-device execution.
 
 Evidence: Watch model/watchOS version, build, screenshots of the picker and
 each Corner state, and the saved Note. Deterministic companion coverage checks
-the compiled widget's family registration, complete waveform, floating dot, gentle centered arc, and rounded logo ends, and shared bezel gap for Stop and warning;
+the compiled widget's family registration, layout fitting 20–38-point canvases, complete waveform, floating dot, gentle centered arc, and rounded logo ends, and shared bezel gap for Stop and warning;
 installed-app complication launch
 coverage checks capture and saving. Face layout and system picker installation
 remain physical acceptance cases.

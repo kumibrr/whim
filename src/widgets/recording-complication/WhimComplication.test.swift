@@ -67,21 +67,30 @@ import XCTest
         XCTAssertLessThanOrEqual(baselineClearance, 18, "Keep the label within its allotted space")
     }
 
-    func testCompleteLogoUsesAWiderCornerWithoutWideningStatusIcons() throws {
-        let date = Date()
-        let recording = RecordingProjection(sessionID: "session", noteID: "note", source: .appleWatch, createdAt: date)
-        let cases: [(ComplicationSnapshot, Int)] = [
-            (.idle, 56),
-            (.init(recording: recording, hasFailedNotes: false), 38),
-            (.init(recording: nil, hasFailedNotes: true), 38),
-        ]
-        for (snapshot, expectedWidth) in cases {
-            let renderer = ImageRenderer(content: WhimCornerComplicationContent(entry: .init(date: date, snapshot: snapshot))
-                .frame(height: 38).background(.black))
-            renderer.proposedSize = .init(width: 38, height: 38)
-            renderer.scale = 1
+    // Break: a fixed 56-point logo overflows the smaller Watch's Corner canvas.
+    func testIdleCornerLogoRespectsSmallWatchCanvasSizes() throws {
+        let entry = WhimComplicationEntry(date: Date(), snapshot: .idle)
+        // Apple specifies 21 pt for a 41 mm Corner image with text, and 34 pt
+        // for its circular canvas. Include the adjacent supported Watch sizes.
+        for size: CGFloat in [20, 21, 24, 32, 34, 38] {
+            let content = WhimCornerComplicationContent(entry: entry, imageBundle: Bundle(for: Self.self))
+                .foregroundStyle(.white)
+            let renderer = ImageRenderer(content: content)
+            renderer.proposedSize = .init(width: size, height: size)
+            renderer.scale = 2
             let image = try XCTUnwrap(renderer.cgImage)
-            XCTAssertEqual(image.width, expectedWidth, "The complete logo should claim the available horizontal space")
+            // ImageRenderer rounds fractional aspect-fit dimensions up to a pixel.
+            XCTAssertLessThanOrEqual(image.width, Int(size * 2) + 1, "Respect the system's Corner width")
+            XCTAssertLessThanOrEqual(image.height, Int(size * 2) + 1, "Respect the system's Corner height")
+
+            let (canvas, pixels) = try render(content.frame(width: size, height: size).background(.black))
+            let glyphPixels = stride(from: 0, to: pixels.count, by: 4).filter { pixels[$0] > 100 }
+            XCTAssertGreaterThan(glyphPixels.count, 10, "The compiled logo must remain visible")
+            let rows = glyphPixels.map { ($0 / 4) / canvas.width }
+            let firstRow = try XCTUnwrap(rows.min())
+            let lastRow = try XCTUnwrap(rows.max())
+            XCTAssertEqual(Double(firstRow + lastRow) / 2, Double(canvas.height - 1) / 2, accuracy: 1,
+                           "Keep the logo centered in the small Corner canvas")
         }
     }
 

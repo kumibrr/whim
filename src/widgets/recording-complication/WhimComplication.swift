@@ -109,6 +109,7 @@ struct WhimCornerComplicationContent: View {
     static let logoAssetName = "whim.corner"
     static let logoWidth: CGFloat = 56
     let entry: WhimComplicationEntry
+    var imageBundle: Bundle = .main
 
     private var displaysLogo: Bool {
         entry.snapshot.activeRecording(at: entry.date) == nil && !entry.snapshot.hasFailedNotes
@@ -116,8 +117,8 @@ struct WhimCornerComplicationContent: View {
 
     var body: some View {
         glyph
-            .frame(minWidth: displaysLogo ? Self.logoWidth : nil,
-                   maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .frame(maxWidth: .infinity, maxHeight: .infinity,
+                   alignment: displaysLogo ? .center : .bottom)
             .widgetAccentable()
             .widgetCurvesContent()
             .widgetLabel { WhimCornerComplicationLabel(entry: entry) }
@@ -140,10 +141,12 @@ struct WhimCornerComplicationContent: View {
                 .foregroundStyle(.white)
                 .accessibilityLabel("Record a Whim. Failed Notes need attention")
         } else {
-            Image(Self.logoAssetName)
+            Image(Self.logoAssetName, bundle: imageBundle)
                 .resizable()
                 .scaledToFit()
-                .frame(width: Self.logoWidth, height: 14)
+                // Corner canvases shrink on smaller Watches. Let the complete
+                // mark fit the proposed size instead of forcing a wider view.
+                .frame(maxWidth: Self.logoWidth, maxHeight: 14)
                 .accessibilityLabel("Record a Whim")
         }
     }
