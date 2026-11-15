@@ -48,3 +48,8 @@ jobs:
           else
             node scripts/prepare-cloud-release.mjs --resume
           fi
+      - name: Update published release performance summaries
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/benchmark-release.mjs

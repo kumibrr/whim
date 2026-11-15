@@ -134,6 +134,14 @@ test('Actions only prepares manual releases and resumes landed preparations; clo
   assert.match(workflow, /--resume/);
 });
 
+test('release publication and main history appends refresh performance notes even when preparation fails', async () => {
+  const workflow = await readFile(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /types: \[published\]/);
+  assert.match(workflow, /branches: \[main\]/);
+  assert.match(workflow, /contents: write/);
+  assert.match(workflow, /if: \$\{\{ !cancelled\(\) \}\}[\s\S]*GH_TOKEN: \$\{\{ github.token \}\}[\s\S]*node scripts\/benchmark-release\.mjs/);
+});
+
 for (const phaseName of ['clone', 'pre']) {
   test(`release workflow rejects manually selected unprepared source during ${phaseName}`, async () => {
     const { result } = await phase(phaseName, { CI_WORKFLOW: 'Release', CI_BRANCH: 'main', CI_XCODEBUILD_ACTION: 'archive' });
