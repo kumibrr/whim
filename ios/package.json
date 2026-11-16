@@ -1,6 +1,6 @@
 {
   "name": "@whim/app",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "private": true,
   "description": "Version source for the native iPhone and Watch apps. Synced to Xcode MARKETING_VERSION by scripts/sync-app-version.mjs."
 }

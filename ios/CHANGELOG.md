@@ -1,5 +1,11 @@
 # @whim/app
 
+## 1.2.4
+
+### Patch Changes
+
+- 1d80a87: Restore the native Apple Watch corner complication layout and display the compact Whim logo on smaller Watches without clipping or content curving.
+
 ## 1.2.3
 
 ### Patch Changes
