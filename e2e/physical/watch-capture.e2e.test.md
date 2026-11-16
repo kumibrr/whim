@@ -42,61 +42,64 @@ During capture, verify Discard is red with a minimum 100 × 44 point target. Tap
 
 ## Corner complication
 
-Status: pending physical-device execution. The previous shared-canvas previews
-used custom-drawn lettering and were rejected. The current implementation restores
-plain Text through WidgetKit's native label and keeps the compact logo straight.
-watchOS controls the font, size, curve and placement, including any native radial
-offset between the logo and label. The four published widget kinds remain registered
-so existing face selections survive upgrades.
+Status: pending physical-device execution. On the 41 mm Infograph simulator,
+using the compact symbol at 21 points with content curving enabled still produced
+a blank idle icon while the native Record label remained visible. The deterministic
+asset/size regression passed in that state, so it cannot validate WidgetKit's
+private face renderer. After disabling idle content curving and installing the updated build, the
+actual face displayed the complete small logo above the native Record label.
+Recording and warning keep their original behavior. Physical Watch acceptance
+and the remaining corner/tint/wrist-down checks below are still required.
 
-Simulator acceptance: on 2026-11-15, the local build was installed on the paired
-Apple Watch Series 9 (41 mm), watchOS 27.0. Infograph displayed the straight
-compact logo and native curved Record label. The native label remains offset
-from the logo; this is not a claim that radial centering is fixed.
-Evidence: [native Record label](../../artifacts/complication-previews/watch-series9-41mm-native-record.png).
+Validation: the compact-logo raster regression failed against release 1.2.2
+before the asset/size change, then all 22 Watch tests passed on the 41 mm
+simulator. After the content-curving fix, `npm run test:all` passed with the
+iPhone app-update flow and both Watch complication-launch UI cases selected.
+The final Watch UI result reported two passes, no failures and no skipped tests.
 
-Size follow-up: increased the straight idle mark from 18 to 21 points wide,
-about 17%, while preserving the native Record label. Verified the larger mark
-on the same 41 mm Infograph face without visible clipping.
-Evidence: [larger straight logo](../../artifacts/complication-previews/watch-series9-41mm-larger-logo.png).
-The updated size regression failed at 18 points before the change, then all 27
-Watch tests passed at 21 points. `npm run test:all` also passed with the focused
-app-update iPhone flow and both complication-launch Watch UI cases selected;
-optional simulator diagnostic collection was disabled for this local run.
+Before checking the face, verify the installed app version and build on both
+physical devices with `devicectl device info apps`. An iPhone installation does
+not prove its Watch companion updated. During local acceptance, the iPhone had
+build 28 while the Watch still had build 1; direct Watch installation brought
+both devices to 1.2.2 (28). The user then confirmed the small logo appears on
+the physical Watch. Remaining corner/tint/wrist-down checks are still pending.
 
-Automated validation: both new regressions failed against the custom lettering,
-then all 27 Watch tests passed after restoration. `npm run test:all` passed with
-the app-update iPhone flow and both complication-launch Watch UI cases selected.
-The rerun disabled optional simulator diagnostic collection after Xcode crashed
-while collecting diagnostics on the first attempt. All 22 system-surface tests,
-nine hardware-boundary tests and the selected UI cases passed without failures
-or skipped tests. Physical-device execution remains pending.
+1. Run on a 41 mm Watch and a larger Watch, recording each model and watchOS
+   version. Edit an Infograph watch face and choose each of its four Corner slots in turn.
+   Verify Whim → Record a Whim is available and can be added. Keep a Circular
+   Whim complication on the same face to check existing support.
+2. While idle, verify the Corner shows the complete compact Whim logo, with a
+   native curved “Record” label and no circular background. Tap it with
+   microphone access granted: expect immediate capture. Return to the face and
+   verify the red recording glyph sits close to the curved elapsed-time label,
+   with a tight clear gap and no overlap. The lifted label must stay fully
+   visible in every corner. The timer remains on the bezel.
+   The small logo must fit the available image canvas without cropping, becoming
+   blank, or covering adjacent clock details. On the 41 mm model, verify that
+   adding Whim from the picker produces a visible idle logo on the actual face,
+   and that it remains visible after wrist-down and returning from the app.
+   Keep the native Record label's font and placement. Repeat in all four corners;
+   watchOS controls orientation. Stop and warning retain their existing sizes.
+3. Tap the Corner during capture: expect the same Recording Session, not a
+   second one. Stop in Whim and verify one playable Note and the idle mark.
+4. Produce a failed Note. While idle, verify an angled white SF warning symbol with a black exclamation cutout and curved
+   “Check Notes” label. While recording, verify the warning sits beside the
+   curved elapsed time, clear of the red glyph. Repeat with a tinted face and
+   Always On dimming; verify legibility and VoiceOver labels in all four Corners.
+   VoiceOver must announce the actual elapsed duration as well as the recording
+   label, including when failed Notes exist; refocus after a few seconds and
+   verify the announced duration advances.
+   The standalone warning should sit as close to its label as Stop does. Both
+   the standalone warning glyph and the warning beside the timer must align
+   with the text's local angle in each corner, without touching the label.
 
-1. Run on a 41 mm Watch and a larger Watch, recording model and watchOS version.
-   Verify existing Corner selections survive upgrading, all four published entries
-   remain available, and Circular support remains unchanged.
-2. While idle, verify the small logo stays straight and visible, with the native
-   Record label following the face's bezel. Compare its typography with adjacent
-   system complications. Check cropping and overlap in every corner, after
-   wrist-down and returning from the app. Record any placement offset controlled
-   by watchOS; custom-drawn lettering is not an acceptable workaround.
-3. Tap with microphone access granted: expect immediate capture. Return to the
-   face and verify the red glyph sits close to the curved elapsed-time label,
-   without overlap. Tap again during capture: expect the existing Recording
-   Session. Stop in Whim and verify one playable Note and the idle layout.
-   Confirm all four entries refresh together; none may keep a stale timer.
-4. Produce a failed Note. While idle, verify a monochrome white warning symbol
-   with Check Notes. While recording, verify the warning is beside the timer.
-   Check tinting, Always On dimming and VoiceOver in every corner. VoiceOver must
-   announce the actual elapsed duration; refocus after several seconds and verify
-   it advances. Stop and warning retain their tight bezel gap and orientation.
-
-Deterministic regression coverage compares the idle label with unmodified Text,
-checks that the main image canvas contains only the straight compact logo, and
-retains circular-mask, family/kind registration, position retention, all-kind
-reload and Stop/warning-gap coverage. Installed-app UI coverage verifies launch,
-capture and saving. ImageRenderer cannot prove WidgetKit's native label rendering
-on a face; simulator and physical acceptance remain required.
+Evidence: Watch model/watchOS version, build, screenshots of the picker and
+each Corner state, and the saved Note. Deterministic companion coverage checks
+the compiled widget's family registration, layout fitting 20–38-point canvases,
+the rendered compact asset, circular-mask clearance, and shared bezel gap for
+Stop and warning. Installed-app complication launch coverage checks capture
+and saving. Face layout and system picker installation
+remain physical acceptance cases.
 
 ## Capture control bounds and history toolbar
 

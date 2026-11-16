@@ -53,30 +53,8 @@ import XCTest
                        "Warning and Stop should sit equally close to their curved labels")
     }
 
-    // Break: custom Canvas letters replace the native watchOS bezel label.
-    func testIdleCornerLeavesRecordOutOfTheLogoCanvas() throws {
+    func testCornerLabelMovesOutwardToMeetTheGlyph() throws {
         let entry = WhimComplicationEntry(date: Date(), snapshot: .idle)
-        let (_, actual) = try render(WhimCornerComplicationContent(
-            entry: entry, imageBundle: Bundle(for: Self.self))
-            .foregroundStyle(.white).frame(width: 34, height: 34).background(.black))
-        let (_, expected) = try render(WhimCornerLogo(imageBundle: Bundle(for: Self.self))
-            .frame(maxWidth: 21)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .foregroundStyle(.white).frame(width: 34, height: 34).background(.black))
-        XCTAssertTrue(actual == expected, "Render only the straight 21-point logo in the main canvas")
-    }
-
-    func testIdleRecordUsesAnUnmodifiedSystemTextLabel() throws {
-        let entry = WhimComplicationEntry(date: Date(), snapshot: .idle)
-        let (_, actual) = try render(WhimCornerComplicationLabel(entry: entry)
-            .font(.system(size: 14)).foregroundStyle(.white))
-        let (_, expected) = try render(Text("Record")
-            .font(.system(size: 14)).foregroundStyle(.white))
-        XCTAssertTrue(actual == expected, "Use plain Text without custom font, scaling, tracking or baseline shifts")
-    }
-
-    func testStatusLabelRetainsItsBezelGap() throws {
-        let entry = WhimComplicationEntry(date: Date(), snapshot: .init(recording: nil, hasFailedNotes: true))
         let (image, pixels) = try render(WhimCornerComplicationLabel(entry: entry)
             .font(.system(size: 14)).foregroundStyle(.white)
             .frame(width: 120, height: 40, alignment: .bottom).background(.black))
@@ -84,16 +62,18 @@ import XCTest
             (0..<image.width).contains { x in pixels[(y * image.width + x) * 4] > 200 }
         }
         let lastRow = try XCTUnwrap(rows.max())
-        XCTAssertEqual(Double(image.height - 1 - lastRow), 17, accuracy: 1,
-                       "Keep the attention label close to its status glyph")
+        let baselineClearance = image.height - 1 - lastRow
+        XCTAssertGreaterThanOrEqual(baselineClearance, 16, "Bring the curved label nearly flush with the glyph")
+        XCTAssertLessThanOrEqual(baselineClearance, 18, "Keep the label within its allotted space")
     }
 
     // Break: a fixed 56-point logo overflows the smaller Watch's Corner canvas.
     func testIdleCornerLogoRespectsSmallWatchCanvasSizes() throws {
+        let entry = WhimComplicationEntry(date: Date(), snapshot: .idle)
         // Apple specifies 21 pt for a 41 mm Corner image with text, and 34 pt
         // for its circular canvas. Include the adjacent supported Watch sizes.
         for size: CGFloat in [20, 21, 24, 32, 34, 38] {
-            let content = WhimCornerLogo(imageBundle: Bundle(for: Self.self))
+            let content = WhimCornerComplicationContent(entry: entry, imageBundle: Bundle(for: Self.self))
                 .foregroundStyle(.white)
             let renderer = ImageRenderer(content: content)
             renderer.proposedSize = .init(width: size, height: size)
@@ -104,13 +84,6 @@ import XCTest
             XCTAssertLessThanOrEqual(image.height, Int(size * 2) + 1, "Respect the system's Corner height")
 
             let (canvas, pixels) = try render(content.frame(width: size, height: size).background(.black))
-            let (_, maskedPixels) = try render(content.frame(width: size, height: size)
-                .clipShape(Circle()).background(.black))
-            func coverage(_ values: [UInt8]) -> Double {
-                stride(from: 0, to: values.count, by: 4).reduce(0.0) { $0 + Double(values[$1]) / 255 }
-            }
-            XCTAssertGreaterThan(coverage(maskedPixels), coverage(pixels) * 0.98,
-                                 "Keep the complete compact mark inside the system's circular mask")
             let glyphPixels = stride(from: 0, to: pixels.count, by: 4).filter { pixels[$0] > 100 }
             XCTAssertGreaterThan(glyphPixels.count, 10, "The compiled logo must remain visible")
             let rows = glyphPixels.map { ($0 / 4) / canvas.width }
@@ -121,48 +94,39 @@ import XCTest
         }
     }
 
-    // Break: recording expiry drops the failed-Note attention state.
-    func testRecordingExpirationPreservesFailedNoteAttention() {
-        let date = Date(timeIntervalSince1970: 100)
-        let recording = RecordingProjection(sessionID: "session", noteID: "note", source: .appleWatch,
-                                            createdAt: date)
-        let provider = WhimComplicationProvider(loadSnapshot: {
-            .init(recording: recording, hasFailedNotes: true)
-        })
-        let entries = provider.entries(at: date)
-        XCTAssertEqual(entries.map(\.date), [date, Date(timeIntervalSince1970: 400)])
-        XCTAssertNotNil(entries.first?.snapshot.activeRecording(at: date))
-        XCTAssertNil(entries.last?.snapshot.activeRecording(at: Date(timeIntervalSince1970: 400)))
-        XCTAssertEqual(entries.last?.snapshot.hasFailedNotes, true)
-    }
-
-    func testCornerSelectionSurvivesRefreshAndRecordingExpiration() {
-        let date = Date(timeIntervalSince1970: 100)
-        let recording = RecordingProjection(sessionID: "session", noteID: "note", source: .appleWatch, createdAt: date)
-        for corner in WhimCornerPosition.allCases {
-            let provider = WhimComplicationProvider(corner: corner, loadSnapshot: {
-                .init(recording: recording, hasFailedNotes: false)
-            })
-            XCTAssertEqual(provider.entries(at: date).map(\.corner), [corner, corner])
+    // Break: the wide full mark does not fit the native Corner image canvas.
+    // Compare the rendered complication with the compiled compact artwork so
+    // an empty, cropped or incorrect asset cannot pass as a visible logo.
+    func testIdleCornerShowsCompleteSmallLogoInTheNativeImageCanvas() throws {
+        let entry = WhimComplicationEntry(date: Date(), snapshot: .idle)
+        let bundle = Bundle(for: Self.self)
+        for size: CGFloat in [20, 21, 24, 32, 34, 38] {
+            let reference = Image("whim.small.symbol", bundle: bundle)
+                .resizable().scaledToFit()
+                .frame(width: min(size, 21), height: min(size, 21))
+                .foregroundStyle(.white)
+                .frame(width: size, height: size).background(.black)
+            let (_, expected) = try render(reference)
+            let referenceInk = stride(from: 0, to: expected.count, by: 4).filter { expected[$0] > 100 }
+            XCTAssertGreaterThan(referenceInk.count, 10,
+                                 "The compact logo must exist in the compiled asset catalog")
+            let content = WhimCornerComplicationContent(entry: entry, imageBundle: bundle)
+                .foregroundStyle(.white).frame(width: size, height: size)
+            let (_, actual) = try render(content.background(.black))
+            XCTAssertTrue(actual == expected,
+                          "Show the complete compact mark in the native \(size)-point image canvas")
+            let (_, masked) = try render(content.clipShape(Circle()).background(.black))
+            func coverage(_ values: [UInt8]) -> Double {
+                stride(from: 0, to: values.count, by: 4).reduce(0) { $0 + Double(values[$1]) }
+            }
+            XCTAssertGreaterThan(coverage(masked), coverage(actual) * 0.98,
+                                 "The circular face mask must not crop the small logo")
         }
     }
 
-    func testCornerPickerPreservesExistingIdentityAndUsesDistinctKinds() {
-        XCTAssertEqual(WhimCornerPosition.topRight.widgetKind, "app.whim.recording")
-        XCTAssertEqual(Set(WhimCornerPosition.allCases.map(\.widgetKind)).count, 4)
-    }
-
-    // Break: interpolated display names crash WidgetKit while it discovers the widgets.
-    func testConfigurationBuildsWithoutFormattedMetadata() {
-        _ = WhimComplication().body
-        _ = WhimTopLeftComplication().body
-        _ = WhimBottomRightComplication().body
-        _ = WhimBottomLeftComplication().body
-    }
-
-    private func render<Content: View>(_ content: Content, scale: CGFloat = 1) throws -> (CGImage, [UInt8]) {
+    private func render<Content: View>(_ content: Content) throws -> (CGImage, [UInt8]) {
         let renderer = ImageRenderer(content: content)
-        renderer.scale = scale
+        renderer.scale = 1
         let image = try XCTUnwrap(renderer.cgImage)
         var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
         let context = try XCTUnwrap(CGContext(

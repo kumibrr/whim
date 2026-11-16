@@ -8,9 +8,6 @@ import WidgetKit
         RecordWhimControl()
         #else
         WhimComplication()
-        WhimTopLeftComplication()
-        WhimBottomRightComplication()
-        WhimBottomLeftComplication()
         #endif
     }
 }
